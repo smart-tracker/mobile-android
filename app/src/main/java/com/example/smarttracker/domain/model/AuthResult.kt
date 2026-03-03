@@ -1,12 +1,19 @@
 package com.example.smarttracker.domain.model
 
+/**
+ * Результат успешной верификации email.
+ * Соответствует ответу POST /auth/verify-email:
+ * {
+ *   "access_token": "...",
+ *   "refresh_token": "...",
+ *   "token_type": "bearer"
+ * }
+ *
+ * Токены сохраняются в EncryptedSharedPreferences (МОБ-2.4).
+ * После получения пользователь переходит на главный экран.
+ */
 data class AuthResult(
-
-    // Токены - обязательная часть ответа
-    val accessToken: String,            // jwt_session в БД
-    val refreshToken: String,           // jwt_reload в БД
-
-    // TODO: уточнить у Романа - возвращает ли сервер данные пользователя
-    // сразу в ответе на регистрацию или только токены?
-    // val user: User?
+    val accessToken: String,
+    val refreshToken: String,
+    val tokenType: String = "bearer"
 )
