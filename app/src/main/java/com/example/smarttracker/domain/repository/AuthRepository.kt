@@ -3,6 +3,7 @@ package com.example.smarttracker.domain.repository
 import com.example.smarttracker.domain.model.AuthResult
 import com.example.smarttracker.domain.model.RegisterRequest
 import com.example.smarttracker.domain.model.RegisterResult
+import com.example.smarttracker.domain.model.ResendResult
 
 /**
  * МОБ-1.3 — Контракт репозитория авторизации.
@@ -35,9 +36,9 @@ interface AuthRepository {
     /**
      * POST /auth/resend-code
      * Повторный запрос кода. Доступен раз в 2 минуты (RESEND_COOLDOWN на сервере).
-     * Возвращает новое время жизни кода в секундах.
+     * Возвращает новое время жизни кода в секундах (remaining_seconds из ответа).
      */
-    suspend fun resendCode(email: String): Result<Int>
+    suspend fun resendCode(email: String): Result<ResendResult>
 
     /**
      * POST /auth/login
