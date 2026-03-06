@@ -410,25 +410,20 @@ val startDestination = if (tokenStorage.hasTokens()) Routes.HOME else Routes.LOG
 
 ## Соглашения по коммитам
 
-Формат: `[МОБ-X.X] тип: описание на русском языке`
+Формат: `тип(МОБ-X.X): описание на русском языке`
 
 Примеры:
 ```
-[МОБ-2.1] feat: добавлены DTO модели и mappers для auth-слоя
-[МОБ-2.2] feat: добавлен AuthApiService (Retrofit интерфейс)
-[МОБ-2.4] feat: добавлено хранилище токенов TokenStorage
-[МОБ-2.3] feat: реализован AuthRepositoryImpl
-[МОБ-5.1] feat: добавлен Hilt AuthModule
+feat(МОБ-2.1): добавлены DTO модели и mappers для auth-слоя
+feat(МОБ-2.2): добавлен AuthApiService — Retrofit интерфейс
+feat(МОБ-2.4): добавлено хранилище токенов TokenStorage
+feat(МОБ-2.3): реализован AuthRepositoryImpl
+feat(МОБ-5.1): добавлен Hilt AuthModule
 chore: обновлён CONTEXT.md — зафиксированы расхождения с API
-fix: исправлена nullable-типизация в ResendCodeResponseDto
+fix(МОБ-2.1): исправлена nullable-типизация в ResendCodeResponseDto
 ```
 
 Типы: `feat` — новая функция, `fix` — исправление, `refactor` — рефакторинг, `chore` — служебное, `docs` — документация.
-
-> ⚠️ **PowerShell**: квадратные скобки в сообщении коммита нужно оборачивать в одинарные кавычки, иначе `[МОБ-X.X]` → `[-X.X]`:
-> ```powershell
-> git commit -m '[МОБ-2.2] feat: описание'
-> ```
 
 ---
 
