@@ -23,9 +23,12 @@ DI: Hilt | UI: Jetpack Compose | Сеть: Retrofit | Токены: EncryptedSha
 - `domain/model/ResendResult.kt` — добавлен, `resendCode` в AuthRepository изменён с `Result<Int>` на `Result<ResendResult>`
 - `chore` — создана полная конфигурация Gradle-проекта (Gradle 8.6, AGP 8.3.2, Kotlin 1.9.24)
 - МОБ-2.1 — `data/remote/dto/` — 5 DTO файлов + mappers (с учётом расхождений с API)
+- МОБ-2.2 — `data/remote/AuthApiService.kt` + `dto/RequestDtos.kt` — Retrofit интерфейс, 5 методов
+- МОБ-2.4 — `data/local/TokenStorage.kt` + `TokenStorageImpl.kt` — EncryptedSharedPreferences
+- МОБ-2.3 — `data/repository/AuthRepositoryImpl.kt` — реализация AuthRepository
 
-### 🔜 Следующий шаг — МОБ-2.2 (начинать отсюда)
-`data/remote/AuthApiService.kt` — Retrofit интерфейс с 5 методами
+### 🔜 Следующий шаг — МОБ-5.1 (начинать отсюда)
+`di/AuthModule.kt` — Hilt-модуль, связывает весь auth DI-граф
 
 ### ❌ Не начато
 
@@ -336,6 +339,12 @@ val startDestination = if (tokenStorage.hasTokens()) Routes.HOME else Routes.LOG
 
 ## Важные нюансы (не забыть)
 
+8. **`MAX_VERIFICATION_ATTEMPTS = 5`** — бэкенд блокирует верификацию после 5 неверных попыток. Android должен обрабатывать 400 `"Too many failed attempts"` — показывать сообщение и скрывать поле ввода кода. Учесть в VerifyEmailScreen (будущая задача).
+
+9. **`RESEND_COOLDOWN_SECONDS = 120`** (2 минуты) — кулдаун повторной отправки кода. При 400-ошибке от `/auth/resend-code` тело содержит `"Please wait N seconds before resending"`. На UI — таймер обратного отсчёта 120 секунд.
+
+10. **`VERIFICATION_CODE_EXPIRE_MINUTES = 10`** → `expires_in = 600` секунд в ответе `/auth/register`. Используется для таймера на экране верификации.
+
 1. **`username` vs `nickname`** — в Android domain это `username`, в API БД поле `nickname`. В `RegisterRequestDto` используется `@SerializedName("nickname")`. ✅ Учтено.
 
 2. **`UserPurpose`** — в Android есть, в API нет. Ждём решения от Артёма: сохранять в БД или только клиентское. До ответа не трогать. В `RegisterRequestDto` поле НЕ включено.
@@ -448,12 +457,12 @@ fix(МОБ-2.1): исправлена nullable-типизация в ResendCodeR
 com.example.smarttracker/
 ├── SmartTrackerApp.kt          (@HiltAndroidApp)
 ├── data/
-│   ├── local/                  (TokenStorage — не создан)
+│   ├── local/                  (✅ TokenStorage.kt + TokenStorageImpl.kt)
 │   ├── remote/
-│   │   ├── dto/                (✅ DTO созданы — 5 файлов + mappers)
-│   │   └── AuthApiService.kt   (не создан — следующий шаг)
-│   └── repository/             (AuthRepositoryImpl — не создан)
-├── di/                         (AuthModule — не создан)
+│   │   ├── dto/                (✅ 5 DTO + RequestDtos.kt + mappers)
+│   │   └── AuthApiService.kt   (✅ Retrofit интерфейс, 5 методов)
+│   └── repository/             (✅ AuthRepositoryImpl.kt)
+├── di/                         (❌ AuthModule — следующий шаг)
 ├── domain/
 │   ├── model/                  (все модели созданы)
 │   ├── repository/             (AuthRepository — создан)
