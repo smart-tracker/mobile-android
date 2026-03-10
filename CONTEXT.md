@@ -428,6 +428,12 @@ fix(МОБ-2.1): исправлена nullable-типизация в ResendCodeR
 
 Типы: `feat` — новая функция, `fix` — исправление, `refactor` — рефакторинг, `chore` — служебное, `docs` — документация.
 
+> **PowerShell + кириллица в коммитах:** `-m "..."` обрезает кириллицу внутри скобок.
+> Всегда коммитить через файл:
+> ```powershell
+> "feat(МОБ-X.X): описание" | Out-File -Encoding utf8 .git/COMMIT_MSG; git commit -F .git/COMMIT_MSG; Remove-Item .git/COMMIT_MSG
+> ```
+
 ---
 
 ## Инструменты (MCP серверы подключены)
