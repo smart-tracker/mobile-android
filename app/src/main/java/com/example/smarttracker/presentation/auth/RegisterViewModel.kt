@@ -154,6 +154,24 @@ class RegisterViewModel @Inject constructor(
             _state.update { it.copy(fieldError = "Некорректная дата рождения") }
             return
         }
+        val emailError = when {
+            s.email.isBlank() -> "Введите email"
+            !android.util.Patterns.EMAIL_ADDRESS.matcher(s.email).matches() -> "Некорректный формат email"
+            else -> null
+        }
+        if (emailError != null) {
+            _state.update { it.copy(fieldError = emailError) }
+            return
+        }
+        val passwordError = when {
+            s.password.length < 8 -> "Пароль: минимум 8 символов"
+            s.password != s.confirmPassword -> "Пароли не совпадают"
+            else -> null
+        }
+        if (passwordError != null) {
+            _state.update { it.copy(fieldError = passwordError) }
+            return
+        }
         if (!s.termsAccepted) {
             _state.update { it.copy(fieldError = "Необходимо принять условия использования") }
             return
@@ -189,6 +207,10 @@ class RegisterViewModel @Inject constructor(
         val s = _state.value
         if (s.verificationCode.isBlank()) {
             _state.update { it.copy(fieldError = "Введите код подтверждения") }
+            return
+        }
+        if (s.verificationCode.length != 6) {
+            _state.update { it.copy(fieldError = "Код должен содержать 6 символов") }
             return
         }
 
