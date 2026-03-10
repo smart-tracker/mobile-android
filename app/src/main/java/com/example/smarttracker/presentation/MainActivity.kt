@@ -4,6 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import com.example.smarttracker.presentation.navigation.AppNavGraph
 import com.example.smarttracker.presentation.theme.SmartTrackerTheme
 import dagger.hilt.android.AndroidEntryPoint
 
@@ -18,7 +19,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             SmartTrackerTheme {
-                // TODO: МОБ-5.2 — подключить NavGraph
+                AppNavGraph()
             }
         }
     }
