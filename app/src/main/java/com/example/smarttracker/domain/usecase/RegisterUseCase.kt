@@ -3,6 +3,7 @@ package com.example.smarttracker.domain.usecase
 import com.example.smarttracker.domain.model.RegisterRequest
 import com.example.smarttracker.domain.model.RegisterResult
 import com.example.smarttracker.domain.repository.AuthRepository
+import javax.inject.Inject
 
 private val EMAIL_REGEX = Regex("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$")
 
@@ -15,7 +16,7 @@ private val EMAIL_REGEX = Regex("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}
  *
  * Не знает ничего про UI, Android, Retrofit или БД.
  */
-class RegisterUseCase(
+class RegisterUseCase @Inject constructor(
     private val repository: AuthRepository
 ) {
 
