@@ -32,7 +32,19 @@ DI: Hilt | UI: Jetpack Compose | Сеть: Retrofit | Токены: EncryptedSha
 - МОБ-4.2/4.3 — `presentation/auth/RegisterViewModel.kt` + `RegisterEvent.kt`
 - МОБ-5.2 — `presentation/navigation/Screen.kt` + `AppNavGraph.kt` + MainActivity обновлена
 
-### ✅ Compile: BUILD SUCCESSFUL (compileDebugKotlin clean)
+- BASE_URL переключён на `https://runtastic.gottland.ru/` через `BuildConfig.BASE_URL` в `app/build.gradle.kts`
+- Клиентская валидация в `RegisterViewModel.submitRegistration()` и `verifyEmail()`:
+  - email — формат через `android.util.Patterns.EMAIL_ADDRESS`
+  - password — минимум 8 символов
+  - confirmPassword — совпадение с password
+  - verificationCode — ровно 6 символов
+- Commit `380588d` запушен: `fix: switch BASE_URL to prod, add client-side email/password/code validation`
+
+### ✅ Compile: BUILD SUCCESSFUL (43 задачи Gradle)
+
+### 🔜 Следующие задачи
+- **LoginScreen** (Figma node: 172:640)
+- **PasswordRecovery** screens (nodes: 227:186, 227:288, 227:339)
 
 ### ❌ Не начато
 
@@ -341,6 +353,40 @@ val startDestination = if (tokenStorage.hasTokens()) Routes.HOME else Routes.LOG
 
 ---
 
+## Статус бэкенда (runtastic.gottland.ru)
+
+> Сервер: FastAPI + PostgreSQL, uvicorn слушает `0.0.0.0:8000`, SSL терминируется внешним балансировщиком хостинга.
+> Uvicorn **не управляется systemd** — перезапуск только вручную от пользователя `mihail`.
+> `.env` находится в `/home/mihail/api/.env`.
+
+### ✅ Исправлено на сервере (сессия)
+
+| Ошибка | Причина | Решение |
+|---|---|---|
+| `Chain validation failed` (TLS) | Сервер отдавал только leaf-cert | Само исправилось (certbot обновил конфиг) |
+| HTTP 500 — `ConnectionRefusedError: ('127.0.0.1', 5434)` | `.env` имел `POSTGRES_PORT=5434`, PostgreSQL слушает `5432` | `sed -i` в `.env`, заменено на 5432 |
+| HTTP 500 — `NotNullViolationError: null value in column "last_name"` | Схема БД имела NOT NULL на необязательных полях | `ALTER TABLE users ALTER COLUMN last_name/middle_name/weight/height DROP NOT NULL` |
+
+> ⚠️ **Важно:** `ALTER TABLE` сделан напрямую в БД — SQLAlchemy-модели на бэке **не синхронизированы**. Бэкенд-команде нужно обновить модели.
+
+### 🔴 Текущий блокер: SMTP App Password
+
+```
+Error: (534, b'5.7.9 Application-specific password required')
+smtplib.SMTPAuthenticationError: (534, ...)
+```
+
+Gmail-аккаунт `mgromihala@gmail.com` имеет 2FA — обычный пароль не принимается для SMTP.
+
+**Решение:**
+1. `myaccount.google.com/apppasswords` → создать App Password «SmartTracker API»
+2. На сервере: `nano /home/mihail/api/.env` → заменить `SMTP_PASSWORD=alfavit13` на 16-символьный App Password
+3. Перезапустить uvicorn: `kill <pid>` → `nohup uvicorn app.main:app --host 0.0.0.0 --port 8000 &`
+
+Пользователь **уже записывается в БД** (INSERT + COMMIT в логах) — проблема только в отправке email с кодом.
+
+---
+
 ## Важные нюансы (не забыть)
 
 8. **`MAX_VERIFICATION_ATTEMPTS = 5`** — бэкенд блокирует верификацию после 5 неверных попыток. Android должен обрабатывать 400 `"Too many failed attempts"` — показывать сообщение и скрывать поле ввода кода. Учесть в VerifyEmailScreen (будущая задача).
@@ -466,16 +512,201 @@ com.example.smarttracker/
 │   │   ├── dto/                (✅ 5 DTO + RequestDtos.kt + mappers)
 │   │   └── AuthApiService.kt   (✅ Retrofit интерфейс, 5 методов)
 │   └── repository/             (✅ AuthRepositoryImpl.kt)
-├── di/                         (❌ AuthModule — следующий шаг)
+├── di/                         (✅ AuthModule.kt)
 ├── domain/
-│   ├── model/                  (все модели созданы)
-│   ├── repository/             (AuthRepository — создан)
-│   └── usecase/                (RegisterUseCase — создан)
+│   ├── model/                  (✅ все модели созданы)
+│   ├── repository/             (✅ AuthRepository)
+│   └── usecase/                (✅ RegisterUseCase)
 ├── presentation/
 │   ├── MainActivity.kt
+│   ├── auth/                   (✅ RegisterScreen, RegisterViewModel, RegisterUiState, RegisterEvent)
 │   ├── common/
-│   ├── navigation/             (NavGraph — не создан)
+│   ├── navigation/             (✅ Screen.kt + AppNavGraph.kt)
 │   └── theme/
 │       └── SmartTrackerTheme.kt
 └── utils/
 ```
+
+---
+
+## Отчёт о проделанной работе
+
+### Выполненные задачи
+
+#### Android (реализовано полностью)
+
+| Задача | Файл(ы) | Статус |
+|---|---|---|
+| МОБ-1.1–1.4 | Domain-слой: модели, репозиторий, UseCase | ✅ |
+| МОБ-2.1 | 5 DTO + mappers в `data/remote/dto/` | ✅ |
+| МОБ-2.2 | `AuthApiService.kt` — Retrofit, 5 методов | ✅ |
+| МОБ-2.3 | `AuthRepositoryImpl.kt` | ✅ |
+| МОБ-2.4 | `TokenStorage` + `TokenStorageImpl` (EncryptedSharedPreferences) | ✅ |
+| МОБ-5.1 | `AuthModule.kt` — Hilt DI | ✅ |
+| МОБ-3.1 | `RegisterScreen.kt` — Compose UI по Figma | ✅ |
+| МОБ-4.1–4.3 | `RegisterUiState`, `RegisterViewModel`, `RegisterEvent` | ✅ |
+| МОБ-5.2 | `Screen.kt` + `AppNavGraph.kt` + `MainActivity` | ✅ |
+| fix | `BASE_URL` → `https://runtastic.gottland.ru/` | ✅ |
+| fix | Клиентская валидация: email, пароль, совпадение, код 6 цифр | ✅ |
+
+**Сборка:** BUILD SUCCESSFUL (43 задачи). Commit `380588d` в ветке `main`.
+
+#### Сервер — устранённые баги (в процессе тестирования)
+
+| Ошибка | Причина | Решение |
+|---|---|---|
+| TLS Chain validation failed | Неполная цепочка сертификатов | Само исправилось (certbot) |
+| HTTP 500 — порт БД | `.env` содержал `POSTGRES_PORT=5434` вместо `5432` | Исправлено в `.env` |
+| HTTP 500 — NOT NULL | Схема БД имела NOT NULL на необязательных полях | `ALTER TABLE` для last_name, middle_name, weight, height |
+
+---
+
+### Что мешает дальнейшей работе
+
+#### 🔴 Блокер 1 — SMTP (регистрация не завершается)
+
+Сервер не может отправить email с кодом подтверждения. Причина: Gmail-аккаунт `mgromihala@gmail.com` требует **App Password** вместо обычного пароля (включена 2FA).
+
+**Что нужно сделать участнику команды:**
+1. Открыть `myaccount.google.com/apppasswords`
+2. Создать App Password → получить 16-символьный код
+3. На сервере: `nano /home/mihail/api/.env` → заменить `SMTP_PASSWORD=alfavit13`
+4. Перезапустить uvicorn: `kill <pid>` → `nohup uvicorn app.main:app --host 0.0.0.0 --port 8000 &`
+
+> ⚠️ **Долгосрочная рекомендация:** заменить Gmail на профессиональный транзакционный сервис (Resend, SendGrid, Brevo). Gmail ненадёжен для продакшна: суточные лимиты, зависимость от настроек личного аккаунта, риск блокировки.
+
+#### 🟡 Блокер 2 — SQLAlchemy-модели не синхронизированы с БД
+
+`ALTER TABLE` были применены напрямую в PostgreSQL — схема в коде (SQLAlchemy-модели) не обновлена. При следующих миграциях (`alembic`) возможен откат изменений. **Бэкенд-команде нужно обновить модели** (`last_name`, `middle_name`, `weight`, `height` — сделать Optional).
+
+#### 🟡 Блокер 3 — UserPurpose не реализован на бэкенде
+
+В Android-модели есть `UserPurpose` (цель использования), но в API этого поля нет. Поле не включено в `RegisterRequestDto`. Нужно решение от команды: сохранять в БД или оставить только на клиенте.
+
+#### 🟡 Блокер 4 — Экран верификации не реализован
+
+После успешной регистрации navGraph переходит на `verify_email`, но сам экран ввода кода ещё не создан. Без него пользователь зайдёт в тупик.
+
+---
+
+### Нюансы технического характера
+
+- **Uvicorn не управляется systemd** — после перезагрузки сервера процесс не поднимется автоматически. Нужно настроить systemd-сервис.
+- **`/auth/refresh` — query param, не body** — FastAPI обрабатывает `refresh_token` как query-параметр, в `AuthApiService.kt` используется `@Query`, не `@Body`.
+- **`debug_code` в ответе `/auth/register`** — сервер временно возвращает код верификации открытым текстом. Убрать до выхода в прод.
+- **MAX_VERIFICATION_ATTEMPTS = 5** — после 5 неверных кодов аккаунт блокируется. Нужна обработка на UI.
+- **RESEND_COOLDOWN = 120 сек** — таймер обратного отсчёта на экране верификации.
+
+---
+
+### Предложение следующих задач
+
+#### Приоритет 1 — разблокировать тестирование
+- [ ] **Исправить SMTP** (App Password или замена на Resend) — без этого нельзя завершить регистрацию
+
+#### Приоритет 2 — завершить auth-флоу
+- [ ] **VerifyEmailScreen** — экран ввода 6-значного кода с таймером 10 мин, кнопкой "Отправить повторно" (cooldown 2 мин), обработка блокировки после 5 попыток
+- [ ] **LoginScreen** (Figma node: `172:640`) — email, пароль, кнопка входа, ссылка на регистрацию
+- [ ] **PasswordRecovery** — 3 экрана (Figma nodes: `227:186`, `227:288`, `227:339`): ввод email, ввод кода, новый пароль
+
+#### Приоритет 3 — инфраструктура
+- [ ] **Настроить systemd-сервис** для uvicorn — автозапуск после перезагрузки сервера
+- [ ] **Синхронизировать SQLAlchemy-модели** с изменениями в БД (nullable-поля)
+- [ ] **Alembic-миграция** для фиксации схемы
+
+---
+
+## Результаты дебаггинга (11.03.2026)
+
+Проведён полный аудит кода обоих репозиториев: `smart-tracker/mobile` (Android) и `smart-tracker/api` (FastAPI).
+
+### 🔴 Критические баги
+
+#### API-1: Timezone-naive vs timezone-aware — `TypeError` при сравнении дат
+**Файлы:** `app/services/auth.py`, `app/models/email_verification.py`
+Модель `EmailVerification` хранит `expires_at` и `created_at` как `DateTime(timezone=True)` — PostgreSQL возвращает timezone-aware объекты. Но сервис везде использует `datetime.now()` (без таймзоны) → `TypeError: can't compare offset-naive and offset-aware datetimes`.
+Затронуты: `verify_email()`, `can_resend_code()`, `is_expired()`.
+**Исправление:** заменить `datetime.now()` на `datetime.now(timezone.utc)` во всём `app/services/auth.py` и `app/models/email_verification.py`.
+
+#### API-2: Старые коды верификации не инвалидируются
+**Файл:** `app/services/auth.py`, методы `register_user()` и `resend_verification_code()`
+В обоих методах выполняется `SELECT` по старым неподтверждённым записям `EmailVerification`, но результат нигде не сохраняется и не используется — это мёртвый код. Результат: одновременно существует несколько валидных кодов, все работают до истечения, база засоряется.
+**Исправление:** заменить `SELECT` на `DELETE`, либо выставлять `verified_at = now()` для старых записей перед созданием новой.
+
+#### API-3: Blocking SMTP в async event loop
+**Файл:** `app/services/email.py`
+Метод `_send_email` помечен как `async`, но внутри использует синхронный `smtplib.SMTP`. Блокируется event loop FastAPI на время отправки письма — все остальные запросы подвисают. Параметр `background_tasks: BackgroundTasks` принят в endpoint `/register`, но не используется.
+**Исправление:** использовать `aiosmtplib`, обернуть в `asyncio.to_thread()`, или задействовать `background_tasks.add_task()`.
+
+#### МОБ-1: Cooldown таймер показывает 10 минут вместо 2
+**Файл:** `RegisterViewModel.kt`, методы `submitRegistration()` и `onResendCode()`
+После регистрации и повторной отправки кода вызывается `startCooldown(result.expiresIn)`. API возвращает `remaining_seconds` ≈ 600с (время жизни КОДА), а не cooldown для повторной отправки (120с). Пользователь видит "запросить через 10:00" вместо "через 02:00".
+**Исправление:** использовать фиксированное значение `RESEND_COOLDOWN_SECONDS = 120` на клиенте, или API должен возвращать отдельное поле `resend_cooldown`.
+
+### 🟠 Высокие баги
+
+#### API-4: `debug_code` в production-ответе
+**Файл:** `app/api/auth.py`, endpoint `/register`
+Код верификации возвращается клиенту в теле ответа (`"debug_code": code`). На проде это полностью обходит email-верификацию.
+**Исправление:** убрать `"debug_code"` из ответа или возвращать только при `DEBUG=True`.
+
+#### API-5: `sha256_crypt` вместо `bcrypt` для хеширования паролей
+**Файл:** `app/core/security.py`
+`pwd_context = CryptContext(schemes=["sha256_crypt"], ...)` — `requirements.txt` устанавливает `passlib[bcrypt]`, но код использует значительно более слабый `sha256_crypt`.
+**Исправление:** заменить на `schemes=["bcrypt"]`.
+
+### 🟡 Средние баги
+
+#### API-6: Refresh token передаётся как query-параметр
+**Файл:** `app/api/auth.py`, endpoint `/refresh`
+`refresh_token: str` — FastAPI трактует как query-параметр → токен попадает в URL, логируется в access logs, прокси, кешируется.
+**Исправление:** передавать через Pydantic-схему в теле запроса. **Примечание:** Android-клиент (`AuthApiService.kt`) также использует `@Query` — при исправлении API нужно обновить и мобильный клиент на `@Body`.
+
+#### API-7: CORS — `allow_origins=["*"]` с `allow_credentials=True`
+**Файл:** `app/main.py`
+По спецификации CORS wildcard `*` несовместим с `allow_credentials=True`. Браузеры отклоняют такую конфигурацию.
+**Исправление:** указать конкретные origins или убрать `allow_credentials`.
+
+#### API-8: `random.choices` для кода верификации — не криптографически безопасен
+**Файл:** `app/core/security.py`
+`random` предсказуем. Для security-sensitive кодов нужен `secrets.choice`.
+
+#### МОБ-2: SSL cert chain не настроен для prod
+Из tech-debt: сервер `runtastic.gottland.ru` может отдавать неполную TLS-цепочку. В `network_security_config.xml` нет trust-anchor для Let's Encrypt E7. Если проблема на сервере не исправлена — HTTPS-запросы падают с `Chain validation failed`.
+
+### 🔵 Низкие баги
+
+#### API-9: `datetime.utcnow()` deprecated с Python 3.12
+**Файл:** `app/core/security.py`
+Использовать `datetime.now(timezone.utc)`.
+
+#### API-10: `DATABASE_URL` может быть `None`
+**Файл:** `app/database.py`
+Если `.env` отсутствует, `DATABASE_URL = None` → крэш при создании engine.
+
+#### API-11: Тест `test_expired_verification_code` не работает
+**Файл:** `tests/test_auth.py`
+Monkeypatch подменяет `app.services.auth.datetime`, но в модуле используется прямой импорт `from datetime import datetime` — патч не действует.
+
+#### МОБ-3: Мёртвый `catch (DateTimeParseException)` в `parseBirthDate`
+**Файл:** `RegisterViewModel.kt`
+`LocalDate.of()` бросает `DateTimeException`, а не `DateTimeParseException`. Работает благодаря `catch (e: Exception)` ниже.
+
+### Сводная таблица
+
+| # | Серьёзность | Репо | Описание |
+|---|---|---|---|
+| API-1 | 🔴 Критический | API | Timezone-naive vs aware → `TypeError` |
+| API-2 | 🔴 Критический | API | Старые verification codes не инвалидируются |
+| API-3 | 🔴 Критический | API | Blocking SMTP в async event loop |
+| МОБ-1 | 🔴 Критический | Mobile | Cooldown 10 мин вместо 2 мин |
+| API-4 | 🟠 Высокий | API | `debug_code` в production-ответе |
+| API-5 | 🟠 Высокий | API | `sha256_crypt` вместо `bcrypt` |
+| API-6 | 🟡 Средний | API | Refresh token в URL query |
+| API-7 | 🟡 Средний | API | CORS wildcard + credentials |
+| API-8 | 🟡 Средний | API | `random` вместо `secrets` для кодов |
+| МОБ-2 | 🟡 Средний | Mobile | SSL cert chain не настроен |
+| API-9 | 🔵 Низкий | API | `datetime.utcnow()` deprecated |
+| API-10 | 🔵 Низкий | API | `DATABASE_URL = None` → крэш |
+| API-11 | 🔵 Низкий | API | Тест expired code патчит не то |
+| МОБ-3 | 🔵 Низкий | Mobile | Мёртвый catch `DateTimeParseException` |
