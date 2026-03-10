@@ -26,9 +26,13 @@ DI: Hilt | UI: Jetpack Compose | Сеть: Retrofit | Токены: EncryptedSha
 - МОБ-2.2 — `data/remote/AuthApiService.kt` + `dto/RequestDtos.kt` — Retrofit интерфейс, 5 методов
 - МОБ-2.4 — `data/local/TokenStorage.kt` + `TokenStorageImpl.kt` — EncryptedSharedPreferences
 - МОБ-2.3 — `data/repository/AuthRepositoryImpl.kt` — реализация AuthRepository
+- МОБ-5.1 — `di/AuthModule.kt` — Hilt-модуль: OkHttpClient, Retrofit, AuthApiService, Binds
+- МОБ-4.1 — `presentation/auth/RegisterUiState.kt` — состояние 4-шагового экрана
+- МОБ-3.1 — `presentation/auth/RegisterScreen.kt` — stateless Compose UI по Figma-макету
+- МОБ-4.2/4.3 — `presentation/auth/RegisterViewModel.kt` + `RegisterEvent.kt`
+- МОБ-5.2 — `presentation/navigation/Screen.kt` + `AppNavGraph.kt` + MainActivity обновлена
 
-### 🔜 Следующий шаг — МОБ-5.1 (начинать отсюда)
-`di/AuthModule.kt` — Hilt-модуль, связывает весь auth DI-граф
+### ✅ Compile: BUILD SUCCESSFUL (compileDebugKotlin clean)
 
 ### ❌ Не начато
 
