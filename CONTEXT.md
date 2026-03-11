@@ -29,6 +29,7 @@ DI: Hilt | UI: Jetpack Compose | Сеть: Retrofit | Токены: EncryptedSha
 - МОБ-5.1 — `di/AuthModule.kt` — Hilt-модуль: OkHttpClient, Retrofit, AuthApiService, Binds
 - МОБ-4.1 — `presentation/auth/RegisterUiState.kt` — состояние 4-шагового экрана
 - МОБ-3.1 — `presentation/auth/RegisterScreen.kt` — stateless Compose UI по Figma-макету
+  - UI-улучшения (сессия 11.03.2026): убрана кнопка назад из TopAppBar, добавлен BackHandler, KeyboardCapitalization.Words для поля имени, DatePickerField с иконкой 📅 + DatePickerDialog, DateVisualTransformation (state хранит цифры «04052004», отображает «04.05.2004»)
 - МОБ-4.2/4.3 — `presentation/auth/RegisterViewModel.kt` + `RegisterEvent.kt`
 - МОБ-5.2 — `presentation/navigation/Screen.kt` + `AppNavGraph.kt` + MainActivity обновлена
 
@@ -39,8 +40,10 @@ DI: Hilt | UI: Jetpack Compose | Сеть: Retrofit | Токены: EncryptedSha
   - confirmPassword — совпадение с password
   - verificationCode — ровно 6 символов
 - Commit `380588d` запушен: `fix: switch BASE_URL to prod, add client-side email/password/code validation`
+- Commit `4d36a58` запушен: `feat(МОБ-3.1): убрать кнопку назад, автоформат даты через VisualTransformation, DatePickerDialog`
 
-### ✅ Compile: BUILD SUCCESSFUL (43 задачи Gradle)
+### ✅ Compile: BUILD SUCCESSFUL (43 задачи Gradle — commit `380588d`)
+> ⚠️ Commit `4d36a58` компилируется без ошибок (`get_errors` — чисто), новый полный Gradle-билд не запускался
 
 ### 🔜 Следующие задачи
 - **LoginScreen** (Figma node: 172:640)
@@ -409,6 +412,12 @@ Gmail-аккаунт `mgromihala@gmail.com` имеет 2FA — обычный п
 
 7. **`/auth/refresh` — query param, не body** — FastAPI без явного `Body(...)` трактует `refresh_token: str` как query parameter. В `AuthApiService` (МОБ-2.2) использовать `@POST("auth/refresh") suspend fun refreshToken(@Query("refresh_token") token: String): AuthResponseDto`.
 
+11. **`DateVisualTransformation` — подход к форматированию даты** — state хранит только цифры `"04052004"` (max 8), `DateVisualTransformation` добавляет точки только визуально через `OffsetMapping`. `parseBirthDate()` парсит из 8-цифрной строки: `digits[0..1]` — день, `[2..3]` — месяц, `[4..7]` — год. Альтернативный подход (вставлять точки в строку программно) — **содержит баг курсора**, не использовать.
+
+12. **`@Composable` import — не забыть** — При добавлении новых импортов в `RegisterScreen.kt` инструмент не всегда сохраняет `import androidx.compose.runtime.Composable`. Без него компилятор падает с `BackendException: Unresolved annotation type for @Composable` на этапе `kaptGenerateStubsDebugKotlin`. Всегда проверять этот импорт после правок.
+
+13. **`startCooldown` в RegisterViewModel** — при получении ответа от `/auth/register` прередаётся `result.expiresIn` (600 сек), а кулдаун кнопки "Отправить повторно" должен быть `RESEND_COOLDOWN_SECONDS = 120` сек. Требует отдельной проверки/исправления при работе с VerifyEmailScreen.
+
 ---
 
 ## API (бэкенд, Python/FastAPI)
@@ -487,12 +496,18 @@ fix(МОБ-2.1): исправлена nullable-типизация в ResendCodeR
 
 Типы: `feat` — новая функция, `fix` — исправление, `refactor` — рефакторинг, `chore` — служебное, `docs` — документация.
 
-> **PowerShell + кириллица в коммитах:** `-m "..."` обрезает кириллицу внутри скобок.
-> `Out-File -Encoding utf8` в PS 5.1 добавляет BOM — использовать .NET напрямую.
-> Всегда коммитить через файл:
-> ```powershell
-> [System.IO.File]::WriteAllText("$PWD/.git/COMMIT_MSG", "feat(МОБ-X.X): описание", (New-Object System.Text.UTF8Encoding $false)); git commit -F .git/COMMIT_MSG; Remove-Item .git/COMMIT_MSG
+> **PowerShell + кириллица в коммитах:** `-m "..."` и `[System.IO.File]::WriteAllText` через терминал VS Code — оба обрезают кириллицу внутри скобок (инструмент упрощает команду).
+> `Out-File -Encoding utf8` в PS 5.1 добавляет BOM. `create_file` тоже добавляет BOM — не использовать для COMMIT_MSG.
+>
+> ✅ **Единственный надёжный способ** — Python-скрипт с Unicode-эскейпами (только ASCII в исходнике):
+> ```python
+> # fix_commit.py
+> msg = u'feat(\u041c\u041e\u0411-X.X): \u043e\u043f\u0438\u0441\u0430\u043d\u0438\u0435'
+> with open(r'C:\...\mobile\.git\COMMIT_MSG', 'wb') as f:
+>     f.write(msg.encode('utf-8'))
 > ```
+> Затем: `git commit -F .git/COMMIT_MSG` (или `--amend`), удалить файл и скрипт.
+> Проверить результат: `python -c "import subprocess; r=subprocess.run(['git','log','--oneline','-1'],capture_output=True); print(r.stdout.decode('utf-8'))"`
 
 ---
 
@@ -544,12 +559,14 @@ com.example.smarttracker/
 | МОБ-2.4 | `TokenStorage` + `TokenStorageImpl` (EncryptedSharedPreferences) | ✅ |
 | МОБ-5.1 | `AuthModule.kt` — Hilt DI | ✅ |
 | МОБ-3.1 | `RegisterScreen.kt` — Compose UI по Figma | ✅ |
+| МОБ-3.1 🆕 | UI-улучшения: BackHandler, DatePickerField, DateVisualTransformation, KeyboardCapitalization | ✅ |
 | МОБ-4.1–4.3 | `RegisterUiState`, `RegisterViewModel`, `RegisterEvent` | ✅ |
 | МОБ-5.2 | `Screen.kt` + `AppNavGraph.kt` + `MainActivity` | ✅ |
 | fix | `BASE_URL` → `https://runtastic.gottland.ru/` | ✅ |
 | fix | Клиентская валидация: email, пароль, совпадение, код 6 цифр | ✅ |
 
 **Сборка:** BUILD SUCCESSFUL (43 задачи). Commit `380588d` в ветке `main`.
+**Последний коммит:** `4d36a58` — `feat(МОБ-3.1): убрать кнопку назад, автоформат даты, DatePickerDialog` (get_errors чист, полный Gradle-билд не запускался)
 
 #### Сервер — устранённые баги (в процессе тестирования)
 
