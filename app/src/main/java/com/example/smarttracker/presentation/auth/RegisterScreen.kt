@@ -20,14 +20,18 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.activity.compose.BackHandler
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDefaults
+import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -41,21 +45,33 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import java.util.Calendar
 import com.example.smarttracker.domain.model.Gender
 import com.example.smarttracker.domain.model.UserPurpose
+import com.example.smarttracker.presentation.theme.SmartTrackerTheme
 
 // ── Цвета дизайна ────────────────────────────────────────────────────────────
 private val ColorPrimary     = Color(0xFF0A1928)
@@ -147,6 +163,7 @@ private fun RegisterStep1(
             label = "Имя",
             placeholder = "Имя...",
             keyboardType = KeyboardType.Text,
+            capitalization = KeyboardCapitalization.Words,
         )
 
         Spacer(Modifier.height(16.dp))
@@ -161,12 +178,9 @@ private fun RegisterStep1(
 
         Spacer(Modifier.height(16.dp))
 
-        StyledTextField(
+        DatePickerField(
             value = state.birthDate,
             onValueChange = onBirthDateChange,
-            label = "Дата рождения",
-            placeholder = "дд.мм.гггг",
-            keyboardType = KeyboardType.Number,
         )
 
         Spacer(Modifier.height(16.dp))
@@ -419,20 +433,12 @@ private fun RegisterScaffold(
     isLoading: Boolean,
     content: @Composable () -> Unit,
 ) {
+    BackHandler { onBack() }
     Scaffold(
         containerColor = ColorBackground,
         topBar = {
             TopAppBar(
                 title = {},
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Назад",
-                            tint = ColorPrimary,
-                        )
-                    }
-                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = ColorBackground,
                 ),
@@ -442,7 +448,7 @@ private fun RegisterScaffold(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 16.dp),
+                    .padding(horizontal = 16.dp, vertical = 50.dp),
             ) {
                 Button(
                     onClick = onNext,
@@ -516,13 +522,17 @@ private fun StyledTextField(
     label: String,
     placeholder: String,
     keyboardType: KeyboardType = KeyboardType.Text,
+    capitalization: KeyboardCapitalization = KeyboardCapitalization.None,
     imeAction: ImeAction = ImeAction.Next,
+    visualTransformation: VisualTransformation = VisualTransformation.None,
     isPassword: Boolean = false,
     isPasswordVisible: Boolean = false,
     onTogglePasswordVisibility: (() -> Unit)? = null,
 ) {
-    val visualTransformation = if (isPassword && !isPasswordVisible)
-        PasswordVisualTransformation() else VisualTransformation.None
+    val appliedTransformation = when {
+        isPassword && !isPasswordVisible -> PasswordVisualTransformation()
+        else -> visualTransformation
+    }
 
     Column {
         Text(
@@ -542,9 +552,10 @@ private fun StyledTextField(
                     color = ColorPlaceholder,
                 )
             },
-            visualTransformation = visualTransformation,
+            visualTransformation = appliedTransformation,
             keyboardOptions = KeyboardOptions(
                 keyboardType = keyboardType,
+                capitalization = capitalization,
                 imeAction = imeAction,
             ),
             trailingIcon = if (isPassword && onTogglePasswordVisibility != null) {
@@ -673,3 +684,250 @@ private fun ErrorText(message: String) {
         modifier = Modifier.fillMaxWidth(),
     )
 }
+
+/** Визуальная трансформация для поля даты: state хранит цифры "04052004", отображается "04.05.2004" */
+private class DateVisualTransformation : VisualTransformation {
+    override fun filter(text: AnnotatedString): TransformedText {
+        val digits = text.text
+        val out = buildString {
+            for (i in digits.indices) {
+                if (i == 2 || i == 4) append('.')
+                append(digits[i])
+            }
+        }
+        val offsetMapping = object : OffsetMapping {
+            override fun originalToTransformed(offset: Int): Int = when {
+                offset <= 2 -> offset
+                offset <= 4 -> offset + 1
+                else        -> offset + 2
+            }
+            override fun transformedToOriginal(offset: Int): Int = when {
+                offset <= 2 -> offset
+                offset == 3 -> 2
+                offset <= 5 -> offset - 1
+                offset == 6 -> 4
+                else        -> offset - 2
+            }
+        }
+        return TransformedText(AnnotatedString(out), offsetMapping)
+    }
+}
+
+/**
+ * Поле даты рождения: текстовый ввод + кнопка календаря.
+ * [value] — цифры "04052004", [onValueChange] — коллбэк аналогично полю даты.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DatePickerField(
+    value: String,
+    onValueChange: (String) -> Unit,
+) {
+    var showPicker by remember { mutableStateOf(false) }
+
+    Column {
+        Text(
+            text = "Дата рождения",
+            fontSize = 16.sp,
+            color = ColorPrimary,
+            fontWeight = FontWeight.Light,
+        )
+        Spacer(Modifier.height(4.dp))
+        OutlinedTextField(
+            value = value,
+            onValueChange = { input ->
+                val digits = input.filter { it.isDigit() }.take(8)
+                onValueChange(digits)
+            },
+            placeholder = {
+                Text(
+                    text = "дд.мм.гггг",
+                    fontSize = 16.sp,
+                    color = ColorPlaceholder,
+                )
+            },
+            visualTransformation = DateVisualTransformation(),
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Number,
+                imeAction = ImeAction.Next,
+            ),
+            trailingIcon = {
+                IconButton(onClick = { showPicker = true }) {
+                    Icon(
+                        imageVector = Icons.Default.CalendarMonth,
+                        contentDescription = "Выбрать дату",
+                        tint = ColorPlaceholder,
+                    )
+                }
+            },
+            singleLine = true,
+            shape = RoundedCornerShape(10.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = ColorPrimary,
+                unfocusedBorderColor = ColorPrimary,
+                focusedContainerColor = ColorBackground,
+                unfocusedContainerColor = ColorBackground,
+                cursorColor = ColorPrimary,
+                focusedTextColor = ColorPrimary,
+                unfocusedTextColor = ColorPrimary,
+            ),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(50.dp),
+        )
+    }
+
+    if (showPicker) {
+        // Установить начальную дату из уже введённых цифр (если есть)
+        val initialMillis: Long? = if (value.length == 8) {
+            try {
+                val day   = value.substring(0, 2).toInt()
+                val month = value.substring(2, 4).toInt()
+                val year  = value.substring(4, 8).toInt()
+                val cal = Calendar.getInstance().apply {
+                    set(year, month - 1, day, 0, 0, 0)
+                    set(Calendar.MILLISECOND, 0)
+                }
+                cal.timeInMillis
+            } catch (e: Exception) { null }
+        } else null
+
+        val datePickerState = rememberDatePickerState(initialSelectedDateMillis = initialMillis)
+
+        DatePickerDialog(
+            onDismissRequest = { showPicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    showPicker = false
+                    datePickerState.selectedDateMillis?.let { millis ->
+                        val cal = Calendar.getInstance().apply { timeInMillis = millis }
+                        val d = cal.get(Calendar.DAY_OF_MONTH).toString().padStart(2, '0')
+                        val m = (cal.get(Calendar.MONTH) + 1).toString().padStart(2, '0')
+                        val y = cal.get(Calendar.YEAR).toString()
+                        onValueChange("$d$m$y")
+                    }
+                }) { Text("Ок") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPicker = false }) { Text("Отмена") }
+            },
+        ) {
+            DatePicker(state = datePickerState)
+        }
+    }
+}
+
+// ── Previews ──────────────────────────────────────────────────────────────────
+
+private val previewCallbacks = object {
+    val onString: (String) -> Unit = {}
+    val onBool: (Boolean) -> Unit = {}
+    val onGender: (Gender) -> Unit = {}
+    val onPurpose: (UserPurpose) -> Unit = {}
+    val onUnit: () -> Unit = {}
+}
+
+@Preview(name = "Шаг 1 — Личные данные", showBackground = true, showSystemUi = true)
+@Composable
+private fun PreviewStep1() {
+    SmartTrackerTheme {
+        RegisterScreen(
+            state = RegisterUiState(step = 1, firstName = "", gender = Gender.MALE),
+            onFirstNameChange = previewCallbacks.onString,
+            onUsernameChange = previewCallbacks.onString,
+            onBirthDateChange = previewCallbacks.onString,
+            onGenderChange = previewCallbacks.onGender,
+            onPurposeChange = previewCallbacks.onPurpose,
+            onEmailChange = previewCallbacks.onString,
+            onPasswordChange = previewCallbacks.onString,
+            onConfirmPasswordChange = previewCallbacks.onString,
+            onTogglePasswordVisibility = previewCallbacks.onUnit,
+            onToggleConfirmPasswordVisibility = previewCallbacks.onUnit,
+            onTermsAcceptedChange = previewCallbacks.onBool,
+            onVerificationCodeChange = previewCallbacks.onString,
+            onResendCode = previewCallbacks.onUnit,
+            onNext = previewCallbacks.onUnit,
+            onBack = previewCallbacks.onUnit,
+        )
+    }
+}
+
+@Preview(name = "Шаг 2 — Цель использования", showBackground = true, showSystemUi = true)
+@Composable
+private fun PreviewStep2() {
+    SmartTrackerTheme {
+        RegisterScreen(
+            state = RegisterUiState(step = 2, purpose = UserPurpose.ATHLETE),
+            onFirstNameChange = previewCallbacks.onString,
+            onUsernameChange = previewCallbacks.onString,
+            onBirthDateChange = previewCallbacks.onString,
+            onGenderChange = previewCallbacks.onGender,
+            onPurposeChange = previewCallbacks.onPurpose,
+            onEmailChange = previewCallbacks.onString,
+            onPasswordChange = previewCallbacks.onString,
+            onConfirmPasswordChange = previewCallbacks.onString,
+            onTogglePasswordVisibility = previewCallbacks.onUnit,
+            onToggleConfirmPasswordVisibility = previewCallbacks.onUnit,
+            onTermsAcceptedChange = previewCallbacks.onBool,
+            onVerificationCodeChange = previewCallbacks.onString,
+            onResendCode = previewCallbacks.onUnit,
+            onNext = previewCallbacks.onUnit,
+            onBack = previewCallbacks.onUnit,
+        )
+    }
+}
+
+@Preview(name = "Шаг 3 — Безопасность", showBackground = true, showSystemUi = true)
+@Composable
+private fun PreviewStep3() {
+    SmartTrackerTheme {
+        RegisterScreen(
+            state = RegisterUiState(step = 3, termsAccepted = true),
+            onFirstNameChange = previewCallbacks.onString,
+            onUsernameChange = previewCallbacks.onString,
+            onBirthDateChange = previewCallbacks.onString,
+            onGenderChange = previewCallbacks.onGender,
+            onPurposeChange = previewCallbacks.onPurpose,
+            onEmailChange = previewCallbacks.onString,
+            onPasswordChange = previewCallbacks.onString,
+            onConfirmPasswordChange = previewCallbacks.onString,
+            onTogglePasswordVisibility = previewCallbacks.onUnit,
+            onToggleConfirmPasswordVisibility = previewCallbacks.onUnit,
+            onTermsAcceptedChange = previewCallbacks.onBool,
+            onVerificationCodeChange = previewCallbacks.onString,
+            onResendCode = previewCallbacks.onUnit,
+            onNext = previewCallbacks.onUnit,
+            onBack = previewCallbacks.onUnit,
+        )
+    }
+}
+
+@Preview(name = "Шаг 4 — Подтверждение почты", showBackground = true, showSystemUi = true)
+@Composable
+private fun PreviewStep4() {
+    SmartTrackerTheme {
+        RegisterScreen(
+            state = RegisterUiState(
+                step = 4,
+                email = "user@example.com",
+                resendCooldownSeconds = 97,
+            ),
+            onFirstNameChange = previewCallbacks.onString,
+            onUsernameChange = previewCallbacks.onString,
+            onBirthDateChange = previewCallbacks.onString,
+            onGenderChange = previewCallbacks.onGender,
+            onPurposeChange = previewCallbacks.onPurpose,
+            onEmailChange = previewCallbacks.onString,
+            onPasswordChange = previewCallbacks.onString,
+            onConfirmPasswordChange = previewCallbacks.onString,
+            onTogglePasswordVisibility = previewCallbacks.onUnit,
+            onToggleConfirmPasswordVisibility = previewCallbacks.onUnit,
+            onTermsAcceptedChange = previewCallbacks.onBool,
+            onVerificationCodeChange = previewCallbacks.onString,
+            onResendCode = previewCallbacks.onUnit,
+            onNext = previewCallbacks.onUnit,
+            onBack = previewCallbacks.onUnit,
+        )
+    }
+}
+

@@ -19,7 +19,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.LocalDate
-import java.time.format.DateTimeParseException
 import javax.inject.Inject
 
 @HiltViewModel
@@ -45,9 +44,8 @@ class RegisterViewModel @Inject constructor(
         _state.update { it.copy(username = value, fieldError = null) }
 
     fun onBirthDateChange(value: String) {
-        // Разрешаем только цифры и точки, авто-форматирование дд.мм.гггг
-        val filtered = value.filter { it.isDigit() || it == '.' }
-        _state.update { it.copy(birthDate = filtered, fieldError = null) }
+        val digits = value.filter { it.isDigit() }.take(8)
+        _state.update { it.copy(birthDate = digits, fieldError = null) }
     }
 
     fun onGenderChange(gender: Gender) =
@@ -241,18 +239,15 @@ class RegisterViewModel @Inject constructor(
         }
     }
 
-    /** Парсинг даты из формата дд.мм.гггг → LocalDate */
+    /** Парсинг даты из цифр в0405200 → LocalDate */
     private fun parseBirthDate(dateStr: String): LocalDate? {
-        val trimmed = dateStr.trim()
-        val parts = trimmed.split(".")
-        if (parts.size != 3) return null
+        val digits = dateStr.filter { it.isDigit() }
+        if (digits.length != 8) return null
         return try {
-            val day   = parts[0].toIntOrNull() ?: return null
-            val month = parts[1].toIntOrNull() ?: return null
-            val year  = parts[2].toIntOrNull() ?: return null
+            val day   = digits.substring(0, 2).toInt()
+            val month = digits.substring(2, 4).toInt()
+            val year  = digits.substring(4, 8).toInt()
             LocalDate.of(year, month, day)
-        } catch (e: DateTimeParseException) {
-            null
         } catch (e: Exception) {
             null
         }
