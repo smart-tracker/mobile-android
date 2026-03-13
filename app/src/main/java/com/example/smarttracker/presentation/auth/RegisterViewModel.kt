@@ -35,6 +35,12 @@ class RegisterViewModel @Inject constructor(
 
     private var cooldownJob: Job? = null
 
+    // Кулдаун для повторной отправки кода (120 сек = 2 минуты)
+    // Не путать с VERIFICATION_CODE_EXPIRE_MINUTES (10 минут) — жизнь самого кода верификации!
+    companion object {
+        private const val RESEND_COOLDOWN_SECONDS = 120
+    }
+
     // ── Шаг 1: Личные данные ─────────────────────────────────────────────────
 
     fun onFirstNameChange(value: String) =
@@ -87,7 +93,9 @@ class RegisterViewModel @Inject constructor(
             _state.update { it.copy(isLoading = true, error = null, fieldError = null) }
             authRepository.resendCode(email)
                 .onSuccess { result ->
-                    startCooldown(result.expiresIn)
+                    // Кулдаун RESEND_COOLDOWN_SECONDS (120 сек = 2 мин), НЕ result.expiresIn (600 сек = 10 мин)
+                    // result.expiresIn используется для таймера жизни самого кода верификации
+                    startCooldown(RESEND_COOLDOWN_SECONDS)
                     _state.update { it.copy(isLoading = false) }
                 }
                 .onFailure { error ->
@@ -190,7 +198,9 @@ class RegisterViewModel @Inject constructor(
             _state.update { it.copy(isLoading = true, error = null, fieldError = null) }
             registerUseCase(request)
                 .onSuccess { result ->
-                    startCooldown(result.expiresIn)
+                    // Кулдаун RESEND_COOLDOWN_SECONDS (120 сек = 2 мин), НЕ result.expiresIn (600 сек = 10 мин)
+                    // result.expiresIn используется для таймера жизни самого кода верификации
+                    startCooldown(RESEND_COOLDOWN_SECONDS)
                     _state.update { it.copy(isLoading = false, step = 4) }
                 }
                 .onFailure { error ->
