@@ -78,6 +78,7 @@ private val ColorPrimary     = Color(0xFF0A1928)
 private val ColorPlaceholder = Color(0xFF525760)
 private val ColorBackground  = Color.White
 private val ColorWhite       = Color.White
+private val ColorCheckboxChecked = Color(0xFF4DACA7)  // бирюзово-зелёный
 
 // ── Корневой composable ───────────────────────────────────────────────────────
 
@@ -223,29 +224,24 @@ private fun RegisterStep2(
 
         Column(modifier = Modifier.selectableGroup()) {
             PurposeOption(
-                text = "Я спортсмен и хочу отслеживать свои тренировки",
+                text = "Я тренируюсь - мне нужен трекер для занятий",
                 selected = state.purpose == UserPurpose.ATHLETE,
                 onClick = { onPurposeChange(UserPurpose.ATHLETE) },
             )
             PurposeOption(
-                text = "Я хочу ознакомиться с функционалом приложения",
-                selected = state.purpose == UserPurpose.EXPLORING,
-                onClick = { onPurposeChange(UserPurpose.EXPLORING) },
-            )
-            PurposeOption(
-                text = "Я тренер и хочу создать свой клуб",
+                text = "Я тренирую - мне нужно средство для организации тренировок",
                 selected = state.purpose == UserPurpose.TRAINER,
                 onClick = { onPurposeChange(UserPurpose.TRAINER) },
             )
             PurposeOption(
-                text = "Я владелец клуба и хочу создать свой клуб",
+                text = "Я организатор клуба - мне нужен инструмент для контроля его работы.",
                 selected = state.purpose == UserPurpose.CLUB_OWNER,
                 onClick = { onPurposeChange(UserPurpose.CLUB_OWNER) },
             )
             PurposeOption(
-                text = "Ни одна из причин не подходит",
-                selected = state.purpose == UserPurpose.OTHER,
-                onClick = { onPurposeChange(UserPurpose.OTHER) },
+                text = "Просто посмотреть",
+                selected = state.purpose == UserPurpose.EXPLORING,
+                onClick = { onPurposeChange(UserPurpose.EXPLORING) },
             )
         }
 
@@ -480,6 +476,7 @@ private fun RegisterScaffold(
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp, vertical = 8.dp),
         ) {
+            Spacer(Modifier.height(80.dp))
             StepTitle(title)
             Spacer(Modifier.height(24.dp))
             content()
@@ -503,7 +500,7 @@ private fun StepTitle(text: String) {
             text = text,
             fontSize = 20.sp,
             color = ColorPrimary,
-            fontWeight = FontWeight.Light,
+            fontWeight = FontWeight.SemiBold,
             modifier = Modifier.padding(horizontal = 8.dp),
         )
         HorizontalDivider(
@@ -649,19 +646,24 @@ private fun PurposeOption(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
-            .selectable(
-                selected = selected,
+            .clickable(
+                role = Role.Checkbox,
                 onClick = onClick,
-                role = Role.RadioButton,
             )
             .padding(vertical = 8.dp),
     ) {
-        RadioButton(
-            selected = selected,
-            onClick = null,
-            colors = RadioButtonDefaults.colors(
-                selectedColor = ColorPrimary,
-                unselectedColor = ColorPrimary,
+        Checkbox(
+            checked = selected,
+            onCheckedChange = null,
+            modifier = if (selected) {
+                Modifier.border(2.dp, Color.Black)
+            } else {
+                Modifier
+            },
+            colors = CheckboxDefaults.colors(
+                checkedColor = ColorCheckboxChecked,
+                uncheckedColor = Color.Black,
+                checkmarkColor = Color.Black,
             ),
         )
         Text(
