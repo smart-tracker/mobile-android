@@ -55,6 +55,10 @@ DI: Hilt | UI: Jetpack Compose | Сеть: Retrofit | Токены: EncryptedSha
   - `RegisterViewModel` обновлена для использования `ApiErrorHandler` в методах: `submitRegistration()`, `verifyEmail()`, `onResendCode()`
   - Поддержка категоризации ошибок: USERNAME_TAKEN, EMAIL_TAKEN, PASSWORD_ERROR, TOO_MANY_ATTEMPTS, RESEND_COOLDOWN, GENERIC
   - Примеры типичных ошибок и их обработки в `utils/ApiErrorScenarios.kt` (документация для разработчиков)
+  - **Перевод ошибок на русский:** добавлена карта `errorTranslations` с автоматическим переводом типичных ошибок с английского (от бэкенда) на русский
+  - Примеры переводов: "User with this email already exists" → "Пользователь с такой почтой уже существует"
+  - Коммит `114f617`: feat: add API error handling with user-friendly messages
+  - Коммит `7420009`: feat: translate all API error messages to Russian (only Russian UI errors)
 
 ### ✅ Compile: BUILD SUCCESSFUL
 
