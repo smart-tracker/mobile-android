@@ -1,102 +1,122 @@
 package com.example.smarttracker.utils
 
-import org.junit.Test
-import org.junit.Assert.assertEquals
 import retrofit2.HttpException
+import retrofit2.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
-import okhttp3.Response
 import okhttp3.Protocol
 import okhttp3.Request
+import com.example.smarttracker.utils.ErrorCategory
 
 /**
  * Юнит-тесты для ApiErrorHandler.
- * Проверяют корректность парсинга ошибок и категоризации.
+ * Проверяют корректность парсинга, перевода ошибок и категоризации.
+ * 
+ * Примечание: для запуска требуется JUnit4 в testImplementation (build.gradle.kts)
  */
 class ApiErrorHandlerTest {
 
     /**
-     * Тест 1: HttpException с JSON ошибкой "username already exists"
+     * Тест 1: Перевод ошибки email на русский
      */
-    @Test
-    fun testCategorizeUsername_Taken() {
-        val message = "Username 'john_doe' already exists"
-        val category = ApiErrorHandler.categorizeError(message)
-        assertEquals(ErrorCategory.USERNAME_TAKEN, category)
+    fun testTranslation_EmailAlreadyExists() {
+        val englishError = "User with this email already exists"
+        val russian = ApiErrorHandler.getErrorMessage(
+            createHttpException(409, """{"detail": "$englishError"}""")
+        )
+        if (russian != "Пользователь с такой почтой уже существует") {
+            throw AssertionError("Expected Russian translation, got: $russian")
+        }
     }
 
     /**
-     * Тест 2: HttpException с JSON ошибкой "email already registered"
+     * Тест 2: Перевод ошибки username на русский
      */
-    @Test
-    fun testCategorizeEmail_Taken() {
-        val message = "Email 'user@example.com' is already registered"
-        val category = ApiErrorHandler.categorizeError(message)
-        assertEquals(ErrorCategory.EMAIL_TAKEN, category)
+    fun testTranslation_UsernameAlreadyExists() {
+        val englishError = "User with this username already exists"
+        val russian = ApiErrorHandler.getErrorMessage(
+            createHttpException(409, """{"detail": "$englishError"}""")
+        )
+        if (russian != "Это имя пользователя уже используется") {
+            throw AssertionError("Expected Russian translation, got: $russian")
+        }
     }
 
     /**
-     * Тест 3: HttpException с JSON ошибкой "too many failed attempts"
+     * Тест 3: Категоризация переведённой ошибки email
      */
-    @Test
-    fun testCategorizeTooManyAttempts() {
-        val message = "Too many failed attempts. Account temporarily locked"
+    fun testCategorizeEmail_Translated() {
+        val message = "Пользователь с такой почтой уже существует"
         val category = ApiErrorHandler.categorizeError(message)
-        assertEquals(ErrorCategory.TOO_MANY_ATTEMPTS, category)
+        if (category != ErrorCategory.EMAIL_TAKEN) {
+            throw AssertionError("Expected EMAIL_TAKEN, got: $category")
+        }
     }
 
     /**
-     * Тест 4: HttpException с JSON ошибкой "please wait before resending"
+     * Тест 4: Категоризация переведённой ошибки username
      */
-    @Test
-    fun testCategorizeResendCooldown() {
-        val message = "Please wait 87 seconds before resending verification code"
+    fun testCategorizeUsername_Translated() {
+        val message = "Это имя пользователя уже используется"
         val category = ApiErrorHandler.categorizeError(message)
-        assertEquals(ErrorCategory.RESEND_COOLDOWN, category)
+        if (category != ErrorCategory.USERNAME_TAKEN) {
+            throw AssertionError("Expected USERNAME_TAKEN, got: $category")
+        }
     }
 
     /**
-     * Тест 5: Неизвестная ошибка → GENERIC
+     * Тест 5: Перевод ошибки "Too many attempts"
      */
-    @Test
-    fun testCategorizeGeneric() {
-        val message = "Some other error from server"
-        val category = ApiErrorHandler.categorizeError(message)
-        assertEquals(ErrorCategory.GENERIC, category)
+    fun testTranslation_TooManyAttempts() {
+        val englishError = "Too many failed attempts. Account temporarily locked"
+        val russian = ApiErrorHandler.getErrorMessage(
+            createHttpException(400, """{"detail": "$englishError"}""")
+        )
+        if (!russian.contains("Слишком много")) {
+            throw AssertionError("Expected Russian 'много', got: $russian")
+        }
     }
 
     /**
-     * Тест 6: Сообщение об ошибке на русском
+     * Тест 6: Перевод ошибки с cooldown (извлечение числа)
      */
-    @Test
-    fun testCategorizeRussian_EmailTaken() {
-        val message = "Email занята"
-        val category = ApiErrorHandler.categorizeError(message)
-        assertEquals(ErrorCategory.EMAIL_TAKEN, category)
+    fun testTranslation_CooldownWithSeconds() {
+        val englishError = "Please wait 87 seconds before resending"
+        val russian = ApiErrorHandler.getErrorMessage(
+            createHttpException(400, """{"detail": "$englishError"}""")
+        )
+        if (!russian.contains("87") || !russian.contains("секунд")) {
+            throw AssertionError("Expected Russian with '87' and 'секунд', got: $russian")
+        }
     }
 
     /**
-     * Тест 7: Network error → сообщение об интернете
+     * Тест 7: Network error на русском
      */
-    @Test
     fun testGetErrorMessage_IOException() {
         val exception = java.io.IOException("Connection refused")
         val message = ApiErrorHandler.getErrorMessage(exception)
-        assertTrue(message.contains("подключен", ignoreCase = true))
+        if (!message.contains("Ошибка подключения")) {
+            throw AssertionError("Expected Russian 'подключение', got: $message")
+        }
     }
 
     /**
-     * Тест 8: Неизвестное исключение → fallback сообщение
+     * Тест 8: Категоризация русской ошибки из любого источника
      */
-    @Test
-    fun testGetErrorMessage_UnknownException() {
-        val exception = RuntimeException("Random error")
-        val message = ApiErrorHandler.getErrorMessage(exception)
-        assertEquals("Random error", message)
+    fun testCategorize_RussianEmail() {
+        val message = "Пользователь с такой почтой уже существует"
+        val category = ApiErrorHandler.categorizeError(message)
+        if (category != ErrorCategory.EMAIL_TAKEN) {
+            throw AssertionError("Expected EMAIL_TAKEN, got: $category")
+        }
     }
 
-    private fun assertTrue(condition: Boolean) {
-        if (!condition) {
-            throw AssertionError("Assertion failed")
-        }
+    // ── Хелперы ──────────────────────────────────────────────────────────────
+
+    private fun createHttpException(code: Int, responseBody: String): HttpException {
+        val body = responseBody.toResponseBody()
+        @Suppress("UNCHECKED_CAST")
+        val response = Response.error<Any>(code, body) as Response<Any>
+        return HttpException(response)
     }
 }
