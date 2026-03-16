@@ -34,6 +34,12 @@ object ApiErrorHandler {
         "Username already exists" to "Это имя пользователя уже используется",
         "username already exists" to "Это имя пользователя уже используется",
         
+        // Nickname errors (API использует nickname вместо username)
+        "User with this nickname already exists" to "Это имя пользователя уже используется",
+        "user with this nickname already exists" to "Это имя пользователя уже используется",
+        "Nickname already exists" to "Это имя пользователя уже используется",
+        "nickname already exists" to "Это имя пользователя уже используется",
+        
         // Email format errors
         "Invalid email format" to "Неверный формат почты",
         "invalid email format" to "Неверный формат почты",
@@ -190,7 +196,7 @@ object ApiErrorHandler {
                 ErrorCategory.EMAIL_TAKEN
 
             // Username errors
-            lowerError.contains("username") &&
+            (lowerError.contains("username") || lowerError.contains("nickname")) &&
             (lowerError.contains("exist") || 
              lowerError.contains("already") ||
              lowerError.contains("занят") ||

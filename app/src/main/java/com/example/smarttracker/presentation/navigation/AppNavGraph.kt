@@ -10,6 +10,9 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.example.smarttracker.presentation.auth.LoginEvent
+import com.example.smarttracker.presentation.auth.LoginScreen
+import com.example.smarttracker.presentation.auth.LoginViewModel
 import com.example.smarttracker.presentation.auth.RegisterEvent
 import com.example.smarttracker.presentation.auth.RegisterScreen
 import com.example.smarttracker.presentation.auth.RegisterViewModel
@@ -17,7 +20,7 @@ import com.example.smarttracker.presentation.auth.RegisterViewModel
 @Composable
 fun AppNavGraph(
     navController: NavHostController = rememberNavController(),
-    startDestination: String = Screen.Register.route,
+    startDestination: String = Screen.Login.route,
 ) {
     NavHost(
         navController = navController,
@@ -62,6 +65,42 @@ fun AppNavGraph(
                 isStep2Complete = viewModel.isStep2Complete(),
                 isStep3Complete = viewModel.isStep3Complete(),
                 isStep4Complete = viewModel.isStep4Complete(),
+            )
+        }
+
+        composable(Screen.Login.route) {
+            val viewModel: LoginViewModel = hiltViewModel()
+            val state by viewModel.state.collectAsStateWithLifecycle()
+
+            LaunchedEffect(Unit) {
+                viewModel.events.collect { event ->
+                    when (event) {
+                        is LoginEvent.NavigateToHome -> {
+                            navController.navigate(Screen.Home.route) {
+                                popUpTo(Screen.Login.route) { inclusive = true }
+                            }
+                        }
+                        is LoginEvent.NavigateToRegister -> {
+                            navController.navigate(Screen.Register.route) {
+                                popUpTo(Screen.Login.route) { inclusive = false }
+                            }
+                        }
+                        is LoginEvent.NavigateToPasswordRecovery -> {
+                            // TODO: МОБ-5.x — PasswordRecoveryScreen
+                            // navController.navigate(Screen.PasswordRecovery.route)
+                        }
+                    }
+                }
+            }
+
+            LoginScreen(
+                state = state,
+                onEmailChange = viewModel::onEmailChange,
+                onPasswordChange = viewModel::onPasswordChange,
+                onTogglePasswordVisibility = viewModel::onTogglePasswordVisibility,
+                onSubmitLogin = viewModel::onSubmitLogin,
+                onNavigateToRegister = viewModel::onNavigateToRegister,
+                onNavigateToPasswordRecovery = viewModel::onNavigateToPasswordRecovery
             )
         }
 
