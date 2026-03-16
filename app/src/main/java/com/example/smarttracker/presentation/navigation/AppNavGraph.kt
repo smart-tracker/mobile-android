@@ -58,6 +58,10 @@ fun AppNavGraph(
                 onResendCode = viewModel::onResendCode,
                 onNext = viewModel::onNext,
                 onBack = viewModel::onBack,
+                isStep1Complete = viewModel.isStep1Complete(),
+                isStep2Complete = viewModel.isStep2Complete(),
+                isStep3Complete = viewModel.isStep3Complete(),
+                isStep4Complete = viewModel.isStep4Complete(),
             )
         }
 

@@ -128,6 +128,32 @@ class RegisterViewModel @Inject constructor(
         }
     }
 
+    // ── Проверка заполненности полей (без валидации - для disabling кнопки) ──
+
+    fun isStep1Complete(): Boolean {
+        val s = _state.value
+        return s.firstName.isNotBlank() &&
+               s.username.isNotBlank() &&
+               s.birthDate.length == 8 &&
+               s.gender != null
+    }
+
+    fun isStep2Complete(): Boolean {
+        return _state.value.purpose != null
+    }
+
+    fun isStep3Complete(): Boolean {
+        val s = _state.value
+        return s.email.isNotBlank() &&
+               s.password.isNotBlank() &&
+               s.confirmPassword.isNotBlank() &&
+               s.termsAccepted
+    }
+
+    fun isStep4Complete(): Boolean {
+        return _state.value.verificationCode.length == 6
+    }
+
     // ── Приватная логика ──────────────────────────────────────────────────────
 
     private fun validateStep1() {

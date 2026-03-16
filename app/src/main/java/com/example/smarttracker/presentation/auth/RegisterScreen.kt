@@ -100,6 +100,10 @@ fun RegisterScreen(
     onResendCode: () -> Unit,
     onNext: () -> Unit,
     onBack: () -> Unit,
+    isStep1Complete: Boolean = false,
+    isStep2Complete: Boolean = false,
+    isStep3Complete: Boolean = false,
+    isStep4Complete: Boolean = false,
 ) {
     when (state.step) {
         1 -> RegisterStep1(
@@ -110,12 +114,14 @@ fun RegisterScreen(
             onGenderChange = onGenderChange,
             onNext = onNext,
             onBack = onBack,
+            isNextEnabled = isStep1Complete,
         )
         2 -> RegisterStep2(
             state = state,
             onPurposeChange = onPurposeChange,
             onNext = onNext,
             onBack = onBack,
+            isNextEnabled = isStep2Complete,
         )
         3 -> RegisterStep3(
             state = state,
@@ -127,6 +133,7 @@ fun RegisterScreen(
             onTermsAcceptedChange = onTermsAcceptedChange,
             onNext = onNext,
             onBack = onBack,
+            isNextEnabled = isStep3Complete,
         )
         4 -> RegisterStep4(
             state = state,
@@ -134,6 +141,7 @@ fun RegisterScreen(
             onResendCode = onResendCode,
             onNext = onNext,
             onBack = onBack,
+            isNextEnabled = isStep4Complete,
         )
     }
 }
@@ -150,6 +158,7 @@ private fun RegisterStep1(
     onGenderChange: (Gender) -> Unit,
     onNext: () -> Unit,
     onBack: () -> Unit,
+    isNextEnabled: Boolean = false,
 ) {
     RegisterScaffold(
         title = "Личные данные (1/4)",
@@ -157,6 +166,7 @@ private fun RegisterStep1(
         onNext = onNext,
         nextLabel = "Продолжить",
         isLoading = state.isLoading,
+        isNextEnabled = isNextEnabled,
     ) {
         StyledTextField(
             value = state.firstName,
@@ -205,6 +215,7 @@ private fun RegisterStep2(
     onPurposeChange: (UserPurpose) -> Unit,
     onNext: () -> Unit,
     onBack: () -> Unit,
+    isNextEnabled: Boolean = false,
 ) {
     RegisterScaffold(
         title = "Цель использования (2/4)",
@@ -212,6 +223,7 @@ private fun RegisterStep2(
         onNext = onNext,
         nextLabel = "Продолжить",
         isLoading = state.isLoading,
+        isNextEnabled = isNextEnabled,
     ) {
         Text(
             text = "Почему вы установили приложение?",
@@ -264,6 +276,7 @@ private fun RegisterStep3(
     onTermsAcceptedChange: (Boolean) -> Unit,
     onNext: () -> Unit,
     onBack: () -> Unit,
+    isNextEnabled: Boolean = false,
 ) {
     RegisterScaffold(
         title = "Безопасность и доступ (3/4)",
@@ -271,6 +284,7 @@ private fun RegisterStep3(
         onNext = onNext,
         nextLabel = "Продолжить",
         isLoading = state.isLoading,
+        isNextEnabled = isNextEnabled,
     ) {
         StyledTextField(
             value = state.email,
@@ -343,6 +357,7 @@ private fun RegisterStep4(
     onResendCode: () -> Unit,
     onNext: () -> Unit,
     onBack: () -> Unit,
+    isNextEnabled: Boolean = false,
 ) {
     val cooldown = state.resendCooldownSeconds
     val cooldownFormatted = String.format("%02d:%02d", cooldown / 60, cooldown % 60)
@@ -353,6 +368,7 @@ private fun RegisterStep4(
         onNext = onNext,
         nextLabel = "Создать аккаунт",
         isLoading = state.isLoading,
+        isNextEnabled = isNextEnabled,
     ) {
         Text(
             text = "Код отправлен на ${state.email}.",
@@ -427,6 +443,7 @@ private fun RegisterScaffold(
     onNext: () -> Unit,
     nextLabel: String,
     isLoading: Boolean,
+    isNextEnabled: Boolean = true,
     content: @Composable () -> Unit,
 ) {
     BackHandler { onBack() }
@@ -448,7 +465,7 @@ private fun RegisterScaffold(
             ) {
                 Button(
                     onClick = onNext,
-                    enabled = !isLoading,
+                    enabled = !isLoading && isNextEnabled,
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(50.dp),
@@ -850,6 +867,7 @@ private fun PreviewStep1() {
             onResendCode = previewCallbacks.onUnit,
             onNext = previewCallbacks.onUnit,
             onBack = previewCallbacks.onUnit,
+            isStep1Complete = false,
         )
     }
 }
@@ -875,6 +893,7 @@ private fun PreviewStep2() {
             onResendCode = previewCallbacks.onUnit,
             onNext = previewCallbacks.onUnit,
             onBack = previewCallbacks.onUnit,
+            isStep2Complete = true,
         )
     }
 }
@@ -900,6 +919,7 @@ private fun PreviewStep3() {
             onResendCode = previewCallbacks.onUnit,
             onNext = previewCallbacks.onUnit,
             onBack = previewCallbacks.onUnit,
+            isStep3Complete = false,
         )
     }
 }
@@ -929,6 +949,7 @@ private fun PreviewStep4() {
             onResendCode = previewCallbacks.onUnit,
             onNext = previewCallbacks.onUnit,
             onBack = previewCallbacks.onUnit,
+            isStep4Complete = false,
         )
     }
 }
