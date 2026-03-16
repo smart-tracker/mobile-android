@@ -49,6 +49,12 @@ DI: Hilt | UI: Jetpack Compose | Сеть: Retrofit | Токены: EncryptedSha
   - verificationCode — ровно 6 символов
 - Commit `380588d` запушен: `fix: switch BASE_URL to prod, add client-side email/password/code validation`
 - Commit `4d36a58` запушен: `feat(МОБ-3.1): убрать кнопку назад, автоформат даты через VisualTransformation, DatePickerDialog`
+- **Обработка API-ошибок** (сессия 16.03.2026):
+  - Создана утилита `utils/ApiErrorHandler.kt` для парсинга ошибок HTTP-ответов
+  - Вместо сырых `error.message` пользователю выводятся понятные сообщения на русском
+  - `RegisterViewModel` обновлена для использования `ApiErrorHandler` в методах: `submitRegistration()`, `verifyEmail()`, `onResendCode()`
+  - Поддержка категоризации ошибок: USERNAME_TAKEN, EMAIL_TAKEN, PASSWORD_ERROR, TOO_MANY_ATTEMPTS, RESEND_COOLDOWN, GENERIC
+  - Примеры типичных ошибок и их обработки в `utils/ApiErrorScenarios.kt` (документация для разработчиков)
 
 ### ✅ Compile: BUILD SUCCESSFUL
 

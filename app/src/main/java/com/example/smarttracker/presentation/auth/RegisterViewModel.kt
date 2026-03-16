@@ -7,6 +7,7 @@ import com.example.smarttracker.domain.model.RegisterRequest
 import com.example.smarttracker.domain.model.UserPurpose
 import com.example.smarttracker.domain.repository.AuthRepository
 import com.example.smarttracker.domain.usecase.RegisterUseCase
+import com.example.smarttracker.utils.ApiErrorHandler
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -92,15 +93,16 @@ class RegisterViewModel @Inject constructor(
         viewModelScope.launch {
             _state.update { it.copy(isLoading = true, error = null, fieldError = null) }
             authRepository.resendCode(email)
-                .onSuccess { result ->
+                .onSuccess { _ ->
                     // Кулдаун RESEND_COOLDOWN_SECONDS (120 сек = 2 мин), НЕ result.expiresIn (600 сек = 10 мин)
                     // result.expiresIn используется для таймера жизни самого кода верификации
                     startCooldown(RESEND_COOLDOWN_SECONDS)
                     _state.update { it.copy(isLoading = false) }
                 }
                 .onFailure { error ->
+                    val errorMessage = ApiErrorHandler.getErrorMessage(error)
                     _state.update {
-                        it.copy(isLoading = false, error = error.message ?: "Ошибка при повторной отправке")
+                        it.copy(isLoading = false, error = errorMessage)
                     }
                 }
         }
@@ -197,15 +199,16 @@ class RegisterViewModel @Inject constructor(
         viewModelScope.launch {
             _state.update { it.copy(isLoading = true, error = null, fieldError = null) }
             registerUseCase(request)
-                .onSuccess { result ->
+                .onSuccess { _ ->
                     // Кулдаун RESEND_COOLDOWN_SECONDS (120 сек = 2 мин), НЕ result.expiresIn (600 сек = 10 мин)
                     // result.expiresIn используется для таймера жизни самого кода верификации
                     startCooldown(RESEND_COOLDOWN_SECONDS)
                     _state.update { it.copy(isLoading = false, step = 4) }
                 }
                 .onFailure { error ->
+                    val errorMessage = ApiErrorHandler.getErrorMessage(error)
                     _state.update {
-                        it.copy(isLoading = false, error = error.message ?: "Ошибка регистрации")
+                        it.copy(isLoading = false, error = errorMessage)
                     }
                 }
         }
@@ -231,8 +234,9 @@ class RegisterViewModel @Inject constructor(
                     _events.emit(RegisterEvent.NavigateToHome)
                 }
                 .onFailure { error ->
+                    val errorMessage = ApiErrorHandler.getErrorMessage(error)
                     _state.update {
-                        it.copy(isLoading = false, error = error.message ?: "Неверный код")
+                        it.copy(isLoading = false, error = errorMessage)
                     }
                 }
         }
