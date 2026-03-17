@@ -227,9 +227,10 @@ private fun RegisterStep2(
     ) {
         Text(
             text = "Почему вы установили приложение?",
-            fontSize = 16.sp,
+            style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
             color = ColorPrimary,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .padding(start = 15.dp),
         )
 
         Spacer(Modifier.height(16.dp))
@@ -336,7 +337,7 @@ private fun RegisterStep3(
             )
             Text(
                 text = "Продолжая, вы соглашаетесь с Условиями использования и Политикой конфиденциальности",
-                fontSize = 14.sp,
+                style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
                 color = ColorPrimary,
                 modifier = Modifier.padding(top = 12.dp),
             )
@@ -372,7 +373,7 @@ private fun RegisterStep4(
     ) {
         Text(
             text = "Код отправлен на ${state.email}.",
-            fontSize = 16.sp,
+            style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
             color = ColorPrimary,
             textAlign = TextAlign.Center,
             modifier = Modifier
@@ -393,7 +394,7 @@ private fun RegisterStep4(
         if (cooldown > 0) {
             Text(
                 text = "Запросить новый код можно через $cooldownFormatted",
-                fontSize = 14.sp,
+                style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
                 color = ColorPlaceholder,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth(),
@@ -422,8 +423,7 @@ private fun RegisterStep4(
         ) {
             Text(
                 text = "Отправить код повторно",
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Light,
+                style = androidx.compose.material3.MaterialTheme.typography.labelLarge,
             )
         }
 
@@ -479,8 +479,7 @@ private fun RegisterScaffold(
                 ) {
                     Text(
                         text = if (isLoading) "Загрузка..." else nextLabel,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Light,
+                        style = androidx.compose.material3.MaterialTheme.typography.labelLarge,
                     )
                 }
             }
@@ -515,9 +514,8 @@ private fun StepTitle(text: String) {
         )
         Text(
             text = text,
-            fontSize = 20.sp,
+            style = androidx.compose.material3.MaterialTheme.typography.headlineSmall,
             color = ColorPrimary,
-            fontWeight = FontWeight.SemiBold,
             modifier = Modifier.padding(horizontal = 8.dp),
         )
         HorizontalDivider(
@@ -551,55 +549,62 @@ private fun StyledTextField(
     Column {
         Text(
             text = label,
-            fontSize = 16.sp,
+            style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
             color = ColorPrimary,
-            fontWeight = FontWeight.Light,
+            modifier = Modifier
+                .padding(start = 15.dp),
         )
         Spacer(Modifier.height(4.dp))
-        OutlinedTextField(
-            value = value,
-            onValueChange = onValueChange,
-            placeholder = {
-                Text(
-                    text = placeholder,
-                    fontSize = 16.sp,
-                    color = ColorPlaceholder,
-                )
-            },
-            visualTransformation = appliedTransformation,
-            keyboardOptions = KeyboardOptions(
-                keyboardType = keyboardType,
-                capitalization = capitalization,
-                imeAction = imeAction,
-            ),
-            trailingIcon = if (isPassword && onTogglePasswordVisibility != null) {
-                {
-                    IconButton(onClick = onTogglePasswordVisibility) {
-                        Icon(
-                            imageVector = if (isPasswordVisible) Icons.Default.Visibility
-                                          else Icons.Default.VisibilityOff,
-                            contentDescription = if (isPasswordVisible) "Скрыть пароль"
-                                                 else "Показать пароль",
-                            tint = ColorPlaceholder,
-                        )
-                    }
-                }
-            } else null,
-            singleLine = true,
-            shape = RoundedCornerShape(10.dp),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = ColorPrimary,
-                unfocusedBorderColor = ColorPrimary,
-                focusedContainerColor = ColorBackground,
-                unfocusedContainerColor = ColorBackground,
-                cursorColor = ColorPrimary,
-                focusedTextColor = ColorPrimary,
-                unfocusedTextColor = ColorPrimary,
-            ),
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(50.dp),
-        )
+                .border(2.dp, ColorPrimary, RoundedCornerShape(10.dp))
+        ) {
+            OutlinedTextField(
+                value = value,
+                onValueChange = onValueChange,
+                placeholder = {
+                    Text(
+                        text = placeholder,
+                        style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
+                        color = ColorPlaceholder,
+                    )
+                },
+                visualTransformation = appliedTransformation,
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = keyboardType,
+                    capitalization = capitalization,
+                    imeAction = imeAction,
+                ),
+                trailingIcon = if (isPassword && onTogglePasswordVisibility != null) {
+                    {
+                        IconButton(onClick = onTogglePasswordVisibility) {
+                            Icon(
+                                imageVector = if (isPasswordVisible) Icons.Default.Visibility
+                                              else Icons.Default.VisibilityOff,
+                                contentDescription = if (isPasswordVisible) "Скрыть пароль"
+                                                     else "Показать пароль",
+                                tint = ColorPlaceholder,
+                            )
+                        }
+                    }
+                } else null,
+                singleLine = true,
+                shape = RoundedCornerShape(10.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = ColorPrimary,
+                    unfocusedBorderColor = ColorPrimary,
+                    focusedContainerColor = ColorBackground,
+                    unfocusedContainerColor = ColorBackground,
+                    cursorColor = ColorPrimary,
+                    focusedTextColor = ColorPrimary,
+                    unfocusedTextColor = ColorPrimary,
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp),
+            )
+        }
     }
 }
 
@@ -612,9 +617,10 @@ private fun GenderSelector(
     Column {
         Text(
             text = "Выберите пол",
-            fontSize = 16.sp,
+            style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
             color = ColorPrimary,
-            fontWeight = FontWeight.Light,
+            modifier = Modifier
+                .padding(start = 15.dp),
         )
         Spacer(Modifier.height(4.dp))
         Row(
@@ -642,7 +648,7 @@ private fun GenderSelector(
                     )
                     Text(
                         text = if (gender == Gender.MALE) "Мужской" else "Женский",
-                        fontSize = 16.sp,
+                        style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
                         color = ColorPrimary,
                         modifier = Modifier.padding(start = 8.dp),
                     )
@@ -685,7 +691,7 @@ private fun PurposeOption(
         )
         Text(
             text = text,
-            fontSize = 16.sp,
+            style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
             color = ColorPrimary,
             modifier = Modifier.padding(start = 12.dp),
         )
@@ -747,53 +753,60 @@ private fun DatePickerField(
     Column {
         Text(
             text = "Дата рождения",
-            fontSize = 16.sp,
+            style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
             color = ColorPrimary,
-            fontWeight = FontWeight.Light,
+            modifier = Modifier
+                .padding(start = 15.dp),
         )
         Spacer(Modifier.height(4.dp))
-        OutlinedTextField(
-            value = value,
-            onValueChange = { input ->
-                val digits = input.filter { it.isDigit() }.take(8)
-                onValueChange(digits)
-            },
-            placeholder = {
-                Text(
-                    text = "дд.мм.гггг",
-                    fontSize = 16.sp,
-                    color = ColorPlaceholder,
-                )
-            },
-            visualTransformation = DateVisualTransformation(),
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Number,
-                imeAction = ImeAction.Next,
-            ),
-            trailingIcon = {
-                IconButton(onClick = { showPicker = true }) {
-                    Icon(
-                        imageVector = Icons.Default.CalendarMonth,
-                        contentDescription = "Выбрать дату",
-                        tint = ColorPlaceholder,
-                    )
-                }
-            },
-            singleLine = true,
-            shape = RoundedCornerShape(10.dp),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = ColorPrimary,
-                unfocusedBorderColor = ColorPrimary,
-                focusedContainerColor = ColorBackground,
-                unfocusedContainerColor = ColorBackground,
-                cursorColor = ColorPrimary,
-                focusedTextColor = ColorPrimary,
-                unfocusedTextColor = ColorPrimary,
-            ),
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(50.dp),
-        )
+                .border(2.dp, ColorPrimary, RoundedCornerShape(10.dp))
+        ) {
+            OutlinedTextField(
+                value = value,
+                onValueChange = { input ->
+                    val digits = input.filter { it.isDigit() }.take(8)
+                    onValueChange(digits)
+                },
+                placeholder = {
+                    Text(
+                        text = "дд.мм.гггг",
+                        style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
+                        color = ColorPlaceholder,
+                    )
+                },
+                visualTransformation = DateVisualTransformation(),
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Number,
+                    imeAction = ImeAction.Next,
+                ),
+                trailingIcon = {
+                    IconButton(onClick = { showPicker = true }) {
+                        Icon(
+                            imageVector = Icons.Default.CalendarMonth,
+                            contentDescription = "Выбрать дату",
+                            tint = ColorPlaceholder,
+                        )
+                    }
+                },
+                singleLine = true,
+                shape = RoundedCornerShape(10.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = ColorPrimary,
+                    unfocusedBorderColor = ColorPrimary,
+                    focusedContainerColor = ColorBackground,
+                    unfocusedContainerColor = ColorBackground,
+                    cursorColor = ColorPrimary,
+                    focusedTextColor = ColorPrimary,
+                    unfocusedTextColor = ColorPrimary,
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp),
+            )
+        }
     }
 
     if (showPicker) {

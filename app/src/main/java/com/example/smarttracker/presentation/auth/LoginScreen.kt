@@ -1,6 +1,8 @@
 package com.example.smarttracker.presentation.auth
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -103,22 +106,26 @@ fun LoginScreen(
             verticalArrangement = Arrangement.Top
         ) {
             // ── Логотип ──────────────────────────────────────────────────────
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(64.dp))
 
-            Image(
-                painter = painterResource(id = R.drawable.ic_logo),
-                contentDescription = "SmartTracker Logo",
-                modifier = Modifier.size(120.dp),
-                contentScale = ContentScale.Fit
-            )
+            Box(
+                modifier = Modifier
+                    .border(2.dp, Color.Black, RoundedCornerShape(20.dp))
+            ) {
+                Image(
+                    painter = painterResource(id = R.drawable.ic_logo),
+                    contentDescription = "SmartTracker Logo",
+                    modifier = Modifier.size(120.dp),
+                    contentScale = ContentScale.Fit
+                )
+            }
 
             Spacer(modifier = Modifier.height(24.dp))
 
             // ── Название приложения ─────────────────────────────────────────
             Text(
                 text = "SmartTracker",
-                fontSize = 28.sp,
-                fontWeight = FontWeight.SemiBold,
+                style = androidx.compose.material3.MaterialTheme.typography.titleLarge,
                 color = ColorPrimary,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth()
@@ -127,70 +134,94 @@ fun LoginScreen(
             Spacer(modifier = Modifier.height(32.dp))
 
             // ── Email ────────────────────────────────────────────────────────
-            OutlinedTextField(
-                value = state.email,
-                onValueChange = onEmailChange,
-                label = { Text("Почта...") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Email,
-                    imeAction = ImeAction.Next
-                ),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = ColorPrimary,
-                    unfocusedBorderColor = ColorPlaceholder,
-                    focusedLabelColor = ColorPrimary,
-                    unfocusedLabelColor = ColorPlaceholder,
-                    cursorColor = ColorPrimary
-                ),
-                enabled = !state.isLoading
-            )
+            Column {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(2.dp, ColorPrimary, RoundedCornerShape(10.dp))
+                ) {
+                    OutlinedTextField(
+                        value = state.email,
+                        onValueChange = onEmailChange,
+                        placeholder = {
+                            Text(
+                                text = "Почта...",
+                                style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
+                                color = ColorPlaceholder,
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Email,
+                            imeAction = ImeAction.Next
+                        ),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = ColorPrimary,
+                            unfocusedBorderColor = ColorPrimary,
+                            cursorColor = ColorPrimary
+                        ),
+                        enabled = !state.isLoading
+                    )
+                }
+            }
 
             Spacer(modifier = Modifier.height(16.dp))
 
             // ── Password (с toggle и ссылкой "Забыли пароль?") ──────────────
             Column(modifier = Modifier.fillMaxWidth()) {
-                OutlinedTextField(
-                    value = state.password,
-                    onValueChange = onPasswordChange,
-                    label = { Text("Пароль...") },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    visualTransformation = if (state.isPasswordVisible) {
-                        VisualTransformation.None
-                    } else {
-                        PasswordVisualTransformation()
-                    },
-                    trailingIcon = {
-                        IconButton(
-                            onClick = onTogglePasswordVisibility,
-                            enabled = !state.isLoading
-                        ) {
-                            Icon(
-                                imageVector = if (state.isPasswordVisible) {
-                                    Icons.Default.Visibility
-                                } else {
-                                    Icons.Default.VisibilityOff
-                                },
-                                contentDescription = if (state.isPasswordVisible) "Hide password" else "Show password",
-                                tint = ColorPrimary
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(2.dp, ColorPrimary, RoundedCornerShape(10.dp))
+                ) {
+                    OutlinedTextField(
+                        value = state.password,
+                        onValueChange = onPasswordChange,
+                        placeholder = {
+                            Text(
+                                text = "Пароль...",
+                                style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
+                                color = ColorPlaceholder,
                             )
-                        }
-                    },
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Password,
-                        imeAction = ImeAction.Done
-                    ),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = ColorPrimary,
-                        unfocusedBorderColor = ColorPlaceholder,
-                        focusedLabelColor = ColorPrimary,
-                        unfocusedLabelColor = ColorPlaceholder,
-                        cursorColor = ColorPrimary
-                    ),
-                    enabled = !state.isLoading
-                )
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        visualTransformation = if (state.isPasswordVisible) {
+                            VisualTransformation.None
+                        } else {
+                            PasswordVisualTransformation()
+                        },
+                        trailingIcon = {
+                            IconButton(
+                                onClick = onTogglePasswordVisibility,
+                                enabled = !state.isLoading
+                            ) {
+                                Icon(
+                                    imageVector = if (state.isPasswordVisible) {
+                                        Icons.Default.Visibility
+                                    } else {
+                                        Icons.Default.VisibilityOff
+                                    },
+                                    contentDescription = if (state.isPasswordVisible) "Hide password" else "Show password",
+                                    tint = ColorPrimary
+                                )
+                            }
+                        },
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Password,
+                            imeAction = ImeAction.Done
+                        ),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = ColorPrimary,
+                            unfocusedBorderColor = ColorPrimary,
+                            cursorColor = ColorPrimary
+                        ),
+                        enabled = !state.isLoading
+                    )
+                }
 
                 // ── Ссылка "Забыли пароль?" ──────────────────────────────
                 Row(
@@ -206,15 +237,13 @@ fun LoginScreen(
                     ) {
                         Text(
                             text = "Забыли пароль?",
-                            color = ColorLink,
-                            fontSize = 12.sp,
+                            style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
+                            color = Color.Black,
                             textDecoration = TextDecoration.Underline
                         )
                     }
                 }
             }
-
-            Spacer(modifier = Modifier.height(8.dp))
 
             // ── Error Message ────────────────────────────────────────────────
             if (state.errorMessage != null) {
@@ -229,17 +258,20 @@ fun LoginScreen(
                 Spacer(modifier = Modifier.height(8.dp))
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
             // ── Кнопка "Войти" ───────────────────────────────────────────────
             Button(
                 onClick = onSubmitLogin,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(48.dp),
+                    .height(50.dp),
+                shape = RoundedCornerShape(10.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = ColorPrimary,
-                    disabledContainerColor = ColorPlaceholder
+                    contentColor = ColorWhite,
+                    disabledContainerColor = ColorPlaceholder,
+                    disabledContentColor = ColorWhite,
                 ),
                 enabled = !state.isLoading
             ) {
@@ -252,9 +284,7 @@ fun LoginScreen(
                 } else {
                     Text(
                         text = "Войти",
-                        color = ColorWhite,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Medium
+                        style = androidx.compose.material3.MaterialTheme.typography.labelLarge,
                     )
                 }
             }
@@ -262,21 +292,24 @@ fun LoginScreen(
             Spacer(modifier = Modifier.height(12.dp))
 
             // ── Кнопка "Создать аккаунт" ────────────────────────────────────
-            OutlinedButton(
+            Button(
                 onClick = onNavigateToRegister,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(48.dp),
-                colors = ButtonDefaults.outlinedButtonColors(
-                    contentColor = ColorPrimary
+                    .height(50.dp)
+                    .border(2.dp, ColorPrimary, RoundedCornerShape(10.dp)),
+                shape = RoundedCornerShape(10.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = ColorBackground,
+                    contentColor = ColorPrimary,
+                    disabledContainerColor = ColorBackground,
+                    disabledContentColor = ColorPlaceholder,
                 ),
                 enabled = !state.isLoading
             ) {
                 Text(
                     text = "Создать аккаунт",
-                    color = ColorPrimary,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Medium
+                    style = androidx.compose.material3.MaterialTheme.typography.labelLarge,
                 )
             }
 
@@ -298,9 +331,8 @@ fun LoginScreen(
                 )
                 Text(
                     text = " Войти с помощью ",
-                    color = ColorPlaceholder,
-                    fontSize = 12.sp,
-                    modifier = Modifier.padding(horizontal = 8.dp)
+                    style = androidx.compose.material3.MaterialTheme.typography.labelLarge,
+                    color = ColorPlaceholder
                 )
                 Divider(
                     modifier = Modifier
@@ -320,53 +352,56 @@ fun LoginScreen(
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // TODO: Яндекс (Yandex)
+                // ── Яндекс
                 IconButton(
                     onClick = {},
-                    modifier = Modifier.size(48.dp),
+                    modifier = Modifier.size(56.dp),
                     enabled = !state.isLoading
                 ) {
-                    Box(
+                    Image(
+                        painter = painterResource(id = R.drawable.ic_yandex),
+                        contentDescription = "Yandex",
                         modifier = Modifier
-                            .size(40.dp)
-                            .background(Color(0xFFFFCC00))
-                    ) {
-                        Text("Я", modifier = Modifier.align(Alignment.Center), fontSize = 20.sp)
-                    }
+                            .size(48.dp)
+                            .clip(RoundedCornerShape(4.dp)),
+                        contentScale = ContentScale.Fit
+                    )
                 }
 
                 Spacer(modifier = Modifier.width(16.dp))
 
-                // TODO: VK
+                // ── VK
                 IconButton(
                     onClick = {},
-                    modifier = Modifier.size(48.dp),
+                    modifier = Modifier.size(56.dp),
                     enabled = !state.isLoading
                 ) {
-                    Box(
+                    Image(
+                        painter = painterResource(id = R.drawable.ic_vk),
+                        contentDescription = "VK",
                         modifier = Modifier
-                            .size(40.dp)
-                            .background(Color(0xFF0077FF))
-                    ) {
-                        Text("VK", modifier = Modifier.align(Alignment.Center), fontSize = 14.sp, color = Color.White)
-                    }
+                            .size(48.dp)
+                            .clip(RoundedCornerShape(4.dp)),
+                        contentScale = ContentScale.Fit
+                    )
                 }
 
                 Spacer(modifier = Modifier.width(16.dp))
 
-                // TODO: Telegram или другой сервис
+                // ── Max
                 IconButton(
                     onClick = {},
-                    modifier = Modifier.size(48.dp),
+                    modifier = Modifier.size(56.dp),
                     enabled = !state.isLoading
                 ) {
-                    Box(
+                    Image(
+                        painter = painterResource(id = R.drawable.ic_max),
+                        contentDescription = "Max",
                         modifier = Modifier
-                            .size(40.dp)
-                            .background(Color(0xFF5B5FCF))
-                    ) {
-                        Text("P", modifier = Modifier.align(Alignment.Center), fontSize = 20.sp, color = Color.White)
-                    }
+                            .size(48.dp)
+                            .clip(RoundedCornerShape(4.dp)),
+                        contentScale = ContentScale.Fit
+                    )
                 }
             }
 
