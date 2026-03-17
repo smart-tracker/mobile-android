@@ -48,6 +48,44 @@ DI: Hilt | UI: Jetpack Compose | Сеть: Retrofit | Токены: EncryptedSha
   - confirmPassword — совпадение с password
   - verificationCode — ровно 6 символов
 - Commit `380588d` запушен: `fix: switch BASE_URL to prod, add client-side email/password/code validation`
+
+**Сессия 17.03.2026 — UI рефакторинг и интеграция шрифта Geologica:**
+
+- SmartTrackerTheme.kt расширен: добавлены `FontFamily` для Geologica (Light, Regular, Italic) и `SmartTrackerTypography` с 5 TextStyle:
+  - `titleLarge`: 32px italic для заголовков (логотип SmartTracker)
+  - `headlineSmall`: 20px light для заголовков шагов
+  - `labelLarge`: 20px light для кнопок и основного текста
+  - `bodyMedium`: 16px light для вторичного текста
+  - `bodySmall`: 14px light для мелкого текста
+
+RegisterScreen (17.03.2026):
+  - Все Text компоненты обновлены на `MaterialTheme.typography` стили (использует Geologica)
+  - StyledTextField и DatePickerField: добавлены Box обёрнутые с `border(2.dp, ColorPrimary, RoundedCornerShape(10.dp))`
+  - Заголовки блоков ("Имя", "Дата рождения", "Выберите пол"): добавлены с `padding(start = 15.dp)` для смещения слева
+  - GenderSelector и PurposeOption заголовки также обновлены
+
+LoginScreen (17.03.2026) — полный рефакторинг:
+  - Логотип: обёрнут в Box с `border(2.dp, Color.Black, RoundedCornerShape(20.dp))`, увеличен Spacer с 32.dp на 64.dp
+  - Email поле: убран label, используется placeholder, обёрнуто в Box с 2dp границей (как на RegisterScreen)
+  - Password поле: убран label, используется placeholder, обёрнуто в Box с 2dp границей
+  - "Забыли пароль?" ссылка: изменена на чёрный цвет (вместо синего), padding(top = 8.dp) + Spacer(12.dp) для правильного расстояния
+  - Кнопка "Войти": обновлена до 50.dp высота, добавлен `shape = RoundedCornerShape(10.dp)`, явно указан `contentColor = ColorWhite`
+  - Кнопка "Создать аккаунт": переделана как Button (вместо OutlinedButton) с инвертированными цветами:
+    - `containerColor = ColorBackground` (белый фон)
+    - `contentColor = ColorPrimary` (чёрный текст)
+    - `border = 2.dp ColorPrimary` граница
+    - `shape = RoundedCornerShape(10.dp)`
+  - Социальные логотипы (Yandex, VK, Max): заменены с placeholder-Box на Image с паттерном `painterResource(id = R.drawable.ic_*)`
+    - Image размеры: 48.dp
+    - IconButton размеры: 56.dp (для нормального нажатия)
+    - Добавлен `clip(RoundedCornerShape(4.dp))` для минимального округления углов
+
+Ресурсы добавлены:
+  - Шрифты: `app/src/main/res/font/geologica_light.ttf`, `geologica_regular.ttf`, `geologica_italic.ttf`
+  - Логотипы: `app/src/main/res/drawable/ic_yandex.png`, `ic_vk.png`, `ic_max.png` (от пользователя)
+  - Документация: `FONTS_SETUP.md` с инструкциями по использованию шрифтов
+
+Commit: `feat: UI рефакторинг экранов входа и регистрации, интеграция шрифта Geologica`
 - Commit `4d36a58` запушен: `feat(МОБ-3.1): убрать кнопку назад, автоформат даты через VisualTransformation, DatePickerDialog`
 - **Обработка API-ошибок** (сессия 16.03.2026):
   - Создана утилита `utils/ApiErrorHandler.kt` для парсинга ошибок HTTP-ответов
