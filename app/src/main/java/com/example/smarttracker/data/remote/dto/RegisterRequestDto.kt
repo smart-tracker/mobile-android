@@ -1,6 +1,7 @@
 package com.example.smarttracker.data.remote.dto
 
 import com.example.smarttracker.domain.model.RegisterRequest
+import com.example.smarttracker.domain.model.toRoleId
 import com.google.gson.annotations.SerializedName
 
 /**
@@ -11,7 +12,11 @@ import com.google.gson.annotations.SerializedName
  * - birthDate (LocalDate) → строка "yyyy-MM-dd" (LocalDate.toString() даёт ISO-формат)
  * - gender (enum) → lowercase строка "male" / "female"
  * - confirmPassword ВКЛЮЧЁН: бэкенд (FastAPI/UserCreate) его валидирует обязательно
- * - purpose — НЕ включён: API-поля нет, решение на стороне клиента
+ * - role_ids — выбранная цель использования конвертируется в role_id из таблицы БД roles:
+ *   * ATHLETE (1) → [1]
+ *   * TRAINER (2) → [2]
+ *   * CLUB_OWNER (3) → [3]
+ *   * EXPLORING/OTHER → [] (пустой список, роль не назначается)
  */
 data class RegisterRequestDto(
     @SerializedName("first_name")       val firstName: String,
@@ -20,7 +25,8 @@ data class RegisterRequestDto(
     val gender: String,
     val email: String,
     val password: String,
-    @SerializedName("confirm_password") val confirmPassword: String
+    @SerializedName("confirm_password") val confirmPassword: String,
+    @SerializedName("goal_ids")         val goalIds: List<Int>
 )
 
 fun RegisterRequest.toDto(): RegisterRequestDto = RegisterRequestDto(
@@ -30,5 +36,6 @@ fun RegisterRequest.toDto(): RegisterRequestDto = RegisterRequestDto(
     gender          = gender.name.lowercase(), // MALE → "male", FEMALE → "female"
     email           = email,
     password        = password,
-    confirmPassword = confirmPassword
+    confirmPassword = confirmPassword,
+    goalIds         = purpose.toRoleId()?.let { listOf(it) } ?: emptyList() // UserPurpose → [role_id] или []
 )

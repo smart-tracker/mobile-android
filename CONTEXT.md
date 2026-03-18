@@ -118,7 +118,24 @@ Commit: `feat: UI рефакторинг экранов входа и регис
   - Без дополнительного текста под полем (компактный дизайн)
 - Коммит `634804d`: feat(moB): live nickname validation with debounce, caching and icon feedback
 
+**Сессия 18.03.2026 (вечер) — Отправка role_ids при регистрации:**
+
+⚠️ **Контекст:** На бэкенде отсутствуют endpoints `GET /roles` и `GET /goals` для загрузки списка целей. В таблице БД (`smart-tracker/api`) есть структура (таблицы `roles`, `goal_register`, `user_and_goal`), но endpoints не созданы. Решение: временно отправляем hardcoded список целей с клиента с соответствующими `role_id`.
+
+- `domain/model/UserPurpose.kt` — добавлена функция `toRoleId()` для конвертации цели в номер роли:
+  - ATHLETE → 1 (sportsman в БД)
+  - TRAINER → 2 (trainer в БД)
+  - CLUB_OWNER → 3 (club_organizer в БД)
+  - EXPLORING, OTHER → null (пусто, роль не назначается)
+- `data/remote/dto/RegisterRequestDto.kt`:
+  - Добавлено поле `role_ids: List<Int>`
+  - Маппер теперь конвертирует `UserPurpose` → `role_id` через `toRoleId()`
+  - Пример отправки: ATHLETE → `role_ids: [1]`
+- **API контракт:** Отправляется `role_ids` (массив) вместо единственного role_id, что позволит в будущем поддерживать множественные роли
+- **Статус:** ✅ BUILD SUCCESSFUL, готово к тестированию
+
 ### ✅ Compile: BUILD SUCCESSFUL
+
 
 - Commit `380588d`: `fix: switch BASE_URL to prod, add client-side email/password/code validation` ✅ Полный Gradle-билд
 - Commit `4d36a58`: `feat(МОБ-3.1): убрать кнопку назад, автоформат даты через VisualTransformation, DatePickerDialog` ✅ Компилируется без ошибок

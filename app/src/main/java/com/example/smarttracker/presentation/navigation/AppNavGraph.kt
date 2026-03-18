@@ -16,9 +16,11 @@ import com.example.smarttracker.presentation.auth.ForgotPasswordViewModel
 import com.example.smarttracker.presentation.auth.LoginEvent
 import com.example.smarttracker.presentation.auth.LoginScreen
 import com.example.smarttracker.presentation.auth.LoginViewModel
+import com.example.smarttracker.presentation.auth.PrivacyPolicyScreen
 import com.example.smarttracker.presentation.auth.RegisterEvent
 import com.example.smarttracker.presentation.auth.RegisterScreen
 import com.example.smarttracker.presentation.auth.RegisterViewModel
+import com.example.smarttracker.presentation.auth.TermsOfServiceScreen
 
 @Composable
 fun AppNavGraph(
@@ -62,6 +64,8 @@ fun AppNavGraph(
                 onTermsAcceptedChange = viewModel::onTermsAcceptedChange,
                 onVerificationCodeChange = viewModel::onVerificationCodeChange,
                 onResendCode = viewModel::onResendCode,
+                onOpenTermsOfService = { navController.navigate(Screen.TermsOfService.route) },
+                onOpenPrivacyPolicy = { navController.navigate(Screen.PrivacyPolicy.route) },
                 onNext = viewModel::onNext,
                 onBack = viewModel::onBack,
                 isStep1Complete = viewModel.isStep1Complete(),
@@ -136,6 +140,18 @@ fun AppNavGraph(
                         popUpTo(Screen.PasswordRecovery.route) { inclusive = true }
                     }
                 }
+            )
+        }
+
+        composable(Screen.TermsOfService.route) {
+            TermsOfServiceScreen(
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Screen.PrivacyPolicy.route) {
+            PrivacyPolicyScreen(
+                onBack = { navController.popBackStack() }
             )
         }
 

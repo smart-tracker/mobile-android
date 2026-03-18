@@ -18,10 +18,12 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.ClickableText
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.activity.compose.BackHandler
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
@@ -62,6 +64,9 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.TransformedText
@@ -102,6 +107,8 @@ fun RegisterScreen(
     onResendCode: () -> Unit,
     onNext: () -> Unit,
     onBack: () -> Unit,
+    onOpenTermsOfService: () -> Unit = {},
+    onOpenPrivacyPolicy: () -> Unit = {},
     isStep1Complete: Boolean = false,
     isStep2Complete: Boolean = false,
     isStep3Complete: Boolean = false,
@@ -133,6 +140,8 @@ fun RegisterScreen(
             onTogglePasswordVisibility = onTogglePasswordVisibility,
             onToggleConfirmPasswordVisibility = onToggleConfirmPasswordVisibility,
             onTermsAcceptedChange = onTermsAcceptedChange,
+            onOpenTermsOfService = onOpenTermsOfService,
+            onOpenPrivacyPolicy = onOpenPrivacyPolicy,
             onNext = onNext,
             onBack = onBack,
             isNextEnabled = isStep3Complete,
@@ -356,6 +365,8 @@ private fun RegisterStep3(
     onTogglePasswordVisibility: () -> Unit,
     onToggleConfirmPasswordVisibility: () -> Unit,
     onTermsAcceptedChange: (Boolean) -> Unit,
+    onOpenTermsOfService: () -> Unit = {},
+    onOpenPrivacyPolicy: () -> Unit = {},
     onNext: () -> Unit,
     onBack: () -> Unit,
     isNextEnabled: Boolean = false,
@@ -416,11 +427,42 @@ private fun RegisterStep3(
                     uncheckedColor = ColorPrimary,
                 ),
             )
-            Text(
-                text = "Продолжая, вы соглашаетесь с Условиями использования и Политикой конфиденциальности",
-                style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
-                color = ColorPrimary,
-                modifier = Modifier.padding(top = 12.dp),
+            
+            val linkColor = Color(0xFF00BCD4)  // Бирюзовый цвет для ссылок
+            val annotatedText = buildAnnotatedString {
+                append("Продолжая, вы соглашаетесь с ")
+                
+                pushStringAnnotation(tag = "TERMS", annotation = "true")
+                withStyle(style = SpanStyle(color = linkColor)) {
+                    append("Условиями использования")
+                }
+                pop()
+                
+                append(" и ")
+                
+                pushStringAnnotation(tag = "PRIVACY", annotation = "true")
+                withStyle(style = SpanStyle(color = linkColor)) {
+                    append("Политикой конфиденциальности")
+                }
+                pop()
+            }
+            
+            ClickableText(
+                text = annotatedText,
+                style = androidx.compose.material3.MaterialTheme.typography.bodyMedium.copy(color = ColorPrimary),
+                modifier = Modifier
+                    .padding(top = 12.dp)
+                    .padding(start = 8.dp),
+                onClick = { offset: Int ->
+                    annotatedText.getStringAnnotations(tag = "TERMS", start = offset, end = offset)
+                        .firstOrNull()?.let {
+                            onOpenTermsOfService()
+                        }
+                    annotatedText.getStringAnnotations(tag = "PRIVACY", start = offset, end = offset)
+                        .firstOrNull()?.let {
+                            onOpenPrivacyPolicy()
+                        }
+                }
             )
         }
 
@@ -967,6 +1009,191 @@ private val previewCallbacks = object {
     val onGender: (Gender) -> Unit = {}
     val onPurpose: (UserPurpose) -> Unit = {}
     val onUnit: () -> Unit = {}
+}
+
+// ── Документы ───────────────────────────────────────────────────────────────────
+
+/**
+ * Экран "Условия использования"
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun TermsOfServiceScreen(
+    onBack: () -> Unit = {}
+) {
+    Scaffold(
+        containerColor = ColorBackground,
+        topBar = {
+            TopAppBar(
+                title = {
+                    Text(
+                        text = "Условия использования",
+                        style = androidx.compose.material3.MaterialTheme.typography.headlineSmall,
+                        color = ColorPrimary,
+                    )
+                },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Назад",
+                            tint = ColorPrimary,
+                        )
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = ColorBackground,
+                ),
+            )
+        }
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp)
+        ) {
+            Text(
+                text = "Условия использования SmartTracker",
+                style = androidx.compose.material3.MaterialTheme.typography.titleLarge,
+                color = ColorPrimary,
+                modifier = Modifier.padding(bottom = 16.dp)
+            )
+            Text(
+                text = """Добро пожаловать в SmartTracker!
+
+Наше мобильное приложение предоставляет услуги для отслеживания Вашей физической активности и здоровья. 
+
+Используя приложение, Вы согласны с данными Условиями использования. Пожалуйста, внимательно прочитайте все условия перед использованием приложения.
+
+1. Использование приложения
+
+Вы используете приложение SmartTracker на собственный риск. Мы не несем ответственность за любые прямые или косвенные убытки, вызванные использованием приложения.
+
+2. Конфиденциальность данных
+
+Ваши личные данные обрабатываются в соответствии с нашей Политикой конфиденциальности. Мы не передаем Ваши данные третьим лицам без Вашего согласия.
+
+3. Интеллектуальная собственность
+
+Все содержимое приложения, включая текст, графику, логотипы и изображения, защищено авторским правом и не может быть использовано без нашего разрешения.
+
+4. Ограничение ответственности
+
+SmartTracker не несет ответственность за любые технические сбои, потерю данных или прерывание услуги.
+
+5. Изменение условий
+
+Мы оставляем право изменять данные условия в любое время. Ваше продолжение использования приложения после изменения условий означает Ваше согласие с ними.
+
+Дата последнего обновления: 18 марта 2026 г.
+Вопросы? Свяжитесь с нами: support@smarttracker.com
+""",
+                style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
+                color = ColorPrimary,
+                modifier = Modifier.padding(bottom = 32.dp)
+            )
+        }
+    }
+}
+
+/**
+ * Экран "Политика конфиденциальности"
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun PrivacyPolicyScreen(
+    onBack: () -> Unit = {}
+) {
+    Scaffold(
+        containerColor = ColorBackground,
+        topBar = {
+            TopAppBar(
+                title = {
+                    Text(
+                        text = "Политика конфиденциальности",
+                        style = androidx.compose.material3.MaterialTheme.typography.headlineSmall,
+                        color = ColorPrimary,
+                    )
+                },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Назад",
+                            tint = ColorPrimary,
+                        )
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = ColorBackground,
+                ),
+            )
+        }
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp)
+        ) {
+            Text(
+                text = "Политика конфиденциальности SmartTracker",
+                style = androidx.compose.material3.MaterialTheme.typography.titleLarge,
+                color = ColorPrimary,
+                modifier = Modifier.padding(bottom = 16.dp)
+            )
+            Text(
+                text = """SmartTracker уважает Вашу приватность и обеспечивает защиту Ваших личных данных.
+
+1. Сбор информации
+
+Мы собираем следующую информацию:
+- Персональные данные (имя, адрес электронной почты, дата рождения)
+- Данные о физической активности
+- Целевые показатели здоровья
+- Технические данные устройства (тип устройства, операционная система)
+
+2. Использование информации
+
+Ваша информация используется для:
+- Предоставления и улучшения услуг приложения
+- Анализа статистики использования
+- Отправки обновлений и уведомлений
+- Поддержания безопасности и предотвращения мошенничества
+
+3. Защита данных
+
+Мы используем современные методы шифрования для защиты Ваших данных. Ваша информация хранится на защищенных серверах.
+
+4. Передача данных третьим лицам
+
+Мы НЕ продаем и НЕ передаем Вашу личную информацию третьим лицам, кроме случаев, когда это требуется законом или с Вашего прямого согласия.
+
+5. Cookies и аналитика
+
+Приложение может использовать технологии отслеживания для анализа использования и улучшения пользовательского опыта.
+
+6. Контакт с нами
+
+Если у Вас есть вопросы о данной политике или о том, как мы обрабатываем Ваши данные, пожалуйста, свяжитесь с нами:
+
+Email: privacy@smarttracker.com
+
+7. Изменение политики
+
+Мы оставляем право изменять данную политику. Изменения вступают в силу после опубликования на приложении.
+
+Дата последнего обновления: 18 марта 2026 г.
+""",
+                style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
+                color = ColorPrimary,
+                modifier = Modifier.padding(bottom = 32.dp)
+            )
+        }
+    }
 }
 
 @Preview(name = "Шаг 1 — Личные данные", showBackground = true, showSystemUi = true)

@@ -29,3 +29,19 @@ fun UserPurpose.toUserRole(): UserRole = when (this) {
     UserPurpose.EXPLORING  -> UserRole.USER
     UserPurpose.OTHER      -> UserRole.USER
 }
+
+/**
+ * Конвертирует цель использования в номер роли для API.
+ * Соответствие с таблицей БД (role):
+ * - 1 = sportsman (ATHLETE)
+ * - 2 = trainer (TRAINER)
+ * - 3 = club_organizer (CLUB_OWNER)
+ * - EXPLORING и OTHER → роль не отправляется (пользователь просто исследует)
+ */
+fun UserPurpose.toRoleId(): Int? = when (this) {
+    UserPurpose.ATHLETE    -> 1
+    UserPurpose.TRAINER    -> 2
+    UserPurpose.CLUB_OWNER -> 3
+    UserPurpose.EXPLORING  -> null
+    UserPurpose.OTHER      -> null
+}
