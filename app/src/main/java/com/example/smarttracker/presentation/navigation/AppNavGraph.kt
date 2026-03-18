@@ -10,6 +10,9 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.example.smarttracker.presentation.auth.ForgotPasswordEvent
+import com.example.smarttracker.presentation.auth.ForgotPasswordScreen
+import com.example.smarttracker.presentation.auth.ForgotPasswordViewModel
 import com.example.smarttracker.presentation.auth.LoginEvent
 import com.example.smarttracker.presentation.auth.LoginScreen
 import com.example.smarttracker.presentation.auth.LoginViewModel
@@ -86,8 +89,7 @@ fun AppNavGraph(
                             }
                         }
                         is LoginEvent.NavigateToPasswordRecovery -> {
-                            // TODO: МОБ-5.x — PasswordRecoveryScreen
-                            // navController.navigate(Screen.PasswordRecovery.route)
+                            navController.navigate(Screen.PasswordRecovery.route)
                         }
                     }
                 }
@@ -101,6 +103,39 @@ fun AppNavGraph(
                 onSubmitLogin = viewModel::onSubmitLogin,
                 onNavigateToRegister = viewModel::onNavigateToRegister,
                 onNavigateToPasswordRecovery = viewModel::onNavigateToPasswordRecovery
+            )
+        }
+
+        composable(Screen.PasswordRecovery.route) {
+            val viewModel: ForgotPasswordViewModel = hiltViewModel()
+
+            LaunchedEffect(Unit) {
+                viewModel.events.collect { event ->
+                    when (event) {
+                        is ForgotPasswordEvent.OnContinueFromStep1 -> {
+                            // Navigate back to login after successful password reset
+                            navController.navigate(Screen.Login.route) {
+                                popUpTo(Screen.PasswordRecovery.route) { inclusive = true }
+                            }
+                        }
+                        is ForgotPasswordEvent.OnBackPressed -> navController.popBackStack()
+                        else -> {} // Other events handled within the screen
+                    }
+                }
+            }
+
+            ForgotPasswordScreen(
+                viewModel = viewModel,
+                onSuccess = {
+                    navController.navigate(Screen.Login.route) {
+                        popUpTo(Screen.PasswordRecovery.route) { inclusive = true }
+                    }
+                },
+                onNavigateToLogin = {
+                    navController.navigate(Screen.Login.route) {
+                        popUpTo(Screen.PasswordRecovery.route) { inclusive = true }
+                    }
+                }
             )
         }
 

@@ -98,20 +98,45 @@ Commit: `feat: UI рефакторинг экранов входа и регис
   - Коммит `114f617`: feat: add API error handling with user-friendly messages
   - Коммит `7420009`: feat: translate all API error messages to Russian (only Russian UI errors)
 
+**Сессия 18.03.2026 — Live nickname validation:**
+
+- `domain/model/NicknameCheckResponse.kt` — добавлена модель для API-ответа
+- `data/remote/dto/NicknameCheckResponseDto.kt` — DTO с маппером `toDomain()`
+- `domain/repository/AuthRepository.kt` — добавлен метод `checkNickname()`
+- `data/repository/AuthRepositoryImpl.kt` — реализована проверка уникальности никнейма
+- `data/remote/AuthApiService.kt` — добавлен endpoint `@POST("auth/check-nickname")`
+- `presentation/auth/RegisterUiState.kt` — добавлено поле `nicknameCheckStatus: NicknameCheckStatus` (sealed class с состояниями IDLE, CHECKING, SUCCESS, ERROR)
+- `presentation/auth/RegisterViewModel.kt`:
+  - Добавлен debounce-поток для проверки никнейма (700ms задержка)
+  - Реализовано кеширование результатов проверок (in-memory, в ViewModel)
+  - Минимум 3 символа перед API-вызовом
+  - Обработка ошибок через `ApiErrorHandler`
+- `presentation/auth/RegisterScreen.kt` — обновлена функция `NicknameField`:
+  - Иконка ✓ (зелёная, #4CAF50) при успехе
+  - Иконка ✗ (красная, #E74C3C) при ошибке
+  - Цветная рамка вокруг поля для визуального feedback'а
+  - Без дополнительного текста под полем (компактный дизайн)
+- Коммит `634804d`: feat(moB): live nickname validation with debounce, caching and icon feedback
+
 ### ✅ Compile: BUILD SUCCESSFUL
 
 - Commit `380588d`: `fix: switch BASE_URL to prod, add client-side email/password/code validation` ✅ Полный Gradle-билд
 - Commit `4d36a58`: `feat(МОБ-3.1): убрать кнопку назад, автоформат даты через VisualTransformation, DatePickerDialog` ✅ Компилируется без ошибок
+- Commit `634804d`: `feat(moB): live nickname validation with debounce, caching and icon feedback` ✅ BUILD SUCCESSFUL (2m 11s, 109 tasks)
 
 ### ✅ Регистрационный поток (E2E тестирование)
 
-- RegisterScreen (Step 1-3) → VerifyEmailScreen (Step 4) → HomeScreen ✅ 
+- RegisterScreen Step 1-4 (регистрация + верификация email) → HomeScreen ✅ 
+  - Step 1: Имя, фамилия, дата рождения
+  - Step 2: Пол, цель использования
+  - Step 3: Email, пароль, подтверждение пароля + live nickname validation
+  - Step 4: Ввод 6-значного кода верификации, таймер 10 мин, кнопка "Отправить повторно" (cooldown 2 мин)
 - Все API endpoints работают корректно после исправления багов (см. выше)
 - Возможна быстрая разработка и тестирование других экранов
 
 ### 🔜 Следующие задачи
-- **LoginScreen** (Figma node: 172:640)
 - **PasswordRecovery** screens (nodes: 227:186, 227:288, 227:339)
+- Улучшение остальных функций приложения
 
 ## Статус бэкенда
 
@@ -180,7 +205,12 @@ Commit: `feat: UI рефакторинг экранов входа и регис
 
 1. **`username` vs `nickname`** — в Android domain это `username`, в API БД поле `nickname`. В `RegisterRequestDto` используется `@SerializedName("nickname")`. ✅ Учтено.
 
-2. **`UserPurpose`** — в Android есть, в API нет. Ждём решения от Артёма: сохранять в БД или только клиентское. До ответа не трогать. В `RegisterRequestDto` поле НЕ включено.
+2. **`UserPurpose` / Цели использования** — ✅ **В API ЕСТЬ полная структура:**
+   - Таблицы БД: `roles` (роли), `goal_register` (цели с описанием), `user_and_goal` (связь User↔Goal)
+   - Pydantic-схемы: `RoleResponse`, `GoalRegisterResponse`
+   - Логика в `app/services/auth.py`: `goal_ids` преобразуются в `role_ids` при регистрации
+   - **⚠️ Но endpoints НЕТ:** нет `GET /roles` и `GET /goals` для загрузки списка с клиента
+   - **Решение:** Использовать hardcoded список на клиенте (как сейчас) ИЛИ создать endpoints на API
 
 3. **`debug_code`** — в ответе `POST /auth/register` сервер возвращает код верификации открытым текстом. Временное поле, убрать до прода. В `RegisterResultDto` не включено. ✅ Учтено.
 
@@ -364,9 +394,17 @@ com.example.smarttracker/
 
 `ALTER TABLE` были применены напрямую в PostgreSQL — схема в коде (SQLAlchemy-модели) не обновлена. При следующих миграциях (`alembic`) возможен откат изменений. **Бэкенд-команде нужно обновить модели** (`last_name`, `middle_name`, `weight`, `height` — сделать Optional).
 
-#### 🟡 Блокер 2 — UserPurpose не реализован на бэкенде
+#### 🟡 Блокер 2 — Roles/Goals endpoints отсутствуют на бэкенде
 
-В Android-модели есть `UserPurpose` (цель использования), но в API этого поля нет. Поле не включено в `RegisterRequestDto`. Нужно решение от команды: сохранять в БД или оставить только на клиенте.
+На бэкенде (`smart-tracker/api`) **структура БД полностью готова:** таблицы `roles`, `goal_register`, `user_and_role`, `user_and_goal`, логика обработки при регистрации. **Но endpoints для получения списков НЕ реализованы.**
+
+Что нужно на бэкенде:
+- ❌ `GET /roles` — список всех ролей
+- ❌ `GET /goals` или `GET /goals?role_id=...` — список целей (опционально отфильтрованные по ролям)
+
+Что создавать на клиенте:
+- Вариант 1: Загружать список целей с бэкенда при открытии Step 2 (требует endpoints)
+- Вариант 2: Hardcoded список целей в приложении (текущий подход) — **используется сейчас**
 
 #### 🟡 Блокер 3 — Экран верификации не реализован
 
@@ -385,9 +423,6 @@ com.example.smarttracker/
 ---
 
 ### Предложение следующих задач
-
-#### Приоритет 1 — разблокировать тестирование
-- [ ] **Исправить SMTP** (App Password или замена на Resend) — без этого нельзя завершить регистрацию
 
 #### Приоритет 2 — завершить auth-флоу
 - [ ] **VerifyEmailScreen** — экран ввода 6-значного кода с таймером 10 мин, кнопкой "Отправить повторно" (cooldown 2 мин), обработка блокировки после 5 попыток

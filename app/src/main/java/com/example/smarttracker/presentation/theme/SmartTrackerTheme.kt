@@ -24,6 +24,11 @@ val geologicaFontFamilyItalic = FontFamily(
     Font(R.font.geologica_italic, FontWeight.Light, FontStyle.Italic),
 )
 
+// App Colors (reusable across screens)
+val ColorPrimary = androidx.compose.ui.graphics.Color(0xFF0A1928)  // Dark navy
+val ColorBackground = androidx.compose.ui.graphics.Color.White
+val ColorWhite = androidx.compose.ui.graphics.Color.White
+
 // Custom Typography with Geologica
 val SmartTrackerTypography = Typography(
     // 32px Italic - Название на странице входа (Login Screen Title)

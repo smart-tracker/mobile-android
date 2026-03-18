@@ -59,9 +59,13 @@ class RegisterViewModel @Inject constructor(
             nicknameCheckDebounceFlow
                 .debounce(NICKNAME_CHECK_DEBOUNCE_MILLIS)
                 .distinctUntilChanged()
-                .filter { it.length >= 3 }
                 .collect { nickname ->
-                    checkNicknameUnique(nickname)
+                    if (nickname.length >= 3) {
+                        checkNicknameUnique(nickname)
+                    } else {
+                        // Сбрасываем статус при пустом или коротком вводе
+                        _state.update { it.copy(nicknameCheckStatus = NicknameCheckStatus.IDLE) }
+                    }
                 }
         }
     }

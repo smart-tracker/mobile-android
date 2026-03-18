@@ -239,7 +239,7 @@ fun LoginScreen(
                             text = "Забыли пароль?",
                             style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
                             color = Color.Black,
-                            textDecoration = TextDecoration.Underline
+                            textDecoration = TextDecoration.None
                         )
                     }
                 }

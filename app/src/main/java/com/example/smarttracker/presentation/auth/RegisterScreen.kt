@@ -452,15 +452,31 @@ private fun RegisterStep4(
         isLoading = state.isLoading,
         isNextEnabled = isNextEnabled,
     ) {
-        Text(
-            text = "Код отправлен на ${state.email}.",
-            style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
-            color = ColorPrimary,
-            textAlign = TextAlign.Center,
+        Row(
+            horizontalArrangement = Arrangement.Center,
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(bottom = 16.dp),
-        )
+        ) {
+            Text(
+                text = "Код отправлен на ",
+                style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
+                color = ColorPrimary,
+                textAlign = TextAlign.Center,
+            )
+            Text(
+                text = state.email,
+                style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
+                color = Color(0xFF00BCD4),  // Бирюзовый для email
+                textAlign = TextAlign.Center,
+            )
+            Text(
+                text = ".",
+                style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
+                color = ColorPrimary,
+                textAlign = TextAlign.Center,
+            )
+        }
 
         StyledTextField(
             value = state.verificationCode,
@@ -470,19 +486,30 @@ private fun RegisterStep4(
             keyboardType = KeyboardType.Number,
         )
 
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(25.dp))
 
         if (cooldown > 0) {
-            Text(
-                text = "Запросить новый код можно через $cooldownFormatted",
-                style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
-                color = ColorPlaceholder,
-                textAlign = TextAlign.Center,
+            Row(
+                horizontalArrangement = Arrangement.Center,
                 modifier = Modifier.fillMaxWidth(),
-            )
+            ) {
+                Text(
+                    text = "Запросить новый код можно через ",
+                    style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
+                    color = ColorPrimary,
+                    textAlign = TextAlign.Center,
+                )
+                Text(
+                    text = cooldownFormatted,
+                    style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
+                    color = ColorPrimary,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                    textAlign = TextAlign.Center,
+                )
+            }
         }
 
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(25.dp))
 
         Button(
             onClick = onResendCode,
@@ -494,8 +521,8 @@ private fun RegisterStep4(
             colors = ButtonDefaults.buttonColors(
                 containerColor = ColorBackground,
                 contentColor = ColorPrimary,
-                disabledContainerColor = ColorBackground,
-                disabledContentColor = ColorPlaceholder,
+                disabledContainerColor = ColorPlaceholder,
+                disabledContentColor = ColorWhite,
             ),
             border = androidx.compose.foundation.BorderStroke(
                 width = 2.dp,
@@ -705,7 +732,9 @@ private fun GenderSelector(
         )
         Spacer(Modifier.height(4.dp))
         Row(
-            modifier = Modifier.selectableGroup(),
+            modifier = Modifier
+                .selectableGroup()
+                .padding(start = 15.dp),
             horizontalArrangement = Arrangement.spacedBy(32.dp),
         ) {
             Gender.entries.forEach { gender ->

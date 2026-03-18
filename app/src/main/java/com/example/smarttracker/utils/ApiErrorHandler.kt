@@ -123,7 +123,7 @@ object ApiErrorHandler {
      * Переводит сообщение об ошибке с английского на русский.
      * Проверяет точное совпадение, а также подстроки.
      */
-    private fun translateError(error: String): String {
+    fun translateError(error: String): String {
         // Точное совпадение
         errorTranslations[error]?.let { return it }
         
