@@ -24,7 +24,7 @@ import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Divider
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.foundation.Image
@@ -323,22 +323,20 @@ fun LoginScreen(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center
             ) {
-                Divider(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(1.dp),
-                    color = ColorDivider
+                HorizontalDivider(
+                    modifier = Modifier.weight(1f),
+                    thickness = 1.dp,
+                    color = ColorPrimary
                 )
                 Text(
                     text = " Войти с помощью ",
-                    style = androidx.compose.material3.MaterialTheme.typography.labelLarge,
-                    color = ColorPlaceholder
+                    style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
+                    color = ColorPrimary
                 )
-                Divider(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(1.dp),
-                    color = ColorDivider
+                HorizontalDivider(
+                    modifier = Modifier.weight(1f),
+                    thickness = 1.dp,
+                    color = ColorPrimary
                 )
             }
 
