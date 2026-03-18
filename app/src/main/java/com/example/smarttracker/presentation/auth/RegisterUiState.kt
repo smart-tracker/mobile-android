@@ -3,6 +3,14 @@ package com.example.smarttracker.presentation.auth
 import com.example.smarttracker.domain.model.Gender
 import com.example.smarttracker.domain.model.UserPurpose
 
+/** Статус проверки уникальности никнейма */
+sealed class NicknameCheckStatus {
+    object IDLE : NicknameCheckStatus()
+    object CHECKING : NicknameCheckStatus()
+    data class SUCCESS(val message: String) : NicknameCheckStatus()
+    data class ERROR(val message: String) : NicknameCheckStatus()
+}
+
 /**
  * UI-состояние многошагового экрана регистрации.
  * Шаги:
@@ -18,6 +26,7 @@ data class RegisterUiState(
     // ── Шаг 1: Личные данные ────────────────────────────────────────────────
     val firstName: String = "",
     val username: String = "",
+    val nicknameCheckStatus: NicknameCheckStatus = NicknameCheckStatus.IDLE,
     /** Дата в формате дд.мм.гггг (строка для поля ввода) */
     val birthDate: String = "",
     val gender: Gender? = null,

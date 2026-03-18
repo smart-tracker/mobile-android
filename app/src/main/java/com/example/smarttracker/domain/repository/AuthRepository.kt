@@ -4,6 +4,7 @@ import com.example.smarttracker.domain.model.AuthResult
 import com.example.smarttracker.domain.model.RegisterRequest
 import com.example.smarttracker.domain.model.RegisterResult
 import com.example.smarttracker.domain.model.ResendResult
+import com.example.smarttracker.domain.model.NicknameCheckResponse
 
 /**
  * МОБ-1.3 — Контракт репозитория авторизации.
@@ -51,4 +52,11 @@ interface AuthRepository {
      * Обновление access token. Вызывается автоматически из AuthInterceptor (МОБ-2.2).
      */
     suspend fun refreshToken(refreshToken: String): Result<AuthResult>
+
+    /**
+     * POST /auth/check-nickname
+     * Проверка доступности nickname.
+     * Возвращает объект с полями: is_available (Boolean), message (String).
+     */
+    suspend fun checkNickname(nickname: String): Result<NicknameCheckResponse>
 }

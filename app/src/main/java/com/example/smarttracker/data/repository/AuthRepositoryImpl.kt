@@ -4,6 +4,7 @@ import com.example.smarttracker.data.local.TokenStorage
 import com.example.smarttracker.data.remote.AuthApiService
 import com.example.smarttracker.data.remote.dto.EmailVerificationDto
 import com.example.smarttracker.data.remote.dto.LoginRequestDto
+import com.example.smarttracker.data.remote.dto.NicknameCheckRequestDto
 import com.example.smarttracker.data.remote.dto.ResendEmailDto
 import com.example.smarttracker.data.remote.dto.toDomain
 import com.example.smarttracker.data.remote.dto.toDto
@@ -11,6 +12,7 @@ import com.example.smarttracker.domain.model.AuthResult
 import com.example.smarttracker.domain.model.RegisterRequest
 import com.example.smarttracker.domain.model.RegisterResult
 import com.example.smarttracker.domain.model.ResendResult
+import com.example.smarttracker.domain.model.NicknameCheckResponse
 import com.example.smarttracker.domain.repository.AuthRepository
 import javax.inject.Inject
 
@@ -83,5 +85,15 @@ class AuthRepositoryImpl @Inject constructor(
             val result = api.refreshToken(refreshToken).toDomain()
             tokenStorage.saveTokens(result.accessToken, result.refreshToken)
             result
+        }
+
+    /**
+     * Проверка доступности nickname.
+     * Не требует авторизации — вызывается на этапе регистрации.
+     * Результат не сохраняется в TokenStorage.
+     */
+    override suspend fun checkNickname(nickname: String): Result<NicknameCheckResponse> =
+        runCatching {
+            api.checkNickname(NicknameCheckRequestDto(nickname)).toDomain()
         }
 }

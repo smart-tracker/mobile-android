@@ -23,6 +23,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.activity.compose.BackHandler
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
@@ -146,6 +148,87 @@ fun RegisterScreen(
     }
 }
 
+// ── Компонент: Поле для nickname с проверкой уникальности ──────────────────
+
+@Composable
+private fun NicknameField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    checkStatus: NicknameCheckStatus,
+) {
+    val borderColor = when (checkStatus) {
+        NicknameCheckStatus.IDLE -> ColorPrimary
+        NicknameCheckStatus.CHECKING -> ColorPlaceholder
+        is NicknameCheckStatus.SUCCESS -> Color(0xFF4CAF50)  // Зелёный
+        is NicknameCheckStatus.ERROR -> Color(0xFFE74C3C)    // Красный
+    }
+
+    Column {
+        Text(
+            text = "Имя пользователя",
+            style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
+            color = ColorPrimary,
+            modifier = Modifier
+                .padding(start = 15.dp),
+        )
+
+        Spacer(Modifier.height(8.dp))
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .border(2.dp, borderColor, RoundedCornerShape(10.dp))
+                .background(Color.White)
+        ) {
+            OutlinedTextField(
+                value = value,
+                onValueChange = onValueChange,
+                placeholder = {
+                    Text(
+                        "@Имя пользователя...",
+                        color = ColorPlaceholder,
+                        fontSize = 14.sp,
+                    )
+                },
+                modifier = Modifier.fillMaxWidth(),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = Color.Transparent,
+                    unfocusedBorderColor = Color.Transparent,
+                    disabledBorderColor = Color.Transparent,
+                    focusedTextColor = ColorPrimary,
+                    unfocusedTextColor = ColorPrimary,
+                ),
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Text,
+                    imeAction = ImeAction.Next,
+                ),
+                trailingIcon = {
+                    when (checkStatus) {
+                        is NicknameCheckStatus.SUCCESS -> {
+                            Icon(
+                                imageVector = Icons.Filled.Check,
+                                contentDescription = "Никнейм доступен",
+                                tint = Color(0xFF4CAF50),
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+                        is NicknameCheckStatus.ERROR -> {
+                            Icon(
+                                imageVector = Icons.Filled.Close,
+                                contentDescription = "Никнейм занят",
+                                tint = Color(0xFFE74C3C),
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+                        else -> {}  // IDLE и CHECKING ничего не показываем
+                    }
+                },
+            )
+        }
+    }
+}
+
 // ── Шаг 1: Личные данные ─────────────────────────────────────────────────────
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -179,12 +262,10 @@ private fun RegisterStep1(
 
         Spacer(Modifier.height(16.dp))
 
-        StyledTextField(
+        NicknameField(
             value = state.username,
             onValueChange = onUsernameChange,
-            label = "Имя пользователя",
-            placeholder = "@Имя пользователя...",
-            keyboardType = KeyboardType.Text,
+            checkStatus = state.nicknameCheckStatus,
         )
 
         Spacer(Modifier.height(16.dp))

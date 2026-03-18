@@ -17,11 +17,16 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import javax.inject.Inject
+import kotlinx.coroutines.FlowPreview
 
+@OptIn(FlowPreview::class)
 @HiltViewModel
 class RegisterViewModel @Inject constructor(
     private val registerUseCase: RegisterUseCase,
@@ -35,11 +40,30 @@ class RegisterViewModel @Inject constructor(
     val events: SharedFlow<RegisterEvent> = _events.asSharedFlow()
 
     private var cooldownJob: Job? = null
+    
+    // ── Проверка уникальности nickname ──────────────────────────────────────
+    private val nicknameCheckDebounceFlow = MutableStateFlow<String>("")
+    private val nicknameCheckCache = mutableMapOf<String, Boolean>()
+    private var nicknameCheckJob: Job? = null
 
     // Кулдаун для повторной отправки кода (120 сек = 2 минуты)
     // Не путать с VERIFICATION_CODE_EXPIRE_MINUTES (10 минут) — жизнь самого кода верификации!
     companion object {
         private const val RESEND_COOLDOWN_SECONDS = 120
+        private const val NICKNAME_CHECK_DEBOUNCE_MILLIS = 700L
+    }
+    
+    init {
+        // Инициализировать debounce для проверки nickname
+        nicknameCheckJob = viewModelScope.launch {
+            nicknameCheckDebounceFlow
+                .debounce(NICKNAME_CHECK_DEBOUNCE_MILLIS)
+                .distinctUntilChanged()
+                .filter { it.length >= 3 }
+                .collect { nickname ->
+                    checkNicknameUnique(nickname)
+                }
+        }
     }
 
     // ── Шаг 1: Личные данные ─────────────────────────────────────────────────
@@ -47,8 +71,11 @@ class RegisterViewModel @Inject constructor(
     fun onFirstNameChange(value: String) =
         _state.update { it.copy(firstName = value, fieldError = null) }
 
-    fun onUsernameChange(value: String) =
+    fun onUsernameChange(value: String) {
         _state.update { it.copy(username = value, fieldError = null) }
+        // Запустить debounce для проверки уникальности nickname
+        nicknameCheckDebounceFlow.value = value
+    }
 
     fun onBirthDateChange(value: String) {
         val digits = value.filter { it.isDigit() }.take(8)
@@ -293,8 +320,53 @@ class RegisterViewModel @Inject constructor(
         }
     }
 
+    /** Проверка уникальности nickname с debounce и кэшем */
+    private suspend fun checkNicknameUnique(nickname: String) {
+        // Если в кэше — моментально обновить UI без API запроса
+        if (nicknameCheckCache.containsKey(nickname)) {
+            val isAvailable = nicknameCheckCache[nickname]!!
+            _state.update { state ->
+                state.copy(
+                    nicknameCheckStatus = if (isAvailable) {
+                        NicknameCheckStatus.SUCCESS("✓ Никнейм доступен")
+                    } else {
+                        NicknameCheckStatus.ERROR("✗ Никнейм занят")
+                    }
+                )
+            }
+            return
+        }
+
+        // Показать состояние загрузки
+        _state.update { it.copy(nicknameCheckStatus = NicknameCheckStatus.CHECKING) }
+
+        authRepository.checkNickname(nickname)
+            .onSuccess { response ->
+                nicknameCheckCache[nickname] = response.is_available
+                
+                _state.update { state ->
+                    state.copy(
+                        nicknameCheckStatus = if (response.is_available) {
+                            NicknameCheckStatus.SUCCESS("✓ Никнейм доступен")
+                        } else {
+                            NicknameCheckStatus.ERROR("✗ Никнейм занят")
+                        }
+                    )
+                }
+            }
+            .onFailure { error ->
+                val errorMessage = ApiErrorHandler.getErrorMessage(error)
+                _state.update { state ->
+                    state.copy(
+                        nicknameCheckStatus = NicknameCheckStatus.ERROR(errorMessage)
+                    )
+                }
+            }
+    }
+
     override fun onCleared() {
         super.onCleared()
         cooldownJob?.cancel()
+        nicknameCheckJob?.cancel()
     }
 }

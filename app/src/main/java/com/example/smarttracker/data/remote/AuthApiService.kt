@@ -3,6 +3,8 @@ package com.example.smarttracker.data.remote
 import com.example.smarttracker.data.remote.dto.AuthResponseDto
 import com.example.smarttracker.data.remote.dto.EmailVerificationDto
 import com.example.smarttracker.data.remote.dto.LoginRequestDto
+import com.example.smarttracker.data.remote.dto.NicknameCheckRequestDto
+import com.example.smarttracker.data.remote.dto.NicknameCheckResponseDto
 import com.example.smarttracker.data.remote.dto.RegisterRequestDto
 import com.example.smarttracker.data.remote.dto.RegisterResultDto
 import com.example.smarttracker.data.remote.dto.ResendCodeResponseDto
@@ -58,4 +60,11 @@ interface AuthApiService {
      */
     @POST("auth/refresh")
     suspend fun refreshToken(@Query("refresh_token") token: String): AuthResponseDto
+
+    /**
+     * Проверка доступности nickname.
+     * Возвращает объект с полями: is_available (Boolean), message (String).
+     */
+    @POST("auth/check-nickname")
+    suspend fun checkNickname(@Body request: NicknameCheckRequestDto): NicknameCheckResponseDto
 }

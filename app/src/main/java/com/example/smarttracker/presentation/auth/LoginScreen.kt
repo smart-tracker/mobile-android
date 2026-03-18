@@ -362,8 +362,7 @@ fun LoginScreen(
                         painter = painterResource(id = R.drawable.ic_yandex),
                         contentDescription = "Yandex",
                         modifier = Modifier
-                            .size(48.dp)
-                            .clip(RoundedCornerShape(4.dp)),
+                            .size(56.dp),
                         contentScale = ContentScale.Fit
                     )
                 }
@@ -380,8 +379,8 @@ fun LoginScreen(
                         painter = painterResource(id = R.drawable.ic_vk),
                         contentDescription = "VK",
                         modifier = Modifier
-                            .size(48.dp)
-                            .clip(RoundedCornerShape(4.dp)),
+                            .size(56.dp)
+                            ,
                         contentScale = ContentScale.Fit
                     )
                 }
@@ -398,8 +397,7 @@ fun LoginScreen(
                         painter = painterResource(id = R.drawable.ic_max),
                         contentDescription = "Max",
                         modifier = Modifier
-                            .size(48.dp)
-                            .clip(RoundedCornerShape(4.dp)),
+                            .size(56.dp),
                         contentScale = ContentScale.Fit
                     )
                 }
