@@ -1,18 +1,24 @@
 package com.example.smarttracker.data.repository
 
+import com.example.smarttracker.data.cache.RoleGoalCache
+import com.example.smarttracker.data.local.RoleConfigStorage
 import com.example.smarttracker.data.local.TokenStorage
 import com.example.smarttracker.data.remote.AuthApiService
 import com.example.smarttracker.data.remote.dto.EmailVerificationDto
+import com.example.smarttracker.data.remote.dto.GoalResponseDto
 import com.example.smarttracker.data.remote.dto.LoginRequestDto
 import com.example.smarttracker.data.remote.dto.NicknameCheckRequestDto
 import com.example.smarttracker.data.remote.dto.ResendEmailDto
+import com.example.smarttracker.data.remote.dto.RoleResponseDto
 import com.example.smarttracker.data.remote.dto.toDomain
 import com.example.smarttracker.data.remote.dto.toDto
 import com.example.smarttracker.domain.model.AuthResult
+import com.example.smarttracker.domain.model.GoalResponse
 import com.example.smarttracker.domain.model.RegisterRequest
 import com.example.smarttracker.domain.model.RegisterResult
 import com.example.smarttracker.domain.model.ResendResult
 import com.example.smarttracker.domain.model.NicknameCheckResponse
+import com.example.smarttracker.domain.model.RoleResponse
 import com.example.smarttracker.domain.repository.AuthRepository
 import javax.inject.Inject
 
@@ -35,7 +41,9 @@ import javax.inject.Inject
  */
 class AuthRepositoryImpl @Inject constructor(
     private val api: AuthApiService,
-    private val tokenStorage: TokenStorage
+    private val tokenStorage: TokenStorage,
+    private val roleGoalCache: RoleGoalCache,
+    private val roleConfigStorage: RoleConfigStorage,
 ) : AuthRepository {
 
     /**
@@ -48,11 +56,29 @@ class AuthRepositoryImpl @Inject constructor(
     /**
      * Шаг 2 регистрации. Бэкенд устанавливает is_active=true и возвращает токены.
      * Сохраняем токены сразу — пользователь считается авторизованным.
+     *
+     * МОБ-6 — После верификации используем сохраненные роли из Step 2 наоборот,
+     * если таких нет — загружаем роли пользователя с API для инициализации BottomNavigation.
      */
     override suspend fun verifyEmail(email: String, code: String): Result<AuthResult> =
         runCatching {
             val result = api.verifyEmail(EmailVerificationDto(email, code)).toDomain()
-            tokenStorage.saveTokens(result.accessToken, result.refreshToken)
+            
+            // МОБ-6 — Проверить сохраненные роли из Step 2 регистрации
+            var roleIds = roleConfigStorage.getSelectedRoles()
+            
+            // Если ролей не было сохранено (например, обычный вход без новой регистрации) —
+            // загрузить с API
+            if (roleIds.isEmpty()) {
+                val rolesResult = runCatching {
+                    api.getUserRoles(email).map { it.roleId }
+                }
+                roleIds = rolesResult.getOrElse { emptyList() }
+            }
+            
+            // Сохранить токены И роли (даже если roleIds пуста)
+            tokenStorage.saveTokens(result.accessToken, result.refreshToken, roleIds)
+            
             result
         }
 
@@ -65,11 +91,20 @@ class AuthRepositoryImpl @Inject constructor(
     /**
      * Вход для верифицированных пользователей. Перезаписывает токены
      * (старая сессия заменяется новой).
+     *
+     * МОБ-6 — При входе загружаем роли пользователя заново (могли измениться).
      */
     override suspend fun login(email: String, password: String): Result<AuthResult> =
         runCatching {
             val result = api.login(LoginRequestDto(email, password)).toDomain()
-            tokenStorage.saveTokens(result.accessToken, result.refreshToken)
+            
+            // Загрузить роли пользователя
+            val rolesResult = runCatching {
+                api.getUserRoles(email).map { it.roleId }
+            }
+            val roleIds = rolesResult.getOrElse { emptyList() }
+            
+            tokenStorage.saveTokens(result.accessToken, result.refreshToken, roleIds)
             result
         }
 
@@ -79,11 +114,17 @@ class AuthRepositoryImpl @Inject constructor(
      *
      * Refresh token передаётся как @Query (не @Body) — подтверждено
      * сигнатурой FastAPI-роута (нюанс #7 в CONTEXT.md).
+     *
+     * Роли не перезагружаются (остаются из предыдущего входа).
+     * Если нужна актуальная информация о ролях, используйте login().
      */
     override suspend fun refreshToken(refreshToken: String): Result<AuthResult> =
         runCatching {
             val result = api.refreshToken(refreshToken).toDomain()
-            tokenStorage.saveTokens(result.accessToken, result.refreshToken)
+            
+            // Сохранить токены, роли остаются из TokenStorage
+            val currentRoles = tokenStorage.getUserRoles()
+            tokenStorage.saveTokens(result.accessToken, result.refreshToken, currentRoles)
             result
         }
 
@@ -95,5 +136,52 @@ class AuthRepositoryImpl @Inject constructor(
     override suspend fun checkNickname(nickname: String): Result<NicknameCheckResponse> =
         runCatching {
             api.checkNickname(NicknameCheckRequestDto(nickname)).toDomain()
+        }
+
+    /**
+     * МОБ-6.3 — Получение доступных ролей для регистрации.
+     * 
+     * Сначала проверяет in-memory кеш (RoleGoalCache).
+     * Если кеш пуст или истек (TTL=1 час), загружает с API и сохраняет в кеш.
+     * 
+     * Стратегия кеширования:
+     * 1. Роли редко меняются → безопасно кешировать на 1 час
+     * 2. Первый запрос может быть медленным, но последующие мгновенные
+     * 3. При logout кеш можно инвалидировать через roleGoalCache.clearCache()
+     */
+    override suspend fun getAvailableRoles(): Result<List<RoleResponse>> =
+        // DEPRECATED: Теперь используем getGoalsByRole(null) для загрузки всех целей
+        // и автоматического определения ролей от целей
+        Result.failure(NotImplementedError("getAvailableRoles deprecated - use getGoalsByRole(null)"))
+
+    /**
+     * МОБ-6.4 — Получение целей, опционально отфильтрованных по role_id.
+     * 
+     * Сначала проверяет in-memory кеш (RoleGoalCache).
+     * Если кеш пуст или истек (TTL=1 час), загружает с API и сохраняет в кеш.
+     * 
+     * Стратегия кеширования:
+     * 1. Цели кешируются отдельно для каждого roleId (или null для всех целей)
+     * 2. Первый запрос может быть медленным, но последующие мгновенные
+     * 3. При выборе новой роли кеш обновляется в следующем запросе
+     * 
+     * @param roleId ID роли для фильтрации (null = все цели)
+     */
+    override suspend fun getGoalsByRole(roleId: Int?): Result<List<GoalResponse>> =
+        runCatching {
+            // Проверить in-memory кеш
+            val cachedGoals = roleGoalCache.getCachedGoals(roleId)
+            if (cachedGoals != null) {
+                return@runCatching cachedGoals.map { it.toDomain() }
+            }
+            
+            // Кеш пуст → загрузить с API (всегда загружаем ВСЕ цели)
+            val goalsDto = api.getGoals()
+            
+            // Сохранить в кеш
+            roleGoalCache.setCachedGoals(roleId, goalsDto)
+            
+            // Вернуть domain объекты
+            goalsDto.map { it.toDomain() }
         }
 }

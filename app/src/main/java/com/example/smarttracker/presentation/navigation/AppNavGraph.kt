@@ -1,9 +1,13 @@
 package com.example.smarttracker.presentation.navigation
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
@@ -20,7 +24,7 @@ import com.example.smarttracker.presentation.auth.PrivacyPolicyScreen
 import com.example.smarttracker.presentation.auth.RegisterEvent
 import com.example.smarttracker.presentation.auth.RegisterScreen
 import com.example.smarttracker.presentation.auth.RegisterViewModel
-import com.example.smarttracker.presentation.auth.TermsOfServiceScreen
+import com.example.smarttracker.presentation.home.HomeScreen
 
 @Composable
 fun AppNavGraph(
@@ -56,6 +60,8 @@ fun AppNavGraph(
                 onBirthDateChange = viewModel::onBirthDateChange,
                 onGenderChange = viewModel::onGenderChange,
                 onPurposeChange = viewModel::onPurposeChange,
+                onLoadAvailableGoals = viewModel::loadAvailableGoals,
+                onGoalSelected = viewModel::onGoalSelected,
                 onEmailChange = viewModel::onEmailChange,
                 onPasswordChange = viewModel::onPasswordChange,
                 onConfirmPasswordChange = viewModel::onConfirmPasswordChange,
@@ -144,9 +150,12 @@ fun AppNavGraph(
         }
 
         composable(Screen.TermsOfService.route) {
-            TermsOfServiceScreen(
-                onBack = { navController.popBackStack() }
-            )
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("Условия использования")
+            }
         }
 
         composable(Screen.PrivacyPolicy.route) {
@@ -156,8 +165,7 @@ fun AppNavGraph(
         }
 
         composable(Screen.Home.route) {
-            // TODO: МОБ-6.x — HomeScreen
-            Text(text = "Главный экран (в разработке)")
+            HomeScreen()
         }
     }
 }

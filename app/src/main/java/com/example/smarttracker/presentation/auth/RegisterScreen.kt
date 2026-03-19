@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
@@ -55,6 +56,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -77,6 +79,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.util.Calendar
 import com.example.smarttracker.domain.model.Gender
+import com.example.smarttracker.domain.model.GoalResponse
+import com.example.smarttracker.domain.model.RoleResponse
 import com.example.smarttracker.domain.model.UserPurpose
 import com.example.smarttracker.presentation.theme.SmartTrackerTheme
 
@@ -97,6 +101,8 @@ fun RegisterScreen(
     onBirthDateChange: (String) -> Unit,
     onGenderChange: (Gender) -> Unit,
     onPurposeChange: (UserPurpose) -> Unit,
+    onLoadAvailableGoals: () -> Unit = {},
+    onGoalSelected: (Int) -> Unit = {},
     onEmailChange: (String) -> Unit,
     onPasswordChange: (String) -> Unit,
     onConfirmPasswordChange: (String) -> Unit,
@@ -128,6 +134,8 @@ fun RegisterScreen(
         2 -> RegisterStep2(
             state = state,
             onPurposeChange = onPurposeChange,
+            onLoadAvailableGoals = onLoadAvailableGoals,
+            onGoalSelected = onGoalSelected,
             onNext = onNext,
             onBack = onBack,
             isNextEnabled = isStep2Complete,
@@ -303,53 +311,101 @@ private fun RegisterStep1(
 private fun RegisterStep2(
     state: RegisterUiState,
     onPurposeChange: (UserPurpose) -> Unit,
+    onLoadAvailableGoals: () -> Unit = {},
+    onGoalSelected: (Int) -> Unit = {},
     onNext: () -> Unit,
     onBack: () -> Unit,
     isNextEnabled: Boolean = false,
 ) {
+    // МОБ-6 — Загрузить доступные цели при первом отображении
+    LaunchedEffect(Unit) {
+        onLoadAvailableGoals()
+    }
+
     RegisterScaffold(
         title = "Цель использования (2/4)",
         onBack = onBack,
         onNext = onNext,
         nextLabel = "Продолжить",
-        isLoading = state.isLoading,
+        isLoading = state.isLoadingGoals,
         isNextEnabled = isNextEnabled,
     ) {
         Text(
             text = "Почему вы установили приложение?",
             style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
             color = ColorPrimary,
-            modifier = Modifier
-                .padding(start = 15.dp),
+//            modifier = Modifier.padding(start = 15.dp),
         )
 
         Spacer(Modifier.height(16.dp))
 
-        Column(modifier = Modifier.selectableGroup()) {
-            PurposeOption(
-                text = "Я тренируюсь - мне нужен трекер для занятий",
-                selected = state.purpose == UserPurpose.ATHLETE,
-                onClick = { onPurposeChange(UserPurpose.ATHLETE) },
+        // ── Список доступных целей ────────────────────────────────────────
+        if (state.availableGoals.isEmpty() && !state.isLoadingGoals) {
+            Text(
+                text = "Ошибка загрузки целей. Попробуйте позже.",
+                style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                color = Color(0xFFE74C3C),
+//                modifier = Modifier.padding(start = 15.dp),
             )
-            PurposeOption(
-                text = "Я тренирую - мне нужно средство для организации тренировок",
-                selected = state.purpose == UserPurpose.TRAINER,
-                onClick = { onPurposeChange(UserPurpose.TRAINER) },
-            )
-            PurposeOption(
-                text = "Я организатор клуба - мне нужен инструмент для контроля его работы.",
-                selected = state.purpose == UserPurpose.CLUB_OWNER,
-                onClick = { onPurposeChange(UserPurpose.CLUB_OWNER) },
-            )
-            PurposeOption(
-                text = "Просто посмотреть",
-                selected = state.purpose == UserPurpose.EXPLORING,
-                onClick = { onPurposeChange(UserPurpose.EXPLORING) },
-            )
+        } else {
+            Column {
+                state.availableGoals.forEach { goal ->
+                    GoalSelectionItem(
+                        goal = goal,
+                        isSelected = state.selectedGoalId == goal.id,
+                        onSelect = { onGoalSelected(goal.id) },
+                    )
+                }
+            }
         }
 
+        // ── Ошибки ───────────────────────────────────────────────────────────
         state.fieldError?.let { ErrorText(it) }
         state.error?.let { ErrorText(it) }
+    }
+}
+
+/**
+ * МОБ-6 — Отображение цели с выбором (Checkbox).
+ * Квадратная кнопка выбора с галочкой при выборе.
+ */
+@Composable
+private fun GoalSelectionItem(
+    goal: GoalResponse,
+    isSelected: Boolean,
+    onSelect: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onSelect() }
+            .padding(vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .border(2.dp, ColorPrimary)
+                .size(20.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Checkbox(
+                checked = isSelected,
+                onCheckedChange = { onSelect() },
+                colors = CheckboxDefaults.colors(
+                    checkedColor = ColorCheckboxChecked,
+                    uncheckedColor = Color.Transparent,
+                    checkmarkColor = Color.Black,
+                ),
+                modifier = Modifier.size(20.dp),
+            )
+        }
+        Spacer(Modifier.width(12.dp))
+        Text(
+            text = goal.description,
+            style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
+            color = ColorPrimary,
+            modifier = Modifier.weight(1f),
+        )
     }
 }
 
