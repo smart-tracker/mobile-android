@@ -2,6 +2,7 @@ package com.example.smarttracker.data.remote
 
 import com.example.smarttracker.data.remote.dto.AuthResponseDto
 import com.example.smarttracker.data.remote.dto.EmailVerificationDto
+import com.example.smarttracker.data.remote.dto.GoalResponseDto
 import com.example.smarttracker.data.remote.dto.LoginRequestDto
 import com.example.smarttracker.data.remote.dto.NicknameCheckRequestDto
 import com.example.smarttracker.data.remote.dto.NicknameCheckResponseDto
@@ -9,7 +10,10 @@ import com.example.smarttracker.data.remote.dto.RegisterRequestDto
 import com.example.smarttracker.data.remote.dto.RegisterResultDto
 import com.example.smarttracker.data.remote.dto.ResendCodeResponseDto
 import com.example.smarttracker.data.remote.dto.ResendEmailDto
+import com.example.smarttracker.data.remote.dto.RoleDto
+import com.example.smarttracker.data.remote.dto.RoleResponseDto
 import retrofit2.http.Body
+import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.Query
 
@@ -67,4 +71,28 @@ interface AuthApiService {
      */
     @POST("auth/check-nickname")
     suspend fun checkNickname(@Body request: NicknameCheckRequestDto): NicknameCheckResponseDto
+
+    /**
+     * МОБ-6.2 — Получение ролей пользователя.
+     * API endpoint: GET /role/user_roles?email=...
+     * Возвращает список ролей, назначенных пользователю (из таблицы user_and_role).
+     * Используется после верификации email для инициализации BottomNavigation.
+     *
+     * @param email Email пользователя (используется для поиска в БД)
+     * @return Список ролей с полями role_id и name
+     */
+    @GET("role/user_roles")
+    suspend fun getUserRoles(@Query("email") email: String): List<RoleDto>
+
+    /**
+     * МОБ-6 — Получение целей для регистрации (Step 2).
+     * API endpoint: GET /goal/
+     * Возвращает ВСЕ доступные цели. Каждая цель автоматически привязана к роли (id_role).
+     * Пользователь выбирает цель, и роль определяется на основе id_role.
+     * Кешируется сроком на 1 час.
+     *
+     * @return Список целей с полями goal_id, description, id_role
+     */
+    @GET("goal/")
+    suspend fun getGoals(): List<GoalResponseDto>
 }

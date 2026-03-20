@@ -1,6 +1,8 @@
 package com.example.smarttracker.presentation.auth
 
 import com.example.smarttracker.domain.model.Gender
+import com.example.smarttracker.domain.model.GoalResponse
+import com.example.smarttracker.domain.model.RoleResponse
 import com.example.smarttracker.domain.model.UserPurpose
 
 /** Статус проверки уникальности никнейма */
@@ -9,6 +11,13 @@ sealed class NicknameCheckStatus {
     object CHECKING : NicknameCheckStatus()
     data class SUCCESS(val message: String) : NicknameCheckStatus()
     data class ERROR(val message: String) : NicknameCheckStatus()
+}
+
+/** Статус валидации даты рождения */
+sealed class BirthDateCheckStatus {
+    object IDLE : BirthDateCheckStatus()
+    data class SUCCESS(val message: String) : BirthDateCheckStatus()
+    data class ERROR(val message: String) : BirthDateCheckStatus()
 }
 
 /**
@@ -29,10 +38,19 @@ data class RegisterUiState(
     val nicknameCheckStatus: NicknameCheckStatus = NicknameCheckStatus.IDLE,
     /** Дата в формате дд.мм.гггг (строка для поля ввода) */
     val birthDate: String = "",
+    val birthDateCheckStatus: BirthDateCheckStatus = BirthDateCheckStatus.IDLE,
     val gender: Gender? = null,
 
     // ── Шаг 2: Цель использования ───────────────────────────────────────────
     val purpose: UserPurpose? = null,
+
+    // ── Шаг 2: Динамические цели (МОБ-6) ────────────────────────────────────
+    /** Доступные цели из API (GET /goal/) */
+    val availableGoals: List<GoalResponse> = emptyList(),
+    /** ID выбранной цели (автоматически определяет роль пользователя) */
+    val selectedGoalId: Int? = null,
+    /** Loading состояние для загрузки целей на Step 2 */
+    val isLoadingGoals: Boolean = false,
 
     // ── Шаг 3: Безопасность и доступ ────────────────────────────────────────
     val email: String = "",

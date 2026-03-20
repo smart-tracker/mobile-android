@@ -37,5 +37,6 @@ fun RegisterRequest.toDto(): RegisterRequestDto = RegisterRequestDto(
     email           = email,
     password        = password,
     confirmPassword = confirmPassword,
-    goalIds         = purpose.toRoleId()?.let { listOf(it) } ?: emptyList() // UserPurpose → [role_id] или []
+    goalIds         = if (roleIds.isNotEmpty()) roleIds else (purpose.toRoleId()?.let { listOf(it) } ?: emptyList())
+    // Приоритет: если roleIds не пусто — используем их, иначе конвертируем purpose в role_id
 )

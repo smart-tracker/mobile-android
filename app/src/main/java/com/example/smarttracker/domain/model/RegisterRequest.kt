@@ -14,6 +14,11 @@ data class RegisterRequest(
     // TODO: уточнить у Артёма - сохранять ли purpose в БД или только для определения роли?
     val purpose: UserPurpose,
 
+    // Шаг 2/4 - Динамические роли из API (МОБ-6)
+    // Если roleIds не пусто — эти роли отправляются вместо purpose
+    // Если пусто — используется purpose для определения роли
+    val roleIds: List<Int> = emptyList(),
+
     // Шаг 3/4 - Безопасность и доступ
     val email: String,
     val password: String,

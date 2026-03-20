@@ -2,6 +2,7 @@ package com.example.smarttracker.presentation.auth
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.smarttracker.data.local.RoleConfigStorage
 import com.example.smarttracker.domain.model.Gender
 import com.example.smarttracker.domain.model.RegisterRequest
 import com.example.smarttracker.domain.model.UserPurpose
@@ -31,6 +32,7 @@ import kotlinx.coroutines.FlowPreview
 class RegisterViewModel @Inject constructor(
     private val registerUseCase: RegisterUseCase,
     private val authRepository: AuthRepository,
+    private val roleConfigStorage: RoleConfigStorage,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(RegisterUiState())
@@ -61,7 +63,7 @@ class RegisterViewModel @Inject constructor(
                 .distinctUntilChanged()
                 .collect { nickname ->
                     if (nickname.length >= 3) {
-                        checkNicknameUnique(nickname)
+                        checkNicknameUniqueAsync(nickname)
                     } else {
                         // Сбрасываем статус при пустом или коротком вводе
                         _state.update { it.copy(nicknameCheckStatus = NicknameCheckStatus.IDLE) }
@@ -84,6 +86,12 @@ class RegisterViewModel @Inject constructor(
     fun onBirthDateChange(value: String) {
         val digits = value.filter { it.isDigit() }.take(8)
         _state.update { it.copy(birthDate = digits, fieldError = null) }
+        // Запустить валидацию даты
+        if (digits.length == 8) {
+            validateBirthDate(digits)
+        } else {
+            _state.update { it.copy(birthDateCheckStatus = BirthDateCheckStatus.IDLE) }
+        }
     }
 
     fun onGenderChange(gender: Gender) =
@@ -93,6 +101,42 @@ class RegisterViewModel @Inject constructor(
 
     fun onPurposeChange(purpose: UserPurpose) =
         _state.update { it.copy(purpose = purpose, fieldError = null) }
+
+    /**
+     * МОБ-6 — Загрузить доступные цели для Step 2.
+     * Вызывается при первом отображении Step 2.
+     * Результат кешируется на 1 час в RoleGoalCache.
+     */
+    fun loadAvailableGoals() {
+        val currentGoals = _state.value.availableGoals
+        // Если уже загружены — не загружаем повторно
+        if (currentGoals.isNotEmpty()) return
+
+        viewModelScope.launch {
+            _state.update { it.copy(isLoadingGoals = true, error = null) }
+            authRepository.getGoalsByRole(null)  // Загружаем ВСЕ цели
+                .onSuccess { goals ->
+                    _state.update {
+                        it.copy(
+                            availableGoals = goals,
+                            isLoadingGoals = false,
+                        )
+                    }
+                }
+                .onFailure { error ->
+                    val errorMessage = ApiErrorHandler.getErrorMessage(error)
+                    _state.update { it.copy(isLoadingGoals = false, error = errorMessage) }
+                }
+        }
+    }
+
+    /**
+     * МОБ-6 — Выбрать цель использования.
+     * На основе выбранной цели автоматически определяется роль пользователя.
+     */
+    fun onGoalSelected(goalId: Int) {
+        _state.update { it.copy(selectedGoalId = goalId, fieldError = null) }
+    }
 
     // ── Шаг 3: Безопасность и доступ ─────────────────────────────────────────
 
@@ -170,7 +214,9 @@ class RegisterViewModel @Inject constructor(
     }
 
     fun isStep2Complete(): Boolean {
-        return _state.value.purpose != null
+        // МОБ-6 — Проверяем что пользователь выбрал цель
+        val s = _state.value
+        return s.selectedGoalId != null || s.purpose != null
     }
 
     fun isStep3Complete(): Boolean {
@@ -189,11 +235,19 @@ class RegisterViewModel @Inject constructor(
 
     private fun validateStep1() {
         val s = _state.value
+        
+        // Проверить статус даты рождения — если есть ошибка, не переходить дальше
+        val dateError = when (s.birthDateCheckStatus) {
+            is BirthDateCheckStatus.ERROR -> s.birthDateCheckStatus.message
+            else -> null
+        }
+        
         val error = when {
             s.firstName.isBlank()  -> "Введите имя"
             s.username.isBlank()   -> "Введите имя пользователя"
             s.username.length < 3  -> "Имя пользователя: минимум 3 символа"
-            parseBirthDate(s.birthDate) == null -> "Введите корректную дату (дд.мм.гггг)"
+            s.birthDate.isEmpty()  -> "Введите дату рождения"
+            dateError != null      -> dateError  // Использовать сообщение об ошибке валидации
             s.gender == null       -> "Выберите пол"
             else -> null
         }
@@ -206,8 +260,9 @@ class RegisterViewModel @Inject constructor(
 
     private fun validateStep2() {
         val s = _state.value
-        if (s.purpose == null) {
-            _state.update { it.copy(fieldError = "Выберите цель использования") }
+        // МОБ-6 — Проверяем что выбрана цель (или старый механизм purpose)
+        if (s.selectedGoalId == null && s.purpose == null) {
+            _state.update { it.copy(fieldError = "Выберите цель использования приложения") }
         } else {
             _state.update { it.copy(step = 3, fieldError = null) }
         }
@@ -242,12 +297,18 @@ class RegisterViewModel @Inject constructor(
             return
         }
 
+        // Если выбрана цель — получаем roleId из цели, иначе используем purpose (может быть null)
+        val selectedGoal = s.availableGoals.find { it.id == s.selectedGoalId }
+        val roleId = selectedGoal?.roleId  // Получаем роль из выбранной цели
+        val purpose = s.purpose ?: UserPurpose.EXPLORING  // Дефолт для старого механизма
+
         val request = RegisterRequest(
             firstName = s.firstName,
             username = s.username,
             birthDate = birthDate,
             gender = s.gender!!,
-            purpose = s.purpose!!,
+            purpose = purpose,
+            roleIds = if (roleId != null) listOf(roleId) else emptyList(),  // Используем roleId из цели
             email = s.email,
             password = s.password,
             confirmPassword = s.confirmPassword,
@@ -255,6 +316,12 @@ class RegisterViewModel @Inject constructor(
 
         viewModelScope.launch {
             _state.update { it.copy(isLoading = true, error = null, fieldError = null) }
+            
+            // МОБ-6 — Сохранить выбранную цель/роль перед регистрацией
+            if (roleId != null) {
+                roleConfigStorage.saveSelectedRoles(listOf(roleId))
+            }
+            
             registerUseCase(request)
                 .onSuccess { _ ->
                     // Кулдаун RESEND_COOLDOWN_SECONDS (120 сек = 2 мин), НЕ result.expiresIn (600 сек = 10 мин)
@@ -324,48 +391,107 @@ class RegisterViewModel @Inject constructor(
         }
     }
 
-    /** Проверка уникальности nickname с debounce и кэшем */
-    private suspend fun checkNicknameUnique(nickname: String) {
-        // Если в кэше — моментально обновить UI без API запроса
-        if (nicknameCheckCache.containsKey(nickname)) {
-            val isAvailable = nicknameCheckCache[nickname]!!
+    /** Валидация даты рождения: возраст 6-120 лет, не будущая дата */
+    private fun validateBirthDate(dateStr: String) {
+        val birthDate = parseBirthDate(dateStr) ?: run {
             _state.update { state ->
                 state.copy(
-                    nicknameCheckStatus = if (isAvailable) {
-                        NicknameCheckStatus.SUCCESS("✓ Никнейм доступен")
-                    } else {
-                        NicknameCheckStatus.ERROR("✗ Никнейм занят")
-                    }
+                    birthDateCheckStatus = BirthDateCheckStatus.ERROR("✗ Некорректная дата")
                 )
             }
             return
         }
 
-        // Показать состояние загрузки
-        _state.update { it.copy(nicknameCheckStatus = NicknameCheckStatus.CHECKING) }
+        val today = LocalDate.now()
+        
+        // Проверка: дата не может быть в будущем
+        if (birthDate.isAfter(today)) {
+            _state.update { state ->
+                state.copy(
+                    birthDateCheckStatus = BirthDateCheckStatus.ERROR("✗ Дата не может быть в будущем")
+                )
+            }
+            return
+        }
 
-        authRepository.checkNickname(nickname)
-            .onSuccess { response ->
-                nicknameCheckCache[nickname] = response.is_available
-                
+        // Вычислить возраст
+        val age = today.year - birthDate.year - (
+            if (today.monthValue < birthDate.monthValue || 
+                (today.monthValue == birthDate.monthValue && today.dayOfMonth < birthDate.dayOfMonth)) 1 else 0
+        )
+
+        // Проверка: возраст >= 6 лет
+        if (age < 6) {
+            _state.update { state ->
+                state.copy(
+                    birthDateCheckStatus = BirthDateCheckStatus.ERROR("✗ Минимальный возраст: 6 лет")
+                )
+            }
+            return
+        }
+
+        // Проверка: возраст <= 120 лет
+        if (age > 120) {
+            _state.update { state ->
+                state.copy(
+                    birthDateCheckStatus = BirthDateCheckStatus.ERROR("✗ Максимальный возраст: 120 лет")
+                )
+            }
+            return
+        }
+
+        // Дата валидна
+        _state.update { state ->
+            state.copy(
+                birthDateCheckStatus = BirthDateCheckStatus.SUCCESS("✓ Дата корректна")
+            )
+        }
+    }
+
+    /** Проверка уникальности nickname с debounce и кэшем */
+    private fun checkNicknameUniqueAsync(nickname: String) {
+        viewModelScope.launch {
+            // Если в кэше — моментально обновить UI без API запроса
+            if (nicknameCheckCache.containsKey(nickname)) {
+                val isAvailable = nicknameCheckCache[nickname]!!
                 _state.update { state ->
                     state.copy(
-                        nicknameCheckStatus = if (response.is_available) {
+                        nicknameCheckStatus = if (isAvailable) {
                             NicknameCheckStatus.SUCCESS("✓ Никнейм доступен")
                         } else {
                             NicknameCheckStatus.ERROR("✗ Никнейм занят")
                         }
                     )
                 }
+                return@launch
             }
-            .onFailure { error ->
-                val errorMessage = ApiErrorHandler.getErrorMessage(error)
-                _state.update { state ->
-                    state.copy(
-                        nicknameCheckStatus = NicknameCheckStatus.ERROR(errorMessage)
-                    )
+
+            // Показать состояние загрузки
+            _state.update { it.copy(nicknameCheckStatus = NicknameCheckStatus.CHECKING) }
+
+            authRepository.checkNickname(nickname)
+                .onSuccess { response ->
+                    nicknameCheckCache[nickname] = response.is_available
+                    
+                    _state.update { state ->
+                        state.copy(
+                            nicknameCheckStatus = if (response.is_available) {
+                                NicknameCheckStatus.SUCCESS("✓ Никнейм доступен")
+                            } else {
+                                NicknameCheckStatus.ERROR("✗ Никнейм занят")
+                            }
+                        )
+                    }
                 }
-            }
+                .onFailure { error ->
+                    val errorMessage = ApiErrorHandler.getErrorMessage(error)
+                    _state.update { state ->
+                        state.copy(
+                            nicknameCheckStatus = NicknameCheckStatus.ERROR(errorMessage)
+                        )
+                    }
+                }
+        }
     }
 
     override fun onCleared() {

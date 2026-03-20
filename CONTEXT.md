@@ -22,125 +22,6 @@ DI: Hilt | UI: Jetpack Compose | Сеть: Retrofit | Токены: EncryptedSha
 
 ## Статус задач
 
-### ✅ Выполнено
-- МОБ-1.1 — `domain/model/User.kt`
-- МОБ-1.2 — `domain/model/RegisterRequest.kt`, `AuthResult.kt`, `RegisterResult.kt`
-- МОБ-1.3 — `domain/repository/AuthRepository.kt`
-- МОБ-1.4 — `domain/usecase/RegisterUseCase.kt` (валидация через Regex, без android.util)
-- `domain/model/ResendResult.kt` — добавлен, `resendCode` в AuthRepository изменён с `Result<Int>` на `Result<ResendResult>`
-- `chore` — создана полная конфигурация Gradle-проекта (Gradle 8.6, AGP 8.3.2, Kotlin 1.9.24)
-- МОБ-2.1 — `data/remote/dto/` — 5 DTO файлов + mappers (с учётом расхождений с API)
-- МОБ-2.2 — `data/remote/AuthApiService.kt` + `dto/RequestDtos.kt` — Retrofit интерфейс, 5 методов
-- МОБ-2.4 — `data/local/TokenStorage.kt` + `TokenStorageImpl.kt` — EncryptedSharedPreferences
-- МОБ-2.3 — `data/repository/AuthRepositoryImpl.kt` — реализация AuthRepository
-- МОБ-5.1 — `di/AuthModule.kt` — Hilt-модуль: OkHttpClient, Retrofit, AuthApiService, Binds
-- МОБ-4.1 — `presentation/auth/RegisterUiState.kt` — состояние 4-шагового экрана
-- МОБ-3.1 — `presentation/auth/RegisterScreen.kt` — stateless Compose UI по Figma-макету
-  - UI-улучшения (сессия 11.03.2026): убрана кнопка назад из TopAppBar, добавлен BackHandler, KeyboardCapitalization.Words для поля имени, DatePickerField с иконкой 📅 + DatePickerDialog, DateVisualTransformation (state хранит цифры «04052004», отображает «04.05.2004»)
-  - UI-улучшения (сессия 16.03.2026): смещение заголовков на 15% вниз (Spacer 80.dp), шрифт заголовков SemiBold (менее жирный), RadioButton → Checkbox для "Цель использования", чёрная граница и галочка для чекбоксов, бирюзово-зелёный фон при выборе (#4DACA7)
-- МОБ-4.2/4.3 — `presentation/auth/RegisterViewModel.kt` + `RegisterEvent.kt`
-- МОБ-5.2 — `presentation/navigation/Screen.kt` + `AppNavGraph.kt` + MainActivity обновлена
-
-- BASE_URL переключён на `https://runtastic.gottland.ru/` через `BuildConfig.BASE_URL` в `app/build.gradle.kts`
-- Клиентская валидация в `RegisterViewModel.submitRegistration()` и `verifyEmail()`:
-  - email — формат через `android.util.Patterns.EMAIL_ADDRESS`
-  - password — минимум 8 символов
-  - confirmPassword — совпадение с password
-  - verificationCode — ровно 6 символов
-- Commit `380588d` запушен: `fix: switch BASE_URL to prod, add client-side email/password/code validation`
-
-**Сессия 17.03.2026 — UI рефакторинг и интеграция шрифта Geologica:**
-
-- SmartTrackerTheme.kt расширен: добавлены `FontFamily` для Geologica (Light, Regular, Italic) и `SmartTrackerTypography` с 5 TextStyle:
-  - `titleLarge`: 32px italic для заголовков (логотип SmartTracker)
-  - `headlineSmall`: 20px light для заголовков шагов
-  - `labelLarge`: 20px light для кнопок и основного текста
-  - `bodyMedium`: 16px light для вторичного текста
-  - `bodySmall`: 14px light для мелкого текста
-
-RegisterScreen (17.03.2026):
-  - Все Text компоненты обновлены на `MaterialTheme.typography` стили (использует Geologica)
-  - StyledTextField и DatePickerField: добавлены Box обёрнутые с `border(2.dp, ColorPrimary, RoundedCornerShape(10.dp))`
-  - Заголовки блоков ("Имя", "Дата рождения", "Выберите пол"): добавлены с `padding(start = 15.dp)` для смещения слева
-  - GenderSelector и PurposeOption заголовки также обновлены
-
-LoginScreen (17.03.2026) — полный рефакторинг:
-  - Логотип: обёрнут в Box с `border(2.dp, Color.Black, RoundedCornerShape(20.dp))`, увеличен Spacer с 32.dp на 64.dp
-  - Email поле: убран label, используется placeholder, обёрнуто в Box с 2dp границей (как на RegisterScreen)
-  - Password поле: убран label, используется placeholder, обёрнуто в Box с 2dp границей
-  - "Забыли пароль?" ссылка: изменена на чёрный цвет (вместо синего), padding(top = 8.dp) + Spacer(12.dp) для правильного расстояния
-  - Кнопка "Войти": обновлена до 50.dp высота, добавлен `shape = RoundedCornerShape(10.dp)`, явно указан `contentColor = ColorWhite`
-  - Кнопка "Создать аккаунт": переделана как Button (вместо OutlinedButton) с инвертированными цветами:
-    - `containerColor = ColorBackground` (белый фон)
-    - `contentColor = ColorPrimary` (чёрный текст)
-    - `border = 2.dp ColorPrimary` граница
-    - `shape = RoundedCornerShape(10.dp)`
-  - Социальные логотипы (Yandex, VK, Max): заменены с placeholder-Box на Image с паттерном `painterResource(id = R.drawable.ic_*)`
-    - Image размеры: 48.dp
-    - IconButton размеры: 56.dp (для нормального нажатия)
-    - Добавлен `clip(RoundedCornerShape(4.dp))` для минимального округления углов
-
-Ресурсы добавлены:
-  - Шрифты: `app/src/main/res/font/geologica_light.ttf`, `geologica_regular.ttf`, `geologica_italic.ttf`
-  - Логотипы: `app/src/main/res/drawable/ic_yandex.png`, `ic_vk.png`, `ic_max.png` (от пользователя)
-  - Документация: `FONTS_SETUP.md` с инструкциями по использованию шрифтов
-
-Commit: `feat: UI рефакторинг экранов входа и регистрации, интеграция шрифта Geologica`
-- Commit `4d36a58` запушен: `feat(МОБ-3.1): убрать кнопку назад, автоформат даты через VisualTransformation, DatePickerDialog`
-- **Обработка API-ошибок** (сессия 16.03.2026):
-  - Создана утилита `utils/ApiErrorHandler.kt` для парсинга ошибок HTTP-ответов
-  - Вместо сырых `error.message` пользователю выводятся понятные сообщения на русском
-  - `RegisterViewModel` обновлена для использования `ApiErrorHandler` в методах: `submitRegistration()`, `verifyEmail()`, `onResendCode()`
-  - Поддержка категоризации ошибок: USERNAME_TAKEN, EMAIL_TAKEN, PASSWORD_ERROR, TOO_MANY_ATTEMPTS, RESEND_COOLDOWN, GENERIC
-  - Примеры типичных ошибок и их обработки в `utils/ApiErrorScenarios.kt` (документация для разработчиков)
-  - **Перевод ошибок на русский:** добавлена карта `errorTranslations` с автоматическим переводом типичных ошибок с английского (от бэкенда) на русский
-  - Примеры переводов: "User with this email already exists" → "Пользователь с такой почтой уже существует"
-  - Коммит `114f617`: feat: add API error handling with user-friendly messages
-  - Коммит `7420009`: feat: translate all API error messages to Russian (only Russian UI errors)
-
-**Сессия 18.03.2026 — Live nickname validation:**
-
-- `domain/model/NicknameCheckResponse.kt` — добавлена модель для API-ответа
-- `data/remote/dto/NicknameCheckResponseDto.kt` — DTO с маппером `toDomain()`
-- `domain/repository/AuthRepository.kt` — добавлен метод `checkNickname()`
-- `data/repository/AuthRepositoryImpl.kt` — реализована проверка уникальности никнейма
-- `data/remote/AuthApiService.kt` — добавлен endpoint `@POST("auth/check-nickname")`
-- `presentation/auth/RegisterUiState.kt` — добавлено поле `nicknameCheckStatus: NicknameCheckStatus` (sealed class с состояниями IDLE, CHECKING, SUCCESS, ERROR)
-- `presentation/auth/RegisterViewModel.kt`:
-  - Добавлен debounce-поток для проверки никнейма (700ms задержка)
-  - Реализовано кеширование результатов проверок (in-memory, в ViewModel)
-  - Минимум 3 символа перед API-вызовом
-  - Обработка ошибок через `ApiErrorHandler`
-- `presentation/auth/RegisterScreen.kt` — обновлена функция `NicknameField`:
-  - Иконка ✓ (зелёная, #4CAF50) при успехе
-  - Иконка ✗ (красная, #E74C3C) при ошибке
-  - Цветная рамка вокруг поля для визуального feedback'а
-  - Без дополнительного текста под полем (компактный дизайн)
-- Коммит `634804d`: feat(moB): live nickname validation with debounce, caching and icon feedback
-
-**Сессия 18.03.2026 (вечер) — Отправка role_ids при регистрации:**
-
-⚠️ **Контекст:** На бэкенде отсутствуют endpoints `GET /roles` и `GET /goals` для загрузки списка целей. В таблице БД (`smart-tracker/api`) есть структура (таблицы `roles`, `goal_register`, `user_and_goal`), но endpoints не созданы. Решение: временно отправляем hardcoded список целей с клиента с соответствующими `role_id`.
-
-- `domain/model/UserPurpose.kt` — добавлена функция `toRoleId()` для конвертации цели в номер роли:
-  - ATHLETE → 1 (sportsman в БД)
-  - TRAINER → 2 (trainer в БД)
-  - CLUB_OWNER → 3 (club_organizer в БД)
-  - EXPLORING, OTHER → null (пусто, роль не назначается)
-- `data/remote/dto/RegisterRequestDto.kt`:
-  - Добавлено поле `role_ids: List<Int>`
-  - Маппер теперь конвертирует `UserPurpose` → `role_id` через `toRoleId()`
-  - Пример отправки: ATHLETE → `role_ids: [1]`
-- **API контракт:** Отправляется `role_ids` (массив) вместо единственного role_id, что позволит в будущем поддерживать множественные роли
-- **Статус:** ✅ BUILD SUCCESSFUL, готово к тестированию
-
-### ✅ Compile: BUILD SUCCESSFUL
-
-
-- Commit `380588d`: `fix: switch BASE_URL to prod, add client-side email/password/code validation` ✅ Полный Gradle-билд
-- Commit `4d36a58`: `feat(МОБ-3.1): убрать кнопку назад, автоформат даты через VisualTransformation, DatePickerDialog` ✅ Компилируется без ошибок
-- Commit `634804d`: `feat(moB): live nickname validation with debounce, caching and icon feedback` ✅ BUILD SUCCESSFUL (2m 11s, 109 tasks)
-
 ### ✅ Регистрационный поток (E2E тестирование)
 
 - RegisterScreen Step 1-4 (регистрация + верификация email) → HomeScreen ✅ 
@@ -148,57 +29,43 @@ Commit: `feat: UI рефакторинг экранов входа и регис
   - Step 2: Пол, цель использования
   - Step 3: Email, пароль, подтверждение пароля + live nickname validation
   - Step 4: Ввод 6-значного кода верификации, таймер 10 мин, кнопка "Отправить повторно" (cooldown 2 мин)
-- Все API endpoints работают корректно после исправления багов (см. выше)
-- Возможна быстрая разработка и тестирование других экранов
-
-### 🔜 Следующие задачи
-- **PasswordRecovery** screens (nodes: 227:186, 227:288, 227:339)
-- Улучшение остальных функций приложения
+- ✅ LoginScreen — полная реализация с UI, ViewModel, навигацией
+- ✅ ForgotPasswordScreen / PasswordRecovery — трёхшаговый процесс восстановления пароля
+- ✅ Все API endpoints работают корректно
+- ✅ Навигация RegisterScreen → VerifyEmailScreen → HomeScreen функционирует
 
 ## Статус бэкенда
 
-### 🔧 Локальная разработка (Local API setup)
+### 🔧 Production API
 
-**Статус:** ✅ Готов к тестированию. Android приложение успешно регистрируется и верифицирует email через локальный API.
+**Статус:** ✅ Разработка ведётся с полноценным production сервером.
 
 **Конфигурация:**
-- **Сервер:** FastAPI + SQLite (временно вместо PostgreSQL) на `http://localhost:8000`
-- **Маршрутизация:** Debug build использует `http://10.0.2.2:8000/` (эмулятор → локальный Я хост)
-- **Окружение:** Python venv в `C:\Users\novsm\Documents\GitHub\api`, uvicorn с флагом `--reload`
-- **Конфиг:** `.env` с `DEBUG=true`, `DATABASE_URL=sqlite+aiosqlite:///./smarttracker.db`
+- **Сервер:** FastAPI + PostgreSQL на `https://runtastic.gottland.ru/`
+- **API Docs:** https://runtastic.gottland.ru/docs
+- **BASE_URL в приложении:** `https://runtastic.gottland.ru/` (через `app/build.gradle.kts`)
+- **Android:** Используется production API для всех requests
 
 **Тестирование:**
-1. `/auth/register` → ✅ 200 OK (с `debug_code` в DEBUG-режиме)
-2. `/auth/resend-code` → ✅ 200 OK (код переотправлен)
+1. `/auth/register` → ✅ 200 OK (Email отправляется на реальный адрес)
+2. `/auth/resend-code` → ✅ 200 OK (Код переотправляется)
 3. `/auth/verify-email` → ✅ 200 OK (JWT токены, пользователь авторизован)
 4. **Навигация:** RegisterScreen → VerifyEmailScreen → HomeScreen ✅ успешна
 
 ---
 
-### 🐛 Найденные баги API (нужны в production)
-
-**Баг 1:** `app/services/auth.py` — метод `can_resend_code()` (строка ~143)
-- **Проблема:** Использовано `.scalar_one_or_none()` после `.order_by()` → выбрасывает `MultipleResultsFound`
-- **Когда возникает:** При повторной отправке кода (когда в таблице уже несколько кодов для пользователя)
-- **Исправление:** Заменить на `.first()` и распаковать результат
-- **Статус:** ✅ Исправлено локально
-
-**Баг 2:** `app/services/auth.py` — метод `verify_email()` (строка ~97)
-- **Проблема:** Использовано `.scalar_one_or_none()` после `.order_by()` → выбрасывает `MultipleResultsFound`
-- **Когда возникает:** При подтверждении email кодом (при наличии нескольких кодов в таблице)
-- **Исправление:** Заменить на `.first()` и распаковать результат
-- **Статус:** ✅ Исправлено локально
-
-**Улучшения:**
-- BASE_URL в `app/build.gradle.kts` переключен обратно на `http://10.0.2.2:8000/` для локального тестирования
-
-### 📌 Статус production: Сервер runtastic.gottland.ru
+### � Статус production: Сервер runtastic.gottland.ru
 
 > Сервер: FastAPI + PostgreSQL, uvicorn слушает `0.0.0.0:8000`, SSL терминируется внешним балансировщиком хостинга.
 > Uvicorn **не управляется systemd** — перезапуск только вручную от пользователя `mihail`.
 > `.env` находится в `/home/mihail/api/.env`.
+> API документация доступна по адресу https://runtastic.gottland.ru/docs
 
-**⚠️ Важно:** Баги 1 и 2 выше нужно **обязательно исправить** на production API перед запуском. Без исправлений пользователи не смогут верифицировать email при повторной отправке кода.
+**✅ Статус:**
+- Регистрация пользователей работает корректно
+- Email верификация работает (отправка кодов на реальные адреса)
+- JWT авторизация функционирует
+- API эндпоинты стабильны
 
 ### ✅ Исправлено на сервере (сессия)
 
@@ -258,6 +125,7 @@ Commit: `feat: UI рефакторинг экранов входа и регис
 - `minSdk = 26` — `java.time` (LocalDate) доступен нативно, desugaring не нужен
 - `compileSdk = 35`, `targetSdk = 35`
 - `jvmTarget = "17"`
+- Gradle: 8.6, AGP: **8.13.2** (обновлено 20.03.2026), Kotlin: 1.9.24
 - Все версии библиотек в `gradle/libs.versions.toml`
 - Hilt через `kapt` (не KSP — совместимость с Kotlin 1.9.x)
 
@@ -305,20 +173,22 @@ Commit: `feat: UI рефакторинг экранов входа и регис
 
 ## Соглашения по коммитам
 
-Формат: `тип(МОБ-X.X): описание на русском языке`
+Формат: `тип(название-фичи): описание на русском языке`
 
-> **Обязательно:** в скобках всегда писать `МОБ-` перед номером задачи.
-> Правильно: `feat(МОБ-2.3)` — Неправильно: `feat(-2.3)` или `feat(2.3)`
+> **Формат scope:** используйте kebab-case для названия фичи (например: `auth-validation`, `date-picker`, `error-handler`).
+> Правильно: `feat(nickname-validation)` — Неправильно: `feat(МОБ-2.3)` или `feat(NicknameValidation)`
 
 Примеры:
 ```
-feat(МОБ-2.1): добавлены DTO модели и mappers для auth-слоя
-feat(МОБ-2.2): добавлен AuthApiService — Retrofit интерфейс
-feat(МОБ-2.4): добавлено хранилище токенов TokenStorage
-feat(МОБ-2.3): реализован AuthRepositoryImpl
-feat(МОБ-5.1): добавлен Hilt AuthModule
-chore: обновлён CONTEXT.md — зафиксированы расхождения с API
-fix(МОБ-2.1): исправлена nullable-типизация в ResendCodeResponseDto
+feat(auth-dto): добавлены DTO модели и mappers для auth-слоя
+feat(auth-api): добавлен Retrofit интерфейс AuthApiService
+feat(token-storage): добавлено хранилище токенов TokenStorage
+feat(auth-repo): реализован AuthRepositoryImpl
+feat(hilt-di): добавлен Hilt AuthModule
+feat(register-ui): stateless Compose UI для RegisterScreen
+feat(birth-date-validation): добавлена валидация даты рождения (возраст 6-120 лет)
+fix(terms-screen): исправлена ссылка "Условия использования" в AppNavGraph
+chore: обновлён CONTEXT.md — новый формат коммитов
 ```
 
 Типы: `feat` — новая функция, `fix` — исправление, `refactor` — рефакторинг, `chore` — служебное, `docs` — документация.
@@ -329,7 +199,7 @@ fix(МОБ-2.1): исправлена nullable-типизация в ResendCodeR
 > ✅ **Единственный надёжный способ** — Python-скрипт с Unicode-эскейпами (только ASCII в исходнике):
 > ```python
 > # fix_commit.py
-> msg = u'feat(\u041c\u041e\u0411-X.X): \u043e\u043f\u0438\u0441\u0430\u043d\u0438\u0435'
+> msg = u'feat(auth-validation): \u043e\u043f\u0438\u0441\u0430\u043d\u0438\u0435'
 > with open(r'C:\...\mobile\.git\COMMIT_MSG', 'wb') as f:
 >     f.write(msg.encode('utf-8'))
 > ```
@@ -373,174 +243,190 @@ com.example.smarttracker/
 
 ## Отчёт о проделанной работе
 
-### Выполненные задачи
+### Готовый функционал
 
-#### Android (реализовано полностью)
+#### Android Application (✅ BUILD SUCCESSFUL)
 
-| Задача | Файл(ы) | Статус |
-|---|---|---|
-| МОБ-1.1–1.4 | Domain-слой: модели, репозиторий, UseCase | ✅ |
-| МОБ-2.1 | 5 DTO + mappers в `data/remote/dto/` | ✅ |
-| МОБ-2.2 | `AuthApiService.kt` — Retrofit, 5 методов | ✅ |
-| МОБ-2.3 | `AuthRepositoryImpl.kt` | ✅ |
-| МОБ-2.4 | `TokenStorage` + `TokenStorageImpl` (EncryptedSharedPreferences) | ✅ |
-| МОБ-5.1 | `AuthModule.kt` — Hilt DI | ✅ |
-| МОБ-3.1 | `RegisterScreen.kt` — Compose UI по Figma | ✅ |
-| МОБ-3.1 🆕 | UI-улучшения: BackHandler, DatePickerField, DateVisualTransformation, KeyboardCapitalization | ✅ |
-| МОБ-4.1–4.3 | `RegisterUiState`, `RegisterViewModel`, `RegisterEvent` | ✅ |
-| МОБ-5.2 | `Screen.kt` + `AppNavGraph.kt` + `MainActivity` | ✅ |
-| fix | `BASE_URL` → `https://runtastic.gottland.ru/` | ✅ |
-| fix | Клиентская валидация: email, пароль, совпадение, код 6 цифр | ✅ |
+**Архитектура и DI:**
+- ✅ Domain-слой (Clean Architecture)
+  - `User.kt`, `RegisterRequest.kt`, `AuthResult.kt`, `RegisterResult.kt`, `ResendResult.kt`, `NicknameCheckResponse.kt` — domain модели
+  - `AuthRepository` — интерфейс с методами: `register()`, `verifyEmail()`, `resendCode()`, `login()`, `refreshToken()`, `checkNickname()`
+  - `RegisterUseCase.kt` — валидация (regex, без android.util)
 
-**Сборка:** BUILD SUCCESSFUL (43 задачи). Commit `380588d` в ветке `main`.
-**Последний коммит:** `4d36a58` — `feat(МОБ-3.1): убрать кнопку назад, автоформат даты, DatePickerDialog` (get_errors чист, полный Gradle-билд не запускался)
+- ✅ Data-слой
+  - `data/remote/dto/` — 5 DTO файлов с mappers: `RegisterRequestDto`, `AuthResponseDto`, `ResendCodeResponseDto`, `ErrorResponseDto`, `NicknameCheckResponseDto`
+  - `AuthApiService.kt` — Retrofit интерфейс с 6 методами (register, verify-email, resend-code, login, refresh, check-nickname)
+  - `TokenStorage.kt` + `TokenStorageImpl.kt` — EncryptedSharedPreferences для хранения JWT токенов
+  - `AuthRepositoryImpl.kt` — реализация бизнес-логики
 
-#### Сервер — устранённые баги (в процессе тестирования)
+- ✅ Dependency Injection
+  - `AuthModule.kt` — Hilt конфигурация: OkHttpClient, Retrofit instance, AuthApiService binding, TokenStorage binding
 
-| Ошибка | Причина | Решение |
-|---|---|---|
-| TLS Chain validation failed | Неполная цепочка сертификатов | Само исправилось (certbot) |
-| HTTP 500 — порт БД | `.env` содержал `POSTGRES_PORT=5434` вместо `5432` | Исправлено в `.env` |
-| HTTP 500 — NOT NULL | Схема БД имела NOT NULL на необязательных полях | `ALTER TABLE` для last_name, middle_name, weight, height |
+**Presentation-слой (Jetpack Compose):**
+- ✅ RegisterScreen (4-шаговая регистрация)
+  - Step 1: Имя, фамилия, дата рождения (DatePickerDialog с форматированием DD.MM.YYYY)
+    - **DateVisualTransformation** — состояние хранит 8 цифр (`04052004`), визуально отображает `04.05.2004`
+    - Валидация: возраст 6-120 лет, дата не в будущем, правильный формат
+    - Визуальный feedback: зелёная/красная рамка поля + иконки ✓/✗
+  - Step 2: Пол (RadioButtons), цель использования (Checkboxes)
+    - Чёрная граница вокруг чекбокса при выборе, бирюзово-зелёный фон (#4DACA7)
+  - Step 3: Email, пароль, подтверждение, никнейм + Legal links
+    - **Live nickname validation** с debounce 700ms, иконки ✓/✗, кеширование результатов (min 3 символа)
+    - ClickableText с ссылками на "Условия использования" и "Политика конфиденциальности"
+  - Step 4: Ввод 6-значного кода верификации, таймер 10 мин, кнопка "Отправить повторно" (cooldown 120с)
+    - Таймер обратного отсчёта отображается в формате `MM:SS`
+    - Кнопка "Отправить повторно" отключена во время cooldown'а
+  - `RegisterViewModel.kt` + `RegisterUiState.kt` + `RegisterEvent.kt` — state management
+  - **role_ids**: отправляются в виде массива `[1]` или пусты для EXPLORING/OTHER целей
+
+- ✅ LoginScreen (сессия 17.03.2026)
+  - Email и пароль с валидацией
+  - Кнопка "Войти" и ссылка "Забыли пароль?"
+  - Социальные кнопки (Yandex, VK, Max) с иконками
+  - Полный рефакторинг UI: граница 2dp, placeholder вместо label
+
+- ✅ PasswordRecoveryScreen (ForgotPasswordScreen) — полностью реализован и интегрирован
+  - Step 1: Ввод email для восстановления
+  - Step 2: Ввод нового пароля + подтверждение
+  - Step 3: Ввод 6-значного кода верификации, таймер, resend cooldown
+  - `ForgotPasswordViewModel.kt` + `ForgotPasswordUiState.kt` + `ForgotPasswordEvent.kt`
+  - Навигация из LoginScreen через "Забыли пароль?" ссылку
+  - PasswordRecoveryRepository интегрирован с API
+
+- ✅ Navigation
+  - `Screen.kt` — sealed class с маршрутами (registerScreen, loginScreen, homeScreen, termsOfService, privacyPolicy, passwordRecovery)
+  - `AppNavGraph.kt` — NavHost с переходами, LaunchedEffect для обработки навигационных событий
+  - `MainActivity.kt` — инициализация с Hilt DI
+
+- ✅ Legal Screens
+  - `TermsOfServiceScreen` — полный текст "Условия использования" с TopAppBar и прокруткой
+  - `PrivacyPolicyScreen` — полный текст "Политика конфиденциальности" с TopAppBar и прокруткой
+  - Доступны по ClickableText ссылкам на RegisterStep3
+
+- ✅ HomeScreen (МОБ-6) — динамический BottomNav
+  - Генерируется на основе ролей пользователя (ATHLETE, TRAINER, CLUB_OWNER)
+  - Навигация: Home, MyWorkouts (атлеты), MyAthletes (тренеры), MyClub (владельцы), Profile (все)
+  - `HomeViewModel.kt` загружает NavigationConfig из RoleConfigStorage
+  - `NavigationConfig.kt` + `BottomNavItem` + `RoleConfig.kt` — модели конфигурации
+
+**UI & Styling:**
+- ✅ SmartTrackerTheme
+  - `FontFamily` для Geologica (Light, Regular, Italic) — встроены в `app/src/main/res/font/`
+  - `SmartTrackerTypography` с 5 TextStyle: titleLarge (32px italic), headlineSmall (20px light), labelLarge (20px light), bodyMedium (16px), bodySmall (14px)
+  - Цветовая схема: Primary=#0A1928, Background=white, Placeholder=#525760
+  - 2dp border radius для текстовых полей, 10dp для кнопок
+
+- ✅ Ресурсы
+  - Шрифты встроены: `geologica_light.ttf`, `geologica_regular.ttf`, `geologica_italic.ttf`
+  - Иконки социальных сетей: `ic_yandex.png`, `ic_vk.png`, `ic_max.png`
+
+**Error Handling & Validation:**
+- ✅ ApiErrorHandler
+  - Парсинг HTTP-ошибок (JSON responses)
+  - Автоперевод с английского на русский (карта errorTranslations)
+  - Категоризация: USERNAME_TAKEN, EMAIL_TAKEN, PASSWORD_ERROR, TOO_MANY_ATTEMPTS, RESEND_COOLDOWN, GENERIC
+  - User-friendly сообщения вместо raw HTTP errors
+
+- ✅ Клиентская валидация
+  - Email: `android.util.Patterns.EMAIL_ADDRESS`
+  - Password: минимум 8 символов
+  - Confirm password: совпадение с password
+  - Verification code: ровно 6 символов
+  - Nickname: минимум 3 символа (перед API-вызовом)
+  - **Birth date**: возраст 6-120 лет, дата не в будущем, формат DD.MM.YYYY (ровно 8 цифр)
+
+**API Integration:**
+- ✅ Production API: `https://runtastic.gottland.ru/` (через BuildConfig.BASE_URL)
+- ✅ 6 endpoints:
+  - `POST /auth/register` → returns access_token, refresh_token, expires_in
+  - `POST /auth/verify-email` → returns access_token, refresh_token
+  - `POST /auth/resend-code` → returns message, expires_at, remaining_seconds
+  - `POST /auth/login` → returns access_token, refresh_token
+  - `POST /auth/refresh` → returns access_token, refresh_token
+  - `POST /auth/check-nickname` → returns is_available
+
+**Project Configuration:**
+- ✅ Gradle: 8.6, AGP: **8.13.2**, Kotlin: 1.9.24
+- ✅ SDK: minSdk=26, compileSdk=35, targetSdk=35, jvmTarget="17"
+- ✅ Все версии библиотек в `gradle/libs.versions.toml`
+- ✅ Hilt через `kapt` (не KSP)
+- ✅ SSL certificate chain — обойдено через `network_security_config.xml`
+
+**Сборка:** ✅ BUILD SUCCESSFUL
 
 ---
 
-### Что мешает дальнейшей работе
+### Детали реализации HomeScreen (Фаза 0 и 1 — МОБ-6)
 
-#### � Блокер 1 — SQLAlchemy-модели не синхронизированы с БД
+**Фаза 0 — Domain models для динамического BottomNav (МОБ-6.1)**
+- ✅ `domain/model/NavigationConfig.kt` (BottomNavItem, NavigationConfig, DrawerItem)
+- ✅ `domain/model/RoleConfig.kt` (getNavigationConfig, константы ROLE_ATHLETE/TRAINER/CLUB_OWNER)
+- ✅ `presentation/navigation/Screen.kt` (новые экраны: MyWorkouts, MyAthletes, MyClub, Profile, TermsOfService, PrivacyPolicy)
 
-`ALTER TABLE` были применены напрямую в PostgreSQL — схема в коде (SQLAlchemy-модели) не обновлена. При следующих миграциях (`alembic`) возможен откат изменений. **Бэкенд-команде нужно обновить модели** (`last_name`, `middle_name`, `weight`, `height` — сделать Optional).
-
-#### 🟡 Блокер 2 — Roles/Goals endpoints отсутствуют на бэкенде
-
-На бэкенде (`smart-tracker/api`) **структура БД полностью готова:** таблицы `roles`, `goal_register`, `user_and_role`, `user_and_goal`, логика обработки при регистрации. **Но endpoints для получения списков НЕ реализованы.**
-
-Что нужно на бэкенде:
-- ❌ `GET /roles` — список всех ролей
-- ❌ `GET /goals` или `GET /goals?role_id=...` — список целей (опционально отфильтрованные по ролям)
-
-Что создавать на клиенте:
-- Вариант 1: Загружать список целей с бэкенда при открытии Step 2 (требует endpoints)
-- Вариант 2: Hardcoded список целей в приложении (текущий подход) — **используется сейчас**
-
-#### 🟡 Блокер 3 — Экран верификации не реализован
-
-После успешной регистрации navGraph переходит на `verify_email`, но сам экран ввода кода ещё не создан. Без него пользователь зайдёт в тупик.
+**Фаза 1 — TokenStorage + Роли (МОБ-6.1)**
+- ✅ `data/local/TokenStorage.kt` (интерфейс: saveTokens(roleIds), getUserRoles(), clearAll())
+- ✅ `data/local/TokenStorageImpl.kt` (реализация: сохранение roleIds как "1,2,3" в EncryptedSharedPreferences)
+- ✅ `data/remote/AuthApiService.kt` (endpoints: check-nickname, role/user_roles)
+- ✅ `data/remote/dto/RoleDto.kt` (новый DTO с маппером toDomain())
+- ✅ `domain/model/Role.kt` (новая domain модель для ролей)
+- ✅ `data/repository/AuthRepositoryImpl.kt`:
+  - `verifyEmail()` — загружает роли после верификации email
+  - `login()` — загружает роли при входе
+  - `refreshToken()` — сохраняет текущие роли при обновлении токенов
 
 ---
 
-### Нюансы технического характера
-
-- **Uvicorn не управляется systemd** — после перезагрузки сервера процесс не поднимется автоматически. Нужно настроить systemd-сервис.
-- **`/auth/refresh` — query param, не body** — FastAPI обрабатывает `refresh_token` как query-параметр, в `AuthApiService.kt` используется `@Query`, не `@Body`.
-- **`debug_code` в ответе `/auth/register`** — сервер временно возвращает код верификации открытым текстом. Убрать до выхода в прод.
-- **MAX_VERIFICATION_ATTEMPTS = 5** — после 5 неверных кодов аккаунт блокируется. Нужна обработка на UI.
-- **RESEND_COOLDOWN = 120 сек** — таймер обратного отсчёта на экране верификации.
-
----
-
-### Предложение следующих задач
-
-#### Приоритет 2 — завершить auth-флоу
-- [ ] **VerifyEmailScreen** — экран ввода 6-значного кода с таймером 10 мин, кнопкой "Отправить повторно" (cooldown 2 мин), обработка блокировки после 5 попыток
-- [ ] **LoginScreen** (Figma node: `172:640`) — email, пароль, кнопка входа, ссылка на регистрацию
-- [ ] **PasswordRecovery** — 3 экрана (Figma nodes: `227:186`, `227:288`, `227:339`): ввод email, ввод кода, новый пароль
-
-#### Приоритет 3 — инфраструктура
-- [ ] **Настроить systemd-сервис** для uvicorn — автозапуск после перезагрузки сервера
-- [ ] **Синхронизировать SQLAlchemy-модели** с изменениями в БД (nullable-поля)
-- [ ] **Alembic-миграция** для фиксации схемы
+### Валидация и проверки (Фаза 20.03.2026)
+- ✅ `domain/model/BirthDateCheckStatus.kt` (IDLE, SUCCESS, ERROR состояния)
+- ✅ `domain/model/UserPurpose.kt` + `toRoleId()` маппер (ATHLETE→1, TRAINER→2, CLUB_OWNER→3)
+- ✅ `RegisterViewModel.validateBirthDate()`:
+  - Формат проверки (ровно 8 цифр DD.MM.YYYY)
+  - Дата не в будущем
+  - Возраст ≥ 6 лет, ≤ 120 лет
+  - Визуальный feedback: цветная рамка + иконки ✓/✗
+- ✅ `RegisterRequestDto` отправляет `role_ids: List<Int>` вместо role_id
+- ✅ `TermsOfServiceScreen` и `PrivacyPolicyScreen` — полноценные экраны с документами
 
 ---
 
-## Результаты дебаггинга (11.03.2026)
+**Сборка:** ✅ BUILD SUCCESSFUL
 
-Проведён полный аудит кода обоих репозиториев: `smart-tracker/mobile` (Android) и `smart-tracker/api` (FastAPI).
+---
 
-### 🔴 Критические баги
+#### 🟠 Нюансы PasswordRecovery (уже реализованы)
 
-#### API-1: Timezone-naive vs timezone-aware — `TypeError` при сравнении дат
-**Файлы:** `app/services/auth.py`, `app/models/email_verification.py`
-Модель `EmailVerification` хранит `expires_at` и `created_at` как `DateTime(timezone=True)` — PostgreSQL возвращает timezone-aware объекты. Но сервис везде использует `datetime.now()` (без таймзоны) → `TypeError: can't compare offset-naive and offset-aware datetimes`.
-Затронуты: `verify_email()`, `can_resend_code()`, `is_expired()`.
-**Исправление:** заменить `datetime.now()` на `datetime.now(timezone.utc)` во всём `app/services/auth.py` и `app/models/email_verification.py`.
+PasswordRecovery полностью интегрирован с API:
+- **MAX_VERIFICATION_ATTEMPTS = 5** — обработка блокировки после 5 ошибок (ошибка `"Too many failed attempts"`)
+- **RESEND_COOLDOWN_SECONDS = 120** — таймер обратного отсчёта между отправками кодов
+- **VERIFICATION_CODE_EXPIRE_MINUTES = 10** → `expires_in = 600` секунд (таймер на UI)
+- Валидация: email (формат), пароль (8+ символов), код (ровно 6 цифр)
+- Обработка ошибок через `ApiErrorHandler` (перевод на русский)
 
-#### API-2: Старые коды верификации не инвалидируются
-**Файл:** `app/services/auth.py`, методы `register_user()` и `resend_verification_code()`
-В обоих методах выполняется `SELECT` по старым неподтверждённым записям `EmailVerification`, но результат нигде не сохраняется и не используется — это мёртвый код. Результат: одновременно существует несколько валидных кодов, все работают до истечения, база засоряется.
-**Исправление:** заменить `SELECT` на `DELETE`, либо выставлять `verified_at = now()` для старых записей перед созданием новой.
+---
 
+### Следующие задачи разработки
 
+#### Приоритет 1 — Основной функционал
+- [ ] **HomeScreen** / Dashboard — начальный экран после входа
+- [ ] **ProfileScreen** — редактирование профиля, выход
+- [ ] **SettingsScreen** — настройки приложения
 
-#### ✅ МОБ-1: Cooldown таймер показывает 10 минут вместо 2 — ИСПРАВЛЕНО
-**Файл:** `RegisterViewModel.kt`, методы `submitRegistration()` и `onResendCode()`
-**Проблема:** вызывалось `startCooldown(result.expiresIn)` — 600с (жизнь кода) вместо 120с (кулдаун повторной отправки)
-**Решение:** ✅ добавлена константа `RESEND_COOLDOWN_SECONDS = 120`, обе функции переделаны
-**Коммит:** `fix(МОБ-1): cooldown таймер 120с (2 мин) вместо 600с (10 мин)`
+---
 
-### 🟠 Высокие баги
+## Известные баги и нюансы Backend API
 
-#### API-4: `debug_code` в production-ответе
-**Файл:** `app/api/auth.py`, endpoint `/register`
-Код верификации возвращается клиенту в теле ответа (`"debug_code": code`). На проде это полностью обходит email-верификацию.
-**Исправление:** убрать `"debug_code"` из ответа или возвращать только при `DEBUG=True`.
+**Статус:** Разработка ведётся с production API на `https://runtastic.gottland.ru/`. Некоторые баги из первоначального аудита могут быть актуальны для API.
 
-#### API-5: `sha256_crypt` вместо `bcrypt` для хеширования паролей
-**Файл:** `app/core/security.py`
-`pwd_context = CryptContext(schemes=["sha256_crypt"], ...)` — `requirements.txt` устанавливает `passlib[bcrypt]`, но код использует значительно более слабый `sha256_crypt`.
-**Исправление:** заменить на `schemes=["bcrypt"]`.
+### Критические для мониторинга
 
-### 🟡 Средние баги
+1. **Timezone handling** — API работает с UTC, убедиться, что `expires_at` и `created_at` корректно сравниваются на backend
+2. **Старые verification codes** — при повторной отправке кода старые должны инвалидироваться (DELETE или SET verified_at)
+3. **Blocking SMTP** — если отправка email занимает 3-10 сек, может блокировать event loop
 
-#### API-6: Refresh token передаётся как query-параметр
-**Файл:** `app/api/auth.py`, endpoint `/refresh`
-`refresh_token: str` — FastAPI трактует как query-параметр → токен попадает в URL, логируется в access logs, прокси, кешируется.
-**Исправление:** передавать через Pydantic-схему в теле запроса. **Примечание:** Android-клиент (`AuthApiService.kt`) также использует `@Query` — при исправлении API нужно обновить и мобильный клиент на `@Body`.
+### Высокие баги для исправления (если на API)
 
-#### API-7: CORS — `allow_origins=["*"]` с `allow_credentials=True`
-**Файл:** `app/main.py`
-По спецификации CORS wildcard `*` несовместим с `allow_credentials=True`. Браузеры отклоняют такую конфигурацию.
-**Исправление:** указать конкретные origins или убрать `allow_credentials`.
-
-#### API-8: `random.choices` для кода верификации — не криптографически безопасен
-**Файл:** `app/core/security.py`
-`random` предсказуем. Для security-sensitive кодов нужен `secrets.choice`.
-
-#### МОБ-2: SSL cert chain не настроен для prod
-Из tech-debt: сервер `runtastic.gottland.ru` может отдавать неполную TLS-цепочку. В `network_security_config.xml` нет trust-anchor для Let's Encrypt E7. Если проблема на сервере не исправлена — HTTPS-запросы падают с `Chain validation failed`.
-
-### 🔵 Низкие баги
-
-#### API-9: `datetime.utcnow()` deprecated с Python 3.12
-**Файл:** `app/core/security.py`
-Использовать `datetime.now(timezone.utc)`.
-
-#### API-10: `DATABASE_URL` может быть `None`
-**Файл:** `app/database.py`
-Если `.env` отсутствует, `DATABASE_URL = None` → крэш при создании engine.
-
-#### API-11: Тест `test_expired_verification_code` не работает
-**Файл:** `tests/test_auth.py`
-Monkeypatch подменяет `app.services.auth.datetime`, но в модуле используется прямой импорт `from datetime import datetime` — патч не действует.
-
-#### МОБ-3: Мёртвый `catch (DateTimeParseException)` в `parseBirthDate`
-**Файл:** `RegisterViewModel.kt`
-`LocalDate.of()` бросает `DateTimeException`, а не `DateTimeParseException`. Работает благодаря `catch (e: Exception)` ниже.
-
-### Сводная таблица
-
-| # | Серьёзность | Репо | Описание |
-|---|---|---|---|
-| API-1 | 🔴 Критический | API | Timezone-naive vs aware → `TypeError` |
-| API-2 | 🔴 Критический | API | Старые verification codes не инвалидируются |
-| МОБ-1 | 🔴 Критический | Mobile | Cooldown 10 мин вместо 2 мин |
-| API-4 | 🟠 Высокий | API | `debug_code` в production-ответе |
-| API-5 | 🟠 Высокий | API | `sha256_crypt` вместо `bcrypt` |
-| API-6 | 🟡 Средний | API | Refresh token в URL query |
-| API-7 | 🟡 Средний | API | CORS wildcard + credentials |
-| API-8 | 🟡 Средний | API | `random` вместо `secrets` для кодов |
-| МОБ-2 | 🟡 Средний | Mobile | SSL cert chain не настроен |
-| API-9 | 🔵 Низкий | API | `datetime.utcnow()` deprecated |
-| API-10 | 🔵 Низкий | API | `DATABASE_URL = None` → крэш |
-| API-11 | 🔵 Низкий | API | Тест expired code патчит не то |
-| МОБ-3 | 🔵 Низкий | Mobile | Мёртвый catch `DateTimeParseException` |
+- **API-4:** `debug_code` в response `/register` должен отсутствовать в production (только при DEBUG=true)
+- **API-5:** Проверить, что хеширование паролей использует `bcrypt`, а не `sha256_crypt`
+- **API-6:** `/auth/refresh` передаёт `refresh_token` как query param (текущая реализация Android-клиента соответствует)
+- **API-7:** CORS конфигурация — проверить, что не используется `allow_origins=["*"]` с `allow_credentials=True`
+- **API-8:** Коды верификации должны генерироваться через `secrets`, а не `random`

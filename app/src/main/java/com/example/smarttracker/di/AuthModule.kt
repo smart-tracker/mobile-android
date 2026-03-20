@@ -1,6 +1,8 @@
 package com.example.smarttracker.di
 
 import com.example.smarttracker.BuildConfig
+import com.example.smarttracker.data.local.RoleConfigStorage
+import com.example.smarttracker.data.local.RoleConfigStorageImpl
 import com.example.smarttracker.data.local.TokenStorage
 import com.example.smarttracker.data.local.TokenStorageImpl
 import com.example.smarttracker.data.remote.AuthApiService
@@ -26,6 +28,10 @@ abstract class AuthModule {
     @Binds
     @Singleton
     abstract fun bindTokenStorage(impl: TokenStorageImpl): TokenStorage
+
+    @Binds
+    @Singleton
+    abstract fun bindRoleConfigStorage(impl: RoleConfigStorageImpl): RoleConfigStorage
 
     @Binds
     @Singleton

@@ -24,6 +24,7 @@ import com.example.smarttracker.presentation.auth.PrivacyPolicyScreen
 import com.example.smarttracker.presentation.auth.RegisterEvent
 import com.example.smarttracker.presentation.auth.RegisterScreen
 import com.example.smarttracker.presentation.auth.RegisterViewModel
+import com.example.smarttracker.presentation.auth.TermsOfServiceScreen
 import com.example.smarttracker.presentation.home.HomeScreen
 
 @Composable
@@ -150,12 +151,9 @@ fun AppNavGraph(
         }
 
         composable(Screen.TermsOfService.route) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                Text("Условия использования")
-            }
+            TermsOfServiceScreen(
+                onBack = { navController.popBackStack() }
+            )
         }
 
         composable(Screen.PrivacyPolicy.route) {

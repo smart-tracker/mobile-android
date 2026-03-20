@@ -290,6 +290,7 @@ private fun RegisterStep1(
         DatePickerField(
             value = state.birthDate,
             onValueChange = onBirthDateChange,
+            checkStatus = state.birthDateCheckStatus,
         )
 
         Spacer(Modifier.height(16.dp))
@@ -955,8 +956,15 @@ private class DateVisualTransformation : VisualTransformation {
 private fun DatePickerField(
     value: String,
     onValueChange: (String) -> Unit,
+    checkStatus: BirthDateCheckStatus = BirthDateCheckStatus.IDLE,
 ) {
     var showPicker by remember { mutableStateOf(false) }
+
+    val borderColor = when (checkStatus) {
+        BirthDateCheckStatus.IDLE -> ColorPrimary
+        is BirthDateCheckStatus.SUCCESS -> Color(0xFF4CAF50)  // Зелёный
+        is BirthDateCheckStatus.ERROR -> Color(0xFFE74C3C)    // Красный
+    }
 
     Column {
         Text(
@@ -970,7 +978,7 @@ private fun DatePickerField(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .border(2.dp, ColorPrimary, RoundedCornerShape(10.dp))
+                .border(2.dp, borderColor, RoundedCornerShape(10.dp))
         ) {
             OutlinedTextField(
                 value = value,
@@ -991,19 +999,39 @@ private fun DatePickerField(
                     imeAction = ImeAction.Next,
                 ),
                 trailingIcon = {
-                    IconButton(onClick = { showPicker = true }) {
-                        Icon(
-                            imageVector = Icons.Default.CalendarMonth,
-                            contentDescription = "Выбрать дату",
-                            tint = ColorPlaceholder,
-                        )
+                    when (checkStatus) {
+                        is BirthDateCheckStatus.SUCCESS -> {
+                            Icon(
+                                imageVector = Icons.Default.Check,
+                                contentDescription = "Дата корректна",
+                                tint = Color(0xFF4CAF50),
+                                modifier = Modifier.size(20.dp).padding(end = 8.dp)
+                            )
+                        }
+                        is BirthDateCheckStatus.ERROR -> {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Некорректная дата",
+                                tint = Color(0xFFE74C3C),
+                                modifier = Modifier.size(20.dp).padding(end = 8.dp)
+                            )
+                        }
+                        else -> {
+                            IconButton(onClick = { showPicker = true }) {
+                                Icon(
+                                    imageVector = Icons.Default.CalendarMonth,
+                                    contentDescription = "Выбрать дату",
+                                    tint = ColorPlaceholder,
+                                )
+                            }
+                        }
                     }
                 },
                 singleLine = true,
                 shape = RoundedCornerShape(10.dp),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = ColorPrimary,
-                    unfocusedBorderColor = ColorPrimary,
+                    focusedBorderColor = borderColor,
+                    unfocusedBorderColor = borderColor,
                     focusedContainerColor = ColorBackground,
                     unfocusedContainerColor = ColorBackground,
                     cursorColor = ColorPrimary,

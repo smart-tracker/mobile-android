@@ -1,7 +1,7 @@
 package com.example.smarttracker.data.local
 
 /**
- * Контракт хранилища JWT-токенов.
+ * Контракт хранилища JWT-токенов и ролей пользователя.
  *
  * Находится в слое data, а не domain — потому что это деталь реализации
  * (способ хранения токенов), а не бизнес-правило. Domain знает лишь о
@@ -9,21 +9,48 @@ package com.example.smarttracker.data.local
  *
  * Реализация — TokenStorageImpl через EncryptedSharedPreferences.
  * Привязка интерфейса к реализации — в AuthModule (МОБ-5.1).
+ *
+ * Ролевая модель (МОБ-6):
+ * - После верификации email пользователь имеет список ролей (role_ids)
+ * - Роли определяют доступные экраны в BottomNavigation
+ * - Роли сохраняются здесь же для быстрого доступа при запуске приложения
  */
 interface TokenStorage {
 
-    /** Сохраняет оба токена атомарно в одной транзакции SharedPreferences. */
-    fun saveTokens(accessToken: String, refreshToken: String)
+    /**
+     * Сохраняет оба токена и список ролей атомарно в одной транзакции.
+     * Вызывается после успешной верификации email (AuthRepositoryImpl.verifyEmail).
+     *
+     * @param accessToken JWT access token
+     * @param refreshToken JWT refresh token (для обновления access token)
+     * @param roleIds Список ID ролей пользователя (например [1, 2] для Athlete+Trainer)
+     */
+    fun saveTokens(accessToken: String, refreshToken: String, roleIds: List<Int>)
 
-    /** Возвращает access token или null, если токен ещё не сохранён. */
+    /**
+     * Возвращает access token или null, если токен ещё не сохранён.
+     */
     fun getAccessToken(): String?
 
-    /** Возвращает refresh token или null, если токен ещё не сохранён. */
+    /**
+     * Возвращает refresh token или null, если токен ещё не сохранён.
+     */
     fun getRefreshToken(): String?
 
-    /** Удаляет оба токена (выход из аккаунта / истечение сессии). */
-    fun clearTokens()
+    /**
+     * Возвращает список ролей пользователя или пустой список, если ролей нет.
+     * Используется при инициализации приложения для построения BottomNavigation.
+     */
+    fun getUserRoles(): List<Int>
 
-    /** Возвращает true, если оба токена присутствуют (пользователь авторизован). */
+    /**
+     * Удаляет оба токена и все роли (выход из аккаунта / истечение сессии).
+     */
+    fun clearAll()
+
+    /**
+     * Возвращает true, если оба токена присутствуют (пользователь авторизован).
+     * Роли не влияют на эту проверку (могут быть пусты).
+     */
     fun hasTokens(): Boolean
 }

@@ -8,21 +8,7 @@ import javax.inject.Inject
 
 /**
  * Реализация TokenStorage на базе EncryptedSharedPreferences.
- *
- * Почему EncryptedSharedPreferences:
- * - Ключи шифруются алгоритмом AES256-SIV (детерминированное шифрование,
- *   позволяет искать по ключу), значения — AES256-GCM (аутентифицированное
- *   шифрование). Мастер-ключ хранится в Android Keystore.
- * - Это рекомендуемый AndroidX способ хранения чувствительных строк.
- *
- * Почему prefs — lazy:
- * - EncryptedSharedPreferences.create() выполняет I/O (инициализация Keystore,
- *   чтение файла). Вызов в конструкторе заблокировал бы поток, в котором
- *   создаётся Hilt-граф. lazy откладывает инициализацию до первого обращения
- *   и гарантирует однократное выполнение (SYNCHRONIZED по умолчанию).
- *
- * @param context ApplicationContext — не хранит ссылку на Activity/Fragment,
- *                утечка памяти исключена.
+ * МОБ-6.1 — Сохранение и получение JWT-токенов + ролей пользователя.
  */
 class TokenStorageImpl @Inject constructor(
     @ApplicationContext private val context: Context
@@ -42,10 +28,11 @@ class TokenStorageImpl @Inject constructor(
         )
     }
 
-    override fun saveTokens(accessToken: String, refreshToken: String) {
+    override fun saveTokens(accessToken: String, refreshToken: String, roleIds: List<Int>) {
         prefs.edit()
             .putString(KEY_ACCESS_TOKEN, accessToken)
             .putString(KEY_REFRESH_TOKEN, refreshToken)
+            .putString(KEY_ROLE_IDS, roleIds.joinToString(","))
             .apply()
     }
 
@@ -55,10 +42,24 @@ class TokenStorageImpl @Inject constructor(
     override fun getRefreshToken(): String? =
         prefs.getString(KEY_REFRESH_TOKEN, null)
 
-    override fun clearTokens() {
+    override fun getUserRoles(): List<Int> {
+        val rolesString = prefs.getString(KEY_ROLE_IDS, null)
+                ?: return emptyList()
+
+        return if (rolesString.isEmpty()) {
+            emptyList()
+        } else {
+            rolesString
+                .split(",")
+                .mapNotNull { it.trim().toIntOrNull() }
+        }
+    }
+
+    override fun clearAll() {
         prefs.edit()
             .remove(KEY_ACCESS_TOKEN)
             .remove(KEY_REFRESH_TOKEN)
+            .remove(KEY_ROLE_IDS)
             .apply()
     }
 
@@ -68,5 +69,6 @@ class TokenStorageImpl @Inject constructor(
     companion object {
         private const val KEY_ACCESS_TOKEN  = "access_token"
         private const val KEY_REFRESH_TOKEN = "refresh_token"
+        private const val KEY_ROLE_IDS      = "role_ids"
     }
 }
