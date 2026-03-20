@@ -1,5 +1,6 @@
 package com.example.smarttracker.data.repository
 
+import android.util.Log
 import com.example.smarttracker.data.cache.RoleGoalCache
 import com.example.smarttracker.data.local.RoleConfigStorage
 import com.example.smarttracker.data.local.TokenStorage
@@ -57,8 +58,13 @@ class AuthRepositoryImpl @Inject constructor(
      * Шаг 2 регистрации. Бэкенд устанавливает is_active=true и возвращает токены.
      * Сохраняем токены сразу — пользователь считается авторизованным.
      *
-     * МОБ-6 — После верификации используем сохраненные роли из Step 2 наоборот,
+     * МОБ-6 — После верификации используем сохраненные роли из Step 2 (если были выбраны),
      * если таких нет — загружаем роли пользователя с API для инициализации BottomNavigation.
+     * 
+     * Стратегия:
+     * 1. Если при регистрации была выбрана цель → roles сохранены в RoleConfigStorage ✓
+     * 2. Если регистрация без выбора (EXPLORING) → RoleConfigStorage пуста → пытаемся загрузить с API
+     * 3. Если API ошибается → роли могут остаться пустыми (нормально для EXPLORING пользователей)
      */
     override suspend fun verifyEmail(email: String, code: String): Result<AuthResult> =
         runCatching {
@@ -67,16 +73,26 @@ class AuthRepositoryImpl @Inject constructor(
             // МОБ-6 — Проверить сохраненные роли из Step 2 регистрации
             var roleIds = roleConfigStorage.getSelectedRoles()
             
-            // Если ролей не было сохранено (например, обычный вход без новой регистрации) —
-            // загрузить с API
+            // Если ролей не было сохранено (переустановка приложения или регистрация без выбора) —
+            // пытаемся загрузить с API
             if (roleIds.isEmpty()) {
                 val rolesResult = runCatching {
                     api.getUserRoles(email).map { it.roleId }
                 }
-                roleIds = rolesResult.getOrElse { emptyList() }
+                
+                rolesResult
+                    .onSuccess { roles -> roleIds = roles }
+                    .onFailure { error ->
+                        // Логируем ошибку, но не блокируем верификацию
+                        // Может быть, это EXPLORING пользователь или сервер недоступен
+                        Log.w(
+                            "AuthRepository",
+                            "Failed to load user roles for $email during email verification: ${error.message}"
+                        )
+                    }
             }
             
-            // Сохранить токены И роли (даже если roleIds пуста)
+            // Сохранить токены И роли (даже если roleIds пуста из-за ошибки или EXPLORING регистрации)
             tokenStorage.saveTokens(result.accessToken, result.refreshToken, roleIds)
             
             result
@@ -92,17 +108,29 @@ class AuthRepositoryImpl @Inject constructor(
      * Вход для верифицированных пользователей. Перезаписывает токены
      * (старая сессия заменяется новой).
      *
-     * МОБ-6 — При входе загружаем роли пользователя заново (могли измениться).
+     * МОБ-6 — При входе загружаем роли пользователя заново (могли измениться в админ-панели).
+     * 
+     * Выход:
+     * - Если загрузка ролей успешна → сохраняем новые роли ✓
+     * - Если загрузка ролей ошибается → логируем, сохраняем пустые роли (может быть EXPLORING)
      */
     override suspend fun login(email: String, password: String): Result<AuthResult> =
         runCatching {
             val result = api.login(LoginRequestDto(email, password)).toDomain()
             
-            // Загрузить роли пользователя
+            // Загрузить роли пользователя (свежие данные с API)
             val rolesResult = runCatching {
                 api.getUserRoles(email).map { it.roleId }
             }
-            val roleIds = rolesResult.getOrElse { emptyList() }
+            
+            val roleIds = rolesResult
+                .onFailure { error ->
+                    Log.w(
+                        "AuthRepository",
+                        "Failed to load user roles for $email during login: ${error.message}"
+                    )
+                }
+                .getOrElse { emptyList() }
             
             tokenStorage.saveTokens(result.accessToken, result.refreshToken, roleIds)
             result
@@ -115,14 +143,18 @@ class AuthRepositoryImpl @Inject constructor(
      * Refresh token передаётся как @Query (не @Body) — подтверждено
      * сигнатурой FastAPI-роута (нюанс #7 в CONTEXT.md).
      *
-     * Роли не перезагружаются (остаются из предыдущего входа).
-     * Если нужна актуальная информация о ролях, используйте login().
+     * ⚠️ ВАЖНО: Роли НЕ перезагружаются — остаются из TokenStorage (предыдущего входа).
+     * Причина: refreshToken вызывается часто (при экспирации access token),
+     * не нужно каждый раз ходить на getUserRoles.
+     * 
+     * Если нужна актуальная информация о ролях → вызовите login() повторно.
+     * Роли обновляются только при явном входе в систему.
      */
     override suspend fun refreshToken(refreshToken: String): Result<AuthResult> =
         runCatching {
             val result = api.refreshToken(refreshToken).toDomain()
             
-            // Сохранить токены, роли остаются из TokenStorage
+            // Сохранить токены, роли остаются из TokenStorage (уже актуальные)
             val currentRoles = tokenStorage.getUserRoles()
             tokenStorage.saveTokens(result.accessToken, result.refreshToken, currentRoles)
             result

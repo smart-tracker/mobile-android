@@ -10,7 +10,7 @@ Android-приложение для создания, трекинга и ана
 Базовый промт
 
 Продолжаем проект SmartTracker Android.
-Прочитай CONTEXT.md и /memories/repo/ — там всё актуальное состояние.
+Прочитай CONTEXT.md и /memories/repo/ и файлы проекта — там всё актуальное состояние.
 
 ---
 
@@ -93,9 +93,7 @@ DI: Hilt | UI: Jetpack Compose | Сеть: Retrofit | Токены: EncryptedSha
    - Таблицы БД: `roles` (роли), `goal_register` (цели с описанием), `user_and_goal` (связь User↔Goal)
    - Pydantic-схемы: `RoleResponse`, `GoalRegisterResponse`
    - Логика в `app/services/auth.py`: `goal_ids` преобразуются в `role_ids` при регистрации
-   - **⚠️ Но endpoints НЕТ:** нет `GET /roles` и `GET /goals` для загрузки списка с клиента
-   - **Решение:** Использовать hardcoded список на клиенте (как сейчас) ИЛИ создать endpoints на API
-
+   
 3. **`debug_code`** — в ответе `POST /auth/register` сервер возвращает код верификации открытым текстом. Временное поле, убрать до прода. В `RegisterResultDto` не включено. ✅ Учтено.
 
 4. **`resendCode` ответ** — API возвращает объект `{message, expires_at, remaining_seconds}`, не просто число. Уже исправлено: `Result<ResendResult>`. ✅ Учтено.
@@ -303,9 +301,10 @@ com.example.smarttracker/
   - `PrivacyPolicyScreen` — полный текст "Политика конфиденциальности" с TopAppBar и прокруткой
   - Доступны по ClickableText ссылкам на RegisterStep3
 
-- ✅ HomeScreen (МОБ-6) — динамический BottomNav
-  - Генерируется на основе ролей пользователя (ATHLETE, TRAINER, CLUB_OWNER)
-  - Навигация: Home, MyWorkouts (атлеты), MyAthletes (тренеры), MyClub (владельцы), Profile (все)
+- ✅ HomeScreen (МОБ-6) — скелет с динамическим BottomNav
+  - **BottomNav генерируется по ролям:** все видят Home + Profile, ATHLETE видят Workouts, TRAINER видят Athletes, CLUB_OWNER видят Club
+  - Роли загружаются из RoleConfigStorage и влияют на видимость кнопок BottomNav
+  - **Содержимое экранов — заглушки:** HomeMainScreen, WorkoutsScreen, AthletesScreen, ClubScreen, ProfileScreen — пока пустые
   - `HomeViewModel.kt` загружает NavigationConfig из RoleConfigStorage
   - `NavigationConfig.kt` + `BottomNavItem` + `RoleConfig.kt` — модели конфигурации
 
@@ -406,10 +405,13 @@ PasswordRecovery полностью интегрирован с API:
 
 ### Следующие задачи разработки
 
-#### Приоритет 1 — Основной функционал
-- [ ] **HomeScreen** / Dashboard — начальный экран после входа
-- [ ] **ProfileScreen** — редактирование профиля, выход
-- [ ] **SettingsScreen** — настройки приложения
+#### Приоритет 1 — HomeScreen Dashboard & Тематические экраны
+- [ ] **HomeScreen Dashboard** — реализовать контент главного экрана (виджеты, статистика по ролям)
+- [ ] **ProfileScreen** — профиль пользователя, редактирование данных, выход
+- [ ] **WorkoutsScreen** (ATHLETE) — список тренировок атлета
+- [ ] **AthletesScreen** (TRAINER) — список атлетов тренера
+- [ ] **ClubScreen** (CLUB_OWNER) — управление клубом
+- [ ] **SettingsScreen** — настройки приложения (язык, уведомления, тема)
 
 ---
 

@@ -227,7 +227,7 @@ private fun NicknameField(
                                 imageVector = Icons.Filled.Check,
                                 contentDescription = "Никнейм доступен",
                                 tint = Color(0xFF4CAF50),
-                                modifier = Modifier.size(20.dp),
+                                modifier = Modifier.size(24.dp),
                             )
                         }
                         is NicknameCheckStatus.ERROR -> {
@@ -235,7 +235,7 @@ private fun NicknameField(
                                 imageVector = Icons.Filled.Close,
                                 contentDescription = "Никнейм занят",
                                 tint = Color(0xFFE74C3C),
-                                modifier = Modifier.size(20.dp),
+                                modifier = Modifier.size(24.dp),
                             )
                         }
                         else -> {}  // IDLE и CHECKING ничего не показываем
@@ -785,13 +785,14 @@ private fun StyledTextField(
                 ),
                 trailingIcon = if (isPassword && onTogglePasswordVisibility != null) {
                     {
-                        IconButton(onClick = onTogglePasswordVisibility) {
+                        IconButton(onClick = onTogglePasswordVisibility, modifier = Modifier.size(40.dp)) {
                             Icon(
                                 imageVector = if (isPasswordVisible) Icons.Default.Visibility
                                               else Icons.Default.VisibilityOff,
                                 contentDescription = if (isPasswordVisible) "Скрыть пароль"
                                                      else "Показать пароль",
                                 tint = ColorPlaceholder,
+                                modifier = Modifier.size(24.dp),
                             )
                         }
                     }
@@ -1005,7 +1006,7 @@ private fun DatePickerField(
                                 imageVector = Icons.Default.Check,
                                 contentDescription = "Дата корректна",
                                 tint = Color(0xFF4CAF50),
-                                modifier = Modifier.size(20.dp).padding(end = 8.dp)
+                                modifier = Modifier.size(24.dp)
                             )
                         }
                         is BirthDateCheckStatus.ERROR -> {
@@ -1013,15 +1014,16 @@ private fun DatePickerField(
                                 imageVector = Icons.Default.Close,
                                 contentDescription = "Некорректная дата",
                                 tint = Color(0xFFE74C3C),
-                                modifier = Modifier.size(20.dp).padding(end = 8.dp)
+                                modifier = Modifier.size(24.dp)
                             )
                         }
                         else -> {
-                            IconButton(onClick = { showPicker = true }) {
+                            IconButton(onClick = { showPicker = true }, modifier = Modifier.size(40.dp)) {
                                 Icon(
                                     imageVector = Icons.Default.CalendarMonth,
                                     contentDescription = "Выбрать дату",
                                     tint = ColorPlaceholder,
+                                    modifier = Modifier.size(24.dp),
                                 )
                             }
                         }
