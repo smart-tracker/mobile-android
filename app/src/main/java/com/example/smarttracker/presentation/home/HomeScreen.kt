@@ -3,6 +3,7 @@ package com.example.smarttracker.presentation.home
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.FitnessCenter
@@ -50,42 +51,48 @@ fun HomeScreen(
     // Текущий выбранный экран
     var currentRoute by remember { mutableStateOf("home") }
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        // ── Контент экрана ──────────────────────────────────────────────────
-        when (currentRoute) {
-            "home" -> HomeMainScreen()
-            "workouts" -> WorkoutsScreen()
-            "athletes" -> AthletesScreen()
-            "club" -> ClubScreen()
-            "profile" -> ProfileScreen()
+    Scaffold(
+        modifier = Modifier.fillMaxSize(),
+        bottomBar = {
+            BottomAppBar(
+                containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface,
+            ) {
+                navigationConfig.bottomNavItems.forEach { item ->
+                    NavigationBarItem(
+                        selected = currentRoute == item.route,
+                        onClick = { currentRoute = item.route },
+                        icon = {
+                            Icon(
+                                imageVector = item.getIcon(),
+                                contentDescription = item.label,
+                                modifier = Modifier.size(24.dp),
+                            )
+                        },
+                        label = {
+                            Text(text = item.label)
+                        },
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = androidx.compose.material3.MaterialTheme.colorScheme.primary,
+                            selectedTextColor = androidx.compose.material3.MaterialTheme.colorScheme.primary,
+                            unselectedIconColor = androidx.compose.material3.MaterialTheme.colorScheme.onSurface,
+                            unselectedTextColor = androidx.compose.material3.MaterialTheme.colorScheme.onSurface,
+                        ),
+                    )
+                }
+            }
         }
-
-        // ── BottomNavigation ─────────────────────────────────────────────────
-        BottomAppBar(
-            modifier = Modifier,
-            containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface,
+    ) { paddingValues ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues),
         ) {
-            navigationConfig.bottomNavItems.forEach { item ->
-                NavigationBarItem(
-                    selected = currentRoute == item.route,
-                    onClick = { currentRoute = item.route },
-                    icon = {
-                        Icon(
-                            imageVector = item.getIcon(),
-                            contentDescription = item.label,
-                            modifier = Modifier.size(24.dp),
-                        )
-                    },
-                    label = {
-                        Text(text = item.label)
-                    },
-                    colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = androidx.compose.material3.MaterialTheme.colorScheme.primary,
-                        selectedTextColor = androidx.compose.material3.MaterialTheme.colorScheme.primary,
-                        unselectedIconColor = androidx.compose.material3.MaterialTheme.colorScheme.onSurface,
-                        unselectedTextColor = androidx.compose.material3.MaterialTheme.colorScheme.onSurface,
-                    ),
-                )
+            when (currentRoute) {
+                "home" -> HomeMainScreen()
+                "workouts" -> WorkoutsScreen()
+                "athletes" -> AthletesScreen()
+                "club" -> ClubScreen()
+                "profile" -> ProfileScreen()
             }
         }
     }
