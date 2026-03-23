@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -51,18 +52,18 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.smarttracker.presentation.common.UiTokens
+import com.example.smarttracker.presentation.theme.ColorPlaceholder
 import com.example.smarttracker.presentation.theme.ColorPrimary
 import com.example.smarttracker.presentation.theme.ColorBackground
+import com.example.smarttracker.presentation.theme.ColorLink
 import com.example.smarttracker.presentation.theme.ColorWhite
-
-// ── Цвета ────────────────────────────────────────────────────────────────
-private val ColorPlaceholder = Color(0xFF525760)
 
 /**
  * Главный экран восстановления пароля с тремя шагами:
  * 1. Ввод email
- * 2. Ввод нового пароля
- * 3. Ввод кода верификации и финализация
+ * 2. Ввод кода верификации
+ * 3. Ввод нового пароля и финализация
  *
  * Использует тот же стиль и компоненты, что и RegisterScreen.
  */
@@ -70,8 +71,6 @@ private val ColorPlaceholder = Color(0xFF525760)
 @Composable
 fun ForgotPasswordScreen(
     viewModel: ForgotPasswordViewModel = hiltViewModel(),
-    onSuccess: () -> Unit = {},
-    onNavigateToLogin: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
@@ -96,6 +95,19 @@ fun ForgotPasswordScreen(
             )
 
             2 -> ForgotPasswordStep2Screen(
+                email = uiState.email,
+                verificationCode = uiState.verificationCode,
+                verificationCodeError = uiState.verificationCodeError,
+                resendCodeCooldown = uiState.resendCodeCooldown,
+                isLoading = uiState.isLoading,
+                generalError = uiState.generalError,
+                onVerificationCodeChanged = { viewModel.onEvent(ForgotPasswordEvent.OnVerificationCodeChanged(it)) },
+                onResendCode = { viewModel.onEvent(ForgotPasswordEvent.OnResendCode) },
+                onContinue = { viewModel.onEvent(ForgotPasswordEvent.OnContinueFromStep2) },
+                onBack = { viewModel.onEvent(ForgotPasswordEvent.OnBackPressed) }
+            )
+
+            3 -> ForgotPasswordStep3Screen(
                 newPassword = uiState.newPassword,
                 newPasswordError = uiState.newPasswordError,
                 newPasswordVisibility = uiState.newPasswordVisibility,
@@ -108,19 +120,6 @@ fun ForgotPasswordScreen(
                 onConfirmPasswordChanged = { viewModel.onEvent(ForgotPasswordEvent.OnConfirmPasswordChanged(it)) },
                 onToggleNewPasswordVisibility = { viewModel.onEvent(ForgotPasswordEvent.OnToggleNewPasswordVisibility) },
                 onToggleConfirmPasswordVisibility = { viewModel.onEvent(ForgotPasswordEvent.OnToggleConfirmPasswordVisibility) },
-                onContinue = { viewModel.onEvent(ForgotPasswordEvent.OnContinueFromStep2) },
-                onBack = { viewModel.onEvent(ForgotPasswordEvent.OnBackPressed) }
-            )
-
-            3 -> ForgotPasswordStep3Screen(
-                email = uiState.email,
-                verificationCode = uiState.verificationCode,
-                verificationCodeError = uiState.verificationCodeError,
-                resendCodeCooldown = uiState.resendCodeCooldown,
-                isLoading = uiState.isLoading,
-                generalError = uiState.generalError,
-                onVerificationCodeChanged = { viewModel.onEvent(ForgotPasswordEvent.OnVerificationCodeChanged(it)) },
-                onResendCode = { viewModel.onEvent(ForgotPasswordEvent.OnResendCode) },
                 onResetPassword = { viewModel.onEvent(ForgotPasswordEvent.OnResetPassword) },
                 onBack = { viewModel.onEvent(ForgotPasswordEvent.OnBackPressed) }
             )
@@ -158,7 +157,13 @@ private fun ForgotPasswordStep1Screen(
         )
 
         if (emailError != null) {
-            ErrorText(emailError, modifier = Modifier.padding(top = 8.dp, start = 32.dp))
+            ErrorText(
+                emailError,
+                modifier = Modifier.padding(
+                    top = UiTokens.InlineErrorTopPadding,
+                    start = UiTokens.InlineErrorStartPadding,
+                ),
+            )
         }
 
         if (generalError != null) {
@@ -168,77 +173,10 @@ private fun ForgotPasswordStep1Screen(
 }
 
 /**
- * Экран 2: Ввод нового пароля
+ * Экран 2: Верификация кода
  */
 @Composable
 private fun ForgotPasswordStep2Screen(
-    newPassword: String,
-    newPasswordError: String?,
-    newPasswordVisibility: Boolean,
-    confirmPassword: String,
-    confirmPasswordError: String?,
-    confirmPasswordVisibility: Boolean,
-    isLoading: Boolean,
-    generalError: String?,
-    onNewPasswordChanged: (String) -> Unit,
-    onConfirmPasswordChanged: (String) -> Unit,
-    onToggleNewPasswordVisibility: () -> Unit,
-    onToggleConfirmPasswordVisibility: () -> Unit,
-    onContinue: () -> Unit,
-    onBack: () -> Unit
-) {
-    GenericStepScaffold(
-        title = "Восстановление пароля (2/3)",
-        onBack = onBack,
-        onNext = onContinue,
-        isLoading = isLoading,
-        nextLabel = "Продолжить",
-        isNextEnabled = newPassword.isNotBlank() && confirmPassword.isNotBlank() 
-            && newPasswordError == null && confirmPasswordError == null
-    ) {
-        StyledTextField(
-            value = newPassword,
-            onValueChange = onNewPasswordChanged,
-            label = "Введите новый пароль",
-            placeholder = "Пароль...",
-            keyboardType = KeyboardType.Password,
-            isPassword = true,
-            isPasswordVisible = newPasswordVisibility,
-            onTogglePasswordVisibility = onToggleNewPasswordVisibility,
-        )
-
-        if (newPasswordError != null) {
-            ErrorText(newPasswordError, modifier = Modifier.padding(top = 8.dp, start = 32.dp))
-        }
-
-        Spacer(Modifier.height(16.dp))
-
-        StyledTextField(
-            value = confirmPassword,
-            onValueChange = onConfirmPasswordChanged,
-            label = "Повторите новый пароль",
-            placeholder = "Повторите пароль...",
-            keyboardType = KeyboardType.Password,
-            isPassword = true,
-            isPasswordVisible = confirmPasswordVisibility,
-            onTogglePasswordVisibility = onToggleConfirmPasswordVisibility,
-        )
-
-        if (confirmPasswordError != null) {
-            ErrorText(confirmPasswordError, modifier = Modifier.padding(top = 8.dp, start = 32.dp))
-        }
-
-        if (generalError != null) {
-            ErrorText(generalError, modifier = Modifier.padding(top = 16.dp, start = 32.dp))
-        }
-    }
-}
-
-/**
- * Экран 3: Верификация кода и финализация
- */
-@Composable
-private fun ForgotPasswordStep3Screen(
     email: String,
     verificationCode: String,
     verificationCodeError: String?,
@@ -247,19 +185,19 @@ private fun ForgotPasswordStep3Screen(
     generalError: String?,
     onVerificationCodeChanged: (String) -> Unit,
     onResendCode: () -> Unit,
-    onResetPassword: () -> Unit,
+    onContinue: () -> Unit,
     onBack: () -> Unit
 ) {
     val cooldown = resendCodeCooldown
     val cooldownFormatted = String.format("%02d:%02d", cooldown / 60, cooldown % 60)
 
     GenericStepScaffold(
-        title = "Восстановление пароля (3/3)",
+        title = "Восстановление пароля (2/3)",
         onBack = onBack,
-        onNext = onResetPassword,
+        onNext = onContinue,
         isLoading = isLoading,
-        nextLabel = "Сбросить пароль",
-        isNextEnabled = verificationCode.isNotBlank() && verificationCode.length == 6 
+        nextLabel = "Продолжить",
+        isNextEnabled = verificationCode.isNotBlank() && verificationCode.length == 6
             && verificationCodeError == null
     ) {
         Row(
@@ -277,7 +215,7 @@ private fun ForgotPasswordStep3Screen(
             Text(
                 text = email,
                 style = MaterialTheme.typography.bodyMedium,
-                color = Color(0xFF00BCD4),  // Бирюзовый для email
+                color = ColorLink,
                 textAlign = TextAlign.Center,
             )
         }
@@ -320,8 +258,8 @@ private fun ForgotPasswordStep3Screen(
             enabled = cooldown == 0 && !isLoading,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(50.dp),
-            shape = RoundedCornerShape(10.dp),
+                .height(UiTokens.ButtonHeight),
+            shape = RoundedCornerShape(UiTokens.CornerRadiusMedium),
             colors = ButtonDefaults.buttonColors(
                 containerColor = ColorBackground,
                 contentColor = ColorPrimary,
@@ -329,7 +267,7 @@ private fun ForgotPasswordStep3Screen(
                 disabledContentColor = ColorWhite,
             ),
             border = androidx.compose.foundation.BorderStroke(
-                width = 2.dp,
+                width = UiTokens.BorderWidthThick,
                 color = if (cooldown == 0) ColorPrimary else ColorPlaceholder,
             ),
         ) {
@@ -340,7 +278,92 @@ private fun ForgotPasswordStep3Screen(
         }
 
         if (verificationCodeError != null) {
-            ErrorText(verificationCodeError, modifier = Modifier.padding(top = 8.dp, start = 32.dp))
+            ErrorText(
+                verificationCodeError,
+                modifier = Modifier.padding(
+                    top = UiTokens.InlineErrorTopPadding,
+                    start = UiTokens.InlineErrorStartPadding,
+                ),
+            )
+        }
+
+        if (generalError != null) {
+            ErrorText(generalError, modifier = Modifier.padding(top = 16.dp, start = 32.dp))
+        }
+    }
+}
+
+/**
+ * Экран 3: Ввод нового пароля и финализация
+ */
+@Composable
+private fun ForgotPasswordStep3Screen(
+    newPassword: String,
+    newPasswordError: String?,
+    newPasswordVisibility: Boolean,
+    confirmPassword: String,
+    confirmPasswordError: String?,
+    confirmPasswordVisibility: Boolean,
+    isLoading: Boolean,
+    generalError: String?,
+    onNewPasswordChanged: (String) -> Unit,
+    onConfirmPasswordChanged: (String) -> Unit,
+    onToggleNewPasswordVisibility: () -> Unit,
+    onToggleConfirmPasswordVisibility: () -> Unit,
+    onResetPassword: () -> Unit,
+    onBack: () -> Unit
+) {
+    GenericStepScaffold(
+        title = "Восстановление пароля (3/3)",
+        onBack = onBack,
+        onNext = onResetPassword,
+        isLoading = isLoading,
+        nextLabel = "Сбросить пароль",
+        isNextEnabled = newPassword.isNotBlank() && confirmPassword.isNotBlank() 
+            && newPasswordError == null && confirmPasswordError == null
+    ) {
+        StyledTextField(
+            value = newPassword,
+            onValueChange = onNewPasswordChanged,
+            label = "Введите новый пароль",
+            placeholder = "Пароль...",
+            keyboardType = KeyboardType.Password,
+            isPassword = true,
+            isPasswordVisible = newPasswordVisibility,
+            onTogglePasswordVisibility = onToggleNewPasswordVisibility,
+        )
+
+        if (newPasswordError != null) {
+            ErrorText(
+                newPasswordError,
+                modifier = Modifier.padding(
+                    top = UiTokens.InlineErrorTopPadding,
+                    start = UiTokens.InlineErrorStartPadding,
+                ),
+            )
+        }
+
+        Spacer(Modifier.height(16.dp))
+
+        StyledTextField(
+            value = confirmPassword,
+            onValueChange = onConfirmPasswordChanged,
+            label = "Повторите новый пароль",
+            placeholder = "Повторите пароль...",
+            keyboardType = KeyboardType.Password,
+            isPassword = true,
+            isPasswordVisible = confirmPasswordVisibility,
+            onTogglePasswordVisibility = onToggleConfirmPasswordVisibility,
+        )
+
+        if (confirmPasswordError != null) {
+            ErrorText(
+                confirmPasswordError,
+                modifier = Modifier.padding(
+                    top = UiTokens.InlineErrorTopPadding,
+                    start = UiTokens.InlineErrorStartPadding,
+                ),
+            )
         }
 
         if (generalError != null) {
@@ -381,7 +404,7 @@ private fun StyledTextField(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .border(2.dp, ColorPrimary, RoundedCornerShape(10.dp))
+                .border(UiTokens.BorderWidthThick, ColorPrimary, RoundedCornerShape(UiTokens.CornerRadiusMedium))
         ) {
             OutlinedTextField(
                 value = value,
@@ -413,7 +436,7 @@ private fun StyledTextField(
                     }
                 } else null,
                 singleLine = true,
-                shape = RoundedCornerShape(10.dp),
+                shape = RoundedCornerShape(UiTokens.CornerRadiusMedium),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = ColorPrimary,
                     unfocusedBorderColor = ColorPrimary,
@@ -425,7 +448,7 @@ private fun StyledTextField(
                 ),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(50.dp),
+                    .height(UiTokens.ButtonHeight),
             )
         }
     }
@@ -461,15 +484,18 @@ private fun GenericStepScaffold(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 50.dp),
+                    .padding(
+                        horizontal = UiTokens.BottomActionHorizontalPadding,
+                        vertical = UiTokens.BottomActionVerticalPadding,
+                    ),
             ) {
                 Button(
                     onClick = onNext,
                     enabled = !isLoading && isNextEnabled,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(50.dp),
-                    shape = RoundedCornerShape(10.dp),
+                        .height(UiTokens.ButtonHeight),
+                    shape = RoundedCornerShape(UiTokens.CornerRadiusMedium),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = ColorPrimary,
                         contentColor = ColorWhite,
@@ -479,7 +505,7 @@ private fun GenericStepScaffold(
                 ) {
                     if (isLoading) {
                         CircularProgressIndicator(
-                            modifier = Modifier.padding(4.dp),
+                            modifier = Modifier.size(UiTokens.ButtonLoadingIndicatorSize),
                             color = ColorWhite,
                             strokeWidth = 2.dp
                         )
@@ -498,11 +524,14 @@ private fun GenericStepScaffold(
                 .fillMaxSize()
                 .padding(innerPadding)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+                .padding(
+                    horizontal = UiTokens.ScreenHorizontalPadding,
+                    vertical = UiTokens.ContentVerticalPadding,
+                ),
         ) {
             Spacer(Modifier.height(80.dp))
             StepTitle(title)
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(UiTokens.SectionSpacing))
             content()
         }
     }

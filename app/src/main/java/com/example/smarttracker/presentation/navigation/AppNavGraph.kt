@@ -135,19 +135,7 @@ fun AppNavGraph(
                 }
             }
 
-            ForgotPasswordScreen(
-                viewModel = viewModel,
-                onSuccess = {
-                    navController.navigate(Screen.Login.route) {
-                        popUpTo(Screen.PasswordRecovery.route) { inclusive = true }
-                    }
-                },
-                onNavigateToLogin = {
-                    navController.navigate(Screen.Login.route) {
-                        popUpTo(Screen.PasswordRecovery.route) { inclusive = true }
-                    }
-                }
-            )
+            ForgotPasswordScreen(viewModel = viewModel)
         }
 
         composable(Screen.TermsOfService.route) {

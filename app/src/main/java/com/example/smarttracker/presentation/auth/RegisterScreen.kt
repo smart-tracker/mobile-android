@@ -82,14 +82,14 @@ import com.example.smarttracker.domain.model.Gender
 import com.example.smarttracker.domain.model.GoalResponse
 import com.example.smarttracker.domain.model.RoleResponse
 import com.example.smarttracker.domain.model.UserPurpose
+import com.example.smarttracker.presentation.common.UiTokens
+import com.example.smarttracker.presentation.theme.ColorBackground
+import com.example.smarttracker.presentation.theme.ColorLink
+import com.example.smarttracker.presentation.theme.ColorPlaceholder
+import com.example.smarttracker.presentation.theme.ColorPrimary
+import com.example.smarttracker.presentation.theme.ColorSecondary
+import com.example.smarttracker.presentation.theme.ColorWhite
 import com.example.smarttracker.presentation.theme.SmartTrackerTheme
-
-// ── Цвета дизайна ────────────────────────────────────────────────────────────
-private val ColorPrimary     = Color(0xFF0A1928)
-private val ColorPlaceholder = Color(0xFF525760)
-private val ColorBackground  = Color.White
-private val ColorWhite       = Color.White
-private val ColorCheckboxChecked = Color(0xFF4DACA7)  // бирюзово-зелёный
 
 // ── Корневой composable ───────────────────────────────────────────────────────
 
@@ -194,7 +194,7 @@ private fun NicknameField(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .border(2.dp, borderColor, RoundedCornerShape(10.dp))
+                .border(UiTokens.BorderWidthThick, borderColor, RoundedCornerShape(UiTokens.CornerRadiusMedium))
                 .background(Color.White)
         ) {
             OutlinedTextField(
@@ -385,7 +385,7 @@ private fun GoalSelectionItem(
     ) {
         Box(
             modifier = Modifier
-                .border(2.dp, ColorPrimary)
+                .border(UiTokens.BorderWidthThick, ColorPrimary)
                 .size(20.dp),
             contentAlignment = Alignment.Center,
         ) {
@@ -393,7 +393,7 @@ private fun GoalSelectionItem(
                 checked = isSelected,
                 onCheckedChange = { onSelect() },
                 colors = CheckboxDefaults.colors(
-                    checkedColor = ColorCheckboxChecked,
+                    checkedColor = ColorSecondary,
                     uncheckedColor = Color.Transparent,
                     checkmarkColor = Color.Black,
                 ),
@@ -485,7 +485,7 @@ private fun RegisterStep3(
                 ),
             )
             
-            val linkColor = Color(0xFF00BCD4)  // Бирюзовый цвет для ссылок
+            val linkColor = ColorLink
             val annotatedText = buildAnnotatedString {
                 append("Продолжая, вы соглашаетесь с ")
                 
@@ -566,7 +566,7 @@ private fun RegisterStep4(
             Text(
                 text = state.email,
                 style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
-                color = Color(0xFF00BCD4),  // Бирюзовый для email
+                color = ColorLink,
                 textAlign = TextAlign.Center,
             )
             Text(
@@ -615,8 +615,8 @@ private fun RegisterStep4(
             enabled = cooldown == 0 && !state.isLoading,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(50.dp),
-            shape = RoundedCornerShape(10.dp),
+                .height(UiTokens.ButtonHeight),
+            shape = RoundedCornerShape(UiTokens.CornerRadiusMedium),
             colors = ButtonDefaults.buttonColors(
                 containerColor = ColorBackground,
                 contentColor = ColorPrimary,
@@ -624,7 +624,7 @@ private fun RegisterStep4(
                 disabledContentColor = ColorWhite,
             ),
             border = androidx.compose.foundation.BorderStroke(
-                width = 2.dp,
+                width = UiTokens.BorderWidthThick,
                 color = if (cooldown == 0) ColorPrimary else ColorPlaceholder,
             ),
         ) {
@@ -668,15 +668,18 @@ private fun RegisterScaffold(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 50.dp),
+                    .padding(
+                        horizontal = UiTokens.BottomActionHorizontalPadding,
+                        vertical = UiTokens.BottomActionVerticalPadding,
+                    ),
             ) {
                 Button(
                     onClick = onNext,
                     enabled = !isLoading && isNextEnabled,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(50.dp),
-                    shape = RoundedCornerShape(10.dp),
+                        .height(UiTokens.ButtonHeight),
+                    shape = RoundedCornerShape(UiTokens.CornerRadiusMedium),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = ColorPrimary,
                         contentColor = ColorWhite,
@@ -697,11 +700,14 @@ private fun RegisterScaffold(
                 .fillMaxSize()
                 .padding(innerPadding)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+                .padding(
+                    horizontal = UiTokens.ScreenHorizontalPadding,
+                    vertical = UiTokens.ContentVerticalPadding,
+                ),
         ) {
             Spacer(Modifier.height(80.dp))
             StepTitle(title)
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(UiTokens.SectionSpacing))
             content()
         }
     }
@@ -765,7 +771,7 @@ private fun StyledTextField(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .border(2.dp, ColorPrimary, RoundedCornerShape(10.dp))
+                .border(UiTokens.BorderWidthThick, ColorPrimary, RoundedCornerShape(UiTokens.CornerRadiusMedium))
         ) {
             OutlinedTextField(
                 value = value,
@@ -798,7 +804,7 @@ private fun StyledTextField(
                     }
                 } else null,
                 singleLine = true,
-                shape = RoundedCornerShape(10.dp),
+                shape = RoundedCornerShape(UiTokens.CornerRadiusMedium),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = ColorPrimary,
                     unfocusedBorderColor = ColorPrimary,
@@ -810,7 +816,7 @@ private fun StyledTextField(
                 ),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(50.dp),
+                    .height(UiTokens.ButtonHeight),
             )
         }
     }
@@ -889,12 +895,12 @@ private fun PurposeOption(
             checked = selected,
             onCheckedChange = null,
             modifier = if (selected) {
-                Modifier.border(2.dp, Color.Black)
+                Modifier.border(UiTokens.BorderWidthThick, Color.Black)
             } else {
                 Modifier
             },
             colors = CheckboxDefaults.colors(
-                checkedColor = ColorCheckboxChecked,
+                checkedColor = ColorSecondary,
                 uncheckedColor = Color.Black,
                 checkmarkColor = Color.Black,
             ),
@@ -979,7 +985,7 @@ private fun DatePickerField(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .border(2.dp, borderColor, RoundedCornerShape(10.dp))
+                .border(UiTokens.BorderWidthThick, borderColor, RoundedCornerShape(UiTokens.CornerRadiusMedium))
         ) {
             OutlinedTextField(
                 value = value,
@@ -1030,7 +1036,7 @@ private fun DatePickerField(
                     }
                 },
                 singleLine = true,
-                shape = RoundedCornerShape(10.dp),
+                shape = RoundedCornerShape(UiTokens.CornerRadiusMedium),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = borderColor,
                     unfocusedBorderColor = borderColor,
@@ -1042,7 +1048,7 @@ private fun DatePickerField(
                 ),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(50.dp),
+                    .height(UiTokens.ButtonHeight),
             )
         }
     }

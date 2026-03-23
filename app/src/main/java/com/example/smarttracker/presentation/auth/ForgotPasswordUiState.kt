@@ -12,7 +12,11 @@ data class ForgotPasswordUiState(
     val email: String = "",
     val emailError: String? = null,
     
-    // Шаг 2: Ввод новых паролей
+    // Шаг 2: Ввод кода верификации
+    val verificationCode: String = "",
+    val verificationCodeError: String? = null,
+
+    // Шаг 3: Ввод новых паролей
     val newPassword: String = "",
     val newPasswordError: String? = null,
     val newPasswordVisibility: Boolean = false,
@@ -20,10 +24,6 @@ data class ForgotPasswordUiState(
     val confirmPassword: String = "",
     val confirmPasswordError: String? = null,
     val confirmPasswordVisibility: Boolean = false,
-    
-    // Шаг 3: Ввод кода верификации
-    val verificationCode: String = "",
-    val verificationCodeError: String? = null,
     
     // Таймер для resend-кода (остаток секунд)
     val resendCodeCooldown: Int = 0,

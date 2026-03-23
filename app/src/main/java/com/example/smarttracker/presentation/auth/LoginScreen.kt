@@ -54,16 +54,12 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.smarttracker.R
+import com.example.smarttracker.presentation.common.UiTokens
+import com.example.smarttracker.presentation.theme.ColorBackground
+import com.example.smarttracker.presentation.theme.ColorPlaceholder
+import com.example.smarttracker.presentation.theme.ColorPrimary
+import com.example.smarttracker.presentation.theme.ColorWhite
 import com.example.smarttracker.presentation.theme.SmartTrackerTheme
-
-// ── Цвета дизайна ────────────────────────────────────────────────────────────
-private val ColorPrimary     = Color(0xFF0A1928)
-private val ColorSecondary   = Color(0xFF4DACA7)  // бирюзово-зелёный
-private val ColorPlaceholder = Color(0xFF525760)
-private val ColorBackground  = Color.White
-private val ColorWhite       = Color.White
-private val ColorLink        = Color(0xFF0066CC)
-private val ColorDivider     = Color(0xFFE0E0E0)
 
 /**
  * МОБ-3.2 — Экран входа в приложение.
@@ -100,7 +96,7 @@ fun LoginScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(horizontal = 16.dp)
+                .padding(horizontal = UiTokens.ScreenHorizontalPadding)
                 .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Top
@@ -110,7 +106,7 @@ fun LoginScreen(
 
             Box(
                 modifier = Modifier
-                    .border(2.dp, Color.Black, RoundedCornerShape(20.dp))
+                    .border(UiTokens.BorderWidthThick, Color.Black, RoundedCornerShape(20.dp))
             ) {
                 Image(
                     painter = painterResource(id = R.drawable.ic_logo),
@@ -120,7 +116,7 @@ fun LoginScreen(
                 )
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(UiTokens.SectionSpacing))
 
             // ── Название приложения ─────────────────────────────────────────
             Text(
@@ -138,7 +134,7 @@ fun LoginScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .border(2.dp, ColorPrimary, RoundedCornerShape(10.dp))
+                        .border(UiTokens.BorderWidthThick, ColorPrimary, RoundedCornerShape(UiTokens.CornerRadiusMedium))
                 ) {
                     OutlinedTextField(
                         value = state.email,
@@ -156,7 +152,7 @@ fun LoginScreen(
                             keyboardType = KeyboardType.Email,
                             imeAction = ImeAction.Next
                         ),
-                        shape = RoundedCornerShape(10.dp),
+                        shape = RoundedCornerShape(UiTokens.CornerRadiusMedium),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = ColorPrimary,
                             unfocusedBorderColor = ColorPrimary,
@@ -174,7 +170,7 @@ fun LoginScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .border(2.dp, ColorPrimary, RoundedCornerShape(10.dp))
+                        .border(UiTokens.BorderWidthThick, ColorPrimary, RoundedCornerShape(UiTokens.CornerRadiusMedium))
                 ) {
                     OutlinedTextField(
                         value = state.password,
@@ -213,7 +209,7 @@ fun LoginScreen(
                             keyboardType = KeyboardType.Password,
                             imeAction = ImeAction.Done
                         ),
-                        shape = RoundedCornerShape(10.dp),
+                        shape = RoundedCornerShape(UiTokens.CornerRadiusMedium),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = ColorPrimary,
                             unfocusedBorderColor = ColorPrimary,
@@ -227,7 +223,7 @@ fun LoginScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 8.dp),
+                        .padding(top = UiTokens.InlineErrorTopPadding),
                     horizontalArrangement = Arrangement.End
                 ) {
                     TextButton(
@@ -265,8 +261,8 @@ fun LoginScreen(
                 onClick = onSubmitLogin,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(50.dp),
-                shape = RoundedCornerShape(10.dp),
+                    .height(UiTokens.ButtonHeight),
+                shape = RoundedCornerShape(UiTokens.CornerRadiusMedium),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = ColorPrimary,
                     contentColor = ColorWhite,
@@ -277,7 +273,7 @@ fun LoginScreen(
             ) {
                 if (state.isLoading) {
                     CircularProgressIndicator(
-                        modifier = Modifier.height(24.dp),
+                        modifier = Modifier.size(UiTokens.ButtonLoadingIndicatorSize),
                         color = ColorWhite,
                         strokeWidth = 2.dp
                     )
@@ -296,9 +292,9 @@ fun LoginScreen(
                 onClick = onNavigateToRegister,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(50.dp)
-                    .border(2.dp, ColorPrimary, RoundedCornerShape(10.dp)),
-                shape = RoundedCornerShape(10.dp),
+                    .height(UiTokens.ButtonHeight)
+                    .border(UiTokens.BorderWidthThick, ColorPrimary, RoundedCornerShape(UiTokens.CornerRadiusMedium)),
+                shape = RoundedCornerShape(UiTokens.CornerRadiusMedium),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = ColorBackground,
                     contentColor = ColorPrimary,
@@ -313,7 +309,7 @@ fun LoginScreen(
                 )
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(UiTokens.SectionSpacing))
 
             // ── Разделитель "Войти с помощью" ───────────────────────────────
             Row(
@@ -401,7 +397,7 @@ fun LoginScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(UiTokens.SectionSpacing))
         }
     }
 }

@@ -21,8 +21,8 @@ import javax.inject.Inject
  *
  * Валидация:
  * - Email: формат через android.util.Patterns.EMAIL_ADDRESS (откладывается до Submit)
- * - Password: минимум 8 символов
  * - Verification code: ровно 6 символов
+ * - Password: минимум 8 символов
  * - Matching: newPassword == confirmPassword
  *
  * Таймеры:
@@ -77,7 +77,7 @@ class ForgotPasswordViewModel @Inject constructor(
                 )
             }
             
-            ForgotPasswordEvent.OnContinueFromStep2 -> submitNewPassword()
+            ForgotPasswordEvent.OnContinueFromStep2 -> submitVerificationCode()
             
             is ForgotPasswordEvent.OnVerificationCodeChanged -> {
                 // Ограничиваем ввод 6 символами
@@ -124,6 +124,8 @@ class ForgotPasswordViewModel @Inject constructor(
                 val forgotResult = result.getOrNull()!!
                 _uiState.value = _uiState.value.copy(
                     currentStep = 2,
+                    verificationCode = "",
+                    verificationCodeError = null,
                     verificationCodeExpiresIn = forgotResult.expiresIn,
                     isLoading = false,
                     generalError = null
@@ -141,33 +143,27 @@ class ForgotPasswordViewModel @Inject constructor(
         }
     }
     
-    private fun submitNewPassword() {
-        val newPassword = _uiState.value.newPassword
-        val confirmPassword = _uiState.value.confirmPassword
-        
-        val newPasswordError = validatePassword(newPassword)
-        if (newPasswordError != null) {
-            _uiState.value = _uiState.value.copy(newPasswordError = newPasswordError)
-            return
-        }
-        
-        if (confirmPassword.isEmpty()) {
+    private fun submitVerificationCode() {
+        val verificationCode = _uiState.value.verificationCode
+
+        if (verificationCode.isEmpty()) {
             _uiState.value = _uiState.value.copy(
-                confirmPasswordError = "Подтвердите пароль"
+                verificationCodeError = "Введите код подтверждения"
             )
             return
         }
-        
-        if (newPassword != confirmPassword) {
+
+        if (verificationCode.length != 6) {
             _uiState.value = _uiState.value.copy(
-                confirmPasswordError = "Пароли не совпадают"
+                verificationCodeError = "Код должен состоять из 6 цифр"
             )
             return
         }
-        
-        // Move to step 3
+
         _uiState.value = _uiState.value.copy(
             currentStep = 3,
+            newPasswordError = null,
+            confirmPasswordError = null,
             generalError = null
         )
     }
@@ -199,6 +195,8 @@ class ForgotPasswordViewModel @Inject constructor(
     
     private fun submitResetPassword() {
         val verificationCode = _uiState.value.verificationCode
+        val newPassword = _uiState.value.newPassword
+        val confirmPassword = _uiState.value.confirmPassword
         
         if (verificationCode.isEmpty()) {
             _uiState.value = _uiState.value.copy(
@@ -213,6 +211,26 @@ class ForgotPasswordViewModel @Inject constructor(
             )
             return
         }
+
+        val newPasswordError = validatePassword(newPassword)
+        if (newPasswordError != null) {
+            _uiState.value = _uiState.value.copy(newPasswordError = newPasswordError)
+            return
+        }
+
+        if (confirmPassword.isEmpty()) {
+            _uiState.value = _uiState.value.copy(
+                confirmPasswordError = "Подтвердите пароль"
+            )
+            return
+        }
+
+        if (newPassword != confirmPassword) {
+            _uiState.value = _uiState.value.copy(
+                confirmPasswordError = "Пароли не совпадают"
+            )
+            return
+        }
         
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true)
@@ -221,8 +239,8 @@ class ForgotPasswordViewModel @Inject constructor(
                 ResetPasswordRequest(
                     email = _uiState.value.email,
                     code = verificationCode,
-                    newPassword = _uiState.value.newPassword,
-                    confirmPassword = _uiState.value.confirmPassword
+                    newPassword = newPassword,
+                    confirmPassword = confirmPassword
                 )
             )
             

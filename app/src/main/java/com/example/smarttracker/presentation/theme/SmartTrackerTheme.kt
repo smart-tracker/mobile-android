@@ -26,6 +26,11 @@ val geologicaFontFamilyItalic = FontFamily(
 
 // App Colors (reusable across screens)
 val ColorPrimary = androidx.compose.ui.graphics.Color(0xFF0A1928)  // Dark navy
+val ColorSecondary = androidx.compose.ui.graphics.Color(0xFF4DACA7) // Mint/teal accent
+val ColorPlaceholder = androidx.compose.ui.graphics.Color(0xFF525760)
+val ColorAccent = androidx.compose.ui.graphics.Color(0xFF00BCD4)
+val ColorLink = androidx.compose.ui.graphics.Color(0xFF0066CC)
+val ColorDivider = androidx.compose.ui.graphics.Color(0xFFE0E0E0)
 val ColorBackground = androidx.compose.ui.graphics.Color.White
 val ColorWhite = androidx.compose.ui.graphics.Color.White
 
