@@ -1,4 +1,4 @@
-package com.example.smarttracker.presentation.auth
+package com.example.smarttracker.presentation.auth.login
 
 /** Одноразовые события из LoginViewModel в UI */
 sealed interface LoginEvent {

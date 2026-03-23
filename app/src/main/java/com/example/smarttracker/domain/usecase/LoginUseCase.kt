@@ -1,9 +1,10 @@
 package com.example.smarttracker.domain.usecase
 
-import android.util.Patterns
 import com.example.smarttracker.domain.model.AuthResult
 import com.example.smarttracker.domain.repository.AuthRepository
 import javax.inject.Inject
+
+private val EMAIL_REGEX = Regex("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$")
 
 /**
  * МОБ-3.2 — UseCase входа в приложение.
@@ -46,7 +47,7 @@ class LoginUseCase @Inject constructor(
         if (email.isBlank()) {
             return "Введите email"
         }
-        if (!Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
+        if (!EMAIL_REGEX.matches(email)) {
             return "Введите корректный email"
         }
 

@@ -6,11 +6,9 @@ import com.example.smarttracker.data.local.RoleConfigStorage
 import com.example.smarttracker.data.local.TokenStorage
 import com.example.smarttracker.data.remote.AuthApiService
 import com.example.smarttracker.data.remote.dto.EmailVerificationDto
-import com.example.smarttracker.data.remote.dto.GoalResponseDto
 import com.example.smarttracker.data.remote.dto.LoginRequestDto
 import com.example.smarttracker.data.remote.dto.NicknameCheckRequestDto
 import com.example.smarttracker.data.remote.dto.ResendEmailDto
-import com.example.smarttracker.data.remote.dto.RoleResponseDto
 import com.example.smarttracker.data.remote.dto.toDomain
 import com.example.smarttracker.data.remote.dto.toDto
 import com.example.smarttracker.domain.model.AuthResult
@@ -87,7 +85,7 @@ class AuthRepositoryImpl @Inject constructor(
                         // Может быть, это EXPLORING пользователь или сервер недоступен
                         Log.w(
                             "AuthRepository",
-                            "Failed to load user roles for $email during email verification: ${error.message}"
+                            "Failed to load user roles during email verification: ${error.message}"
                         )
                     }
             }
@@ -127,7 +125,7 @@ class AuthRepositoryImpl @Inject constructor(
                 .onFailure { error ->
                     Log.w(
                         "AuthRepository",
-                        "Failed to load user roles for $email during login: ${error.message}"
+                        "Failed to load user roles during login: ${error.message}"
                     )
                 }
                 .getOrElse { emptyList() }
@@ -172,19 +170,11 @@ class AuthRepositoryImpl @Inject constructor(
 
     /**
      * МОБ-6.3 — Получение доступных ролей для регистрации.
-     * 
-     * Сначала проверяет in-memory кеш (RoleGoalCache).
-     * Если кеш пуст или истек (TTL=1 час), загружает с API и сохраняет в кеш.
-     * 
-     * Стратегия кеширования:
-     * 1. Роли редко меняются → безопасно кешировать на 1 час
-     * 2. Первый запрос может быть медленным, но последующие мгновенные
-     * 3. При logout кеш можно инвалидировать через roleGoalCache.clearCache()
      */
     override suspend fun getAvailableRoles(): Result<List<RoleResponse>> =
-        // DEPRECATED: Теперь используем getGoalsByRole(null) для загрузки всех целей
-        // и автоматического определения ролей от целей
-        Result.failure(NotImplementedError("getAvailableRoles deprecated - use getGoalsByRole(null)"))
+        runCatching {
+            api.getRoles().map { it.toDomain() }
+        }
 
     /**
      * МОБ-6.4 — Получение целей, опционально отфильтрованных по role_id.

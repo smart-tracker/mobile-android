@@ -1,4 +1,4 @@
-package com.example.smarttracker.presentation.auth
+package com.example.smarttracker.presentation.auth.forgot
 
 /**
  * UI-состояние для трёхшагового жанра password recovery flow.

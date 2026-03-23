@@ -1,4 +1,4 @@
-package com.example.smarttracker.presentation.auth
+package com.example.smarttracker.presentation.auth.login
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border

@@ -1,4 +1,4 @@
-package com.example.smarttracker.presentation.auth
+package com.example.smarttracker.presentation.auth.forgot
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -91,6 +91,8 @@ class ForgotPasswordViewModel @Inject constructor(
             ForgotPasswordEvent.OnResendCode -> resendCode()
             ForgotPasswordEvent.OnResetPassword -> submitResetPassword()
             ForgotPasswordEvent.OnBackPressed -> navigateBack()
+            ForgotPasswordEvent.NavigateToLoginAfterReset,
+            ForgotPasswordEvent.NavigateToLoginFromBack -> Unit
         }
     }
     
@@ -247,9 +249,7 @@ class ForgotPasswordViewModel @Inject constructor(
             if (result.isSuccess) {
                 // Успешный сброс - переход на экран логина
                 _uiState.value = _uiState.value.copy(isLoading = false)
-                viewModelScope.launch {
-                    _events.emit(ForgotPasswordEvent.OnContinueFromStep1) // Navigate to login
-                }
+                _events.emit(ForgotPasswordEvent.NavigateToLoginAfterReset)
             } else {
                 val errorMessage = ApiErrorHandler.translateError(
                     result.exceptionOrNull()?.message ?: "Unknown error"
@@ -292,6 +292,10 @@ class ForgotPasswordViewModel @Inject constructor(
                 currentStep = currentStep - 1,
                 generalError = null
             )
+        } else {
+            viewModelScope.launch {
+                _events.emit(ForgotPasswordEvent.NavigateToLoginFromBack)
+            }
         }
     }
 }

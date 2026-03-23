@@ -1,4 +1,4 @@
-package com.example.smarttracker.presentation.auth
+package com.example.smarttracker.presentation.auth.register
 
 import com.example.smarttracker.domain.model.Gender
 import com.example.smarttracker.domain.model.GoalResponse

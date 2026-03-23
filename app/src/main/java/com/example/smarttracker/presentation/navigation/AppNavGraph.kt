@@ -1,30 +1,25 @@
 package com.example.smarttracker.presentation.navigation
 
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.example.smarttracker.presentation.auth.ForgotPasswordEvent
-import com.example.smarttracker.presentation.auth.ForgotPasswordScreen
-import com.example.smarttracker.presentation.auth.ForgotPasswordViewModel
-import com.example.smarttracker.presentation.auth.LoginEvent
-import com.example.smarttracker.presentation.auth.LoginScreen
-import com.example.smarttracker.presentation.auth.LoginViewModel
-import com.example.smarttracker.presentation.auth.PrivacyPolicyScreen
-import com.example.smarttracker.presentation.auth.RegisterEvent
-import com.example.smarttracker.presentation.auth.RegisterScreen
-import com.example.smarttracker.presentation.auth.RegisterViewModel
-import com.example.smarttracker.presentation.auth.TermsOfServiceScreen
+import com.example.smarttracker.presentation.auth.forgot.ForgotPasswordEvent
+import com.example.smarttracker.presentation.auth.forgot.ForgotPasswordScreen
+import com.example.smarttracker.presentation.auth.forgot.ForgotPasswordViewModel
+import com.example.smarttracker.presentation.auth.login.LoginEvent
+import com.example.smarttracker.presentation.auth.login.LoginScreen
+import com.example.smarttracker.presentation.auth.login.LoginViewModel
+import com.example.smarttracker.presentation.auth.register.PrivacyPolicyScreen
+import com.example.smarttracker.presentation.auth.register.RegisterEvent
+import com.example.smarttracker.presentation.auth.register.RegisterScreen
+import com.example.smarttracker.presentation.auth.register.RegisterViewModel
+import com.example.smarttracker.presentation.auth.register.TermsOfServiceScreen
 import com.example.smarttracker.presentation.home.HomeScreen
 
 @Composable
@@ -123,13 +118,17 @@ fun AppNavGraph(
             LaunchedEffect(Unit) {
                 viewModel.events.collect { event ->
                     when (event) {
-                        is ForgotPasswordEvent.OnContinueFromStep1 -> {
+                        is ForgotPasswordEvent.NavigateToLoginAfterReset -> {
                             // Navigate back to login after successful password reset
                             navController.navigate(Screen.Login.route) {
                                 popUpTo(Screen.PasswordRecovery.route) { inclusive = true }
                             }
                         }
-                        is ForgotPasswordEvent.OnBackPressed -> navController.popBackStack()
+                        is ForgotPasswordEvent.NavigateToLoginFromBack -> {
+                            navController.navigate(Screen.Login.route) {
+                                popUpTo(Screen.PasswordRecovery.route) { inclusive = true }
+                            }
+                        }
                         else -> {} // Other events handled within the screen
                     }
                 }

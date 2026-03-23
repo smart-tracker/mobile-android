@@ -1,7 +1,7 @@
+package com.example.smarttracker.data.remote.dto
+
 import com.google.gson.annotations.SerializedName
 import com.example.smarttracker.domain.model.ResendResetCodeResult
-import java.time.LocalDateTime
-import java.time.format.DateTimeFormatter
 
 /**
  * DTO для ответа на запрос resendResetCode (POST /auth/resend-reset-code).

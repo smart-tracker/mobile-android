@@ -2,6 +2,8 @@ package com.example.smarttracker.data.remote
 
 import com.example.smarttracker.data.remote.dto.AuthResponseDto
 import com.example.smarttracker.data.remote.dto.EmailVerificationDto
+import com.example.smarttracker.data.remote.dto.ForgotPasswordRequestDto
+import com.example.smarttracker.data.remote.dto.ForgotPasswordResponseDto
 import com.example.smarttracker.data.remote.dto.GoalResponseDto
 import com.example.smarttracker.data.remote.dto.LoginRequestDto
 import com.example.smarttracker.data.remote.dto.NicknameCheckRequestDto
@@ -10,6 +12,10 @@ import com.example.smarttracker.data.remote.dto.RegisterRequestDto
 import com.example.smarttracker.data.remote.dto.RegisterResultDto
 import com.example.smarttracker.data.remote.dto.ResendCodeResponseDto
 import com.example.smarttracker.data.remote.dto.ResendEmailDto
+import com.example.smarttracker.data.remote.dto.ResendResetCodeRequestDto
+import com.example.smarttracker.data.remote.dto.ResendResetCodeResponseDto
+import com.example.smarttracker.data.remote.dto.ResetPasswordRequestDto
+import com.example.smarttracker.data.remote.dto.ResetPasswordResponseDto
 import com.example.smarttracker.data.remote.dto.RoleDto
 import com.example.smarttracker.data.remote.dto.RoleResponseDto
 import retrofit2.http.Body
@@ -71,6 +77,32 @@ interface AuthApiService {
      */
     @POST("auth/check-nickname")
     suspend fun checkNickname(@Body request: NicknameCheckRequestDto): NicknameCheckResponseDto
+
+    /**
+     * Инициация восстановления пароля.
+     * Отправляет код подтверждения на email пользователя.
+     */
+    @POST("auth/forgot-password")
+    suspend fun forgotPassword(@Body request: ForgotPasswordRequestDto): ForgotPasswordResponseDto
+
+    /**
+     * Повторная отправка кода для восстановления пароля.
+     */
+    @POST("auth/resend-reset-code")
+    suspend fun resendResetCode(@Body request: ResendResetCodeRequestDto): ResendResetCodeResponseDto
+
+    /**
+     * Завершение восстановления пароля.
+     * Проверяет код и устанавливает новый пароль.
+     */
+    @POST("auth/reset-password")
+    suspend fun resetPassword(@Body request: ResetPasswordRequestDto): ResetPasswordResponseDto
+
+    /**
+     * МОБ-6.3 — Получение всех доступных ролей.
+     */
+    @GET("role/")
+    suspend fun getRoles(): List<RoleResponseDto>
 
     /**
      * МОБ-6.2 — Получение ролей пользователя.

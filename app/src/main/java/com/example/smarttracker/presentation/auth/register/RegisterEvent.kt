@@ -1,4 +1,4 @@
-package com.example.smarttracker.presentation.auth
+package com.example.smarttracker.presentation.auth.register
 
 /** Одноразовые события из RegisterViewModel в UI */
 sealed interface RegisterEvent {

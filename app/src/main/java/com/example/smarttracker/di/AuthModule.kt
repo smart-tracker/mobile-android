@@ -39,6 +39,12 @@ abstract class AuthModule {
 
     @Binds
     @Singleton
+    // Временно используем mock-реализацию, т.к. recovery endpoints ещё не реализованы в backend (smart-tracker/api).
+    // Когда backend-команда добавит:
+    // POST /auth/forgot-password, POST /auth/resend-reset-code, POST /auth/reset-password
+    // нужно переключить binding на PasswordRecoveryRepositoryImpl.
+    // Пример переключения:
+    // abstract fun bindPasswordRecoveryRepository(impl: PasswordRecoveryRepositoryImpl): PasswordRecoveryRepository
     abstract fun bindPasswordRecoveryRepository(impl: MockPasswordRecoveryRepository): PasswordRecoveryRepository
 
     companion object {

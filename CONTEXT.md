@@ -31,8 +31,15 @@ DI: Hilt | UI: Jetpack Compose | Сеть: Retrofit | Токены: EncryptedSha
   - Step 4: Ввод 6-значного кода верификации, таймер 10 мин, кнопка "Отправить повторно" (cooldown 2 мин)
 - ✅ LoginScreen — полная реализация с UI, ViewModel, навигацией
 - ✅ ForgotPasswordScreen / PasswordRecovery — трёхшаговый процесс восстановления пароля
-- ✅ Все API endpoints работают корректно
+- ✅ Все auth API endpoints, кроме password recovery, работают корректно
 - ✅ Навигация RegisterScreen → VerifyEmailScreen → HomeScreen функционирует
+
+### ✅ Последние изменения (сессия 23.03.2026)
+
+- Auth-пакет реструктурирован по подпапкам: `auth/login`, `auth/register`, `auth/forgot`.
+- `AppNavGraph` обновлён под новые package/import пути после реструктуризации.
+- В legal-тексте шага регистрации убран deprecated `ClickableText`: используется современный `LinkAnnotation`.
+- Введено продуктовое ограничение: `home` не изменять до появления финального дизайна (текущие экраны считаются заглушками).
 
 ## Статус бэкенда
 
@@ -51,6 +58,14 @@ DI: Hilt | UI: Jetpack Compose | Сеть: Retrofit | Токены: EncryptedSha
 2. `/auth/resend-code` → ✅ 200 OK (Код переотправляется)
 3. `/auth/verify-email` → ✅ 200 OK (JWT токены, пользователь авторизован)
 4. **Навигация:** RegisterScreen → VerifyEmailScreen → HomeScreen ✅ успешна
+
+**⚠️ Password Recovery (важно):**
+- На backend (`smart-tracker/api`, ветка `main`) сейчас **нет** эндпоинтов:
+  - `POST /auth/forgot-password`
+  - `POST /auth/resend-reset-code`
+  - `POST /auth/reset-password`
+- Поэтому в Android временно включён `MockPasswordRecoveryRepository` через DI в `AuthModule`.
+- Подготовленная real-реализация `PasswordRecoveryRepositoryImpl` оставлена в коде, но **не активна** до готовности backend.
 
 ---
 
@@ -110,11 +125,23 @@ DI: Hilt | UI: Jetpack Compose | Сеть: Retrofit | Токены: EncryptedSha
 
 13. **`startCooldown` в RegisterViewModel** — при получении ответа от `/auth/register` прередаётся `result.expiresIn` (600 сек), а кулдаун кнопки "Отправить повторно" должен быть `RESEND_COOLDOWN_SECONDS = 120` сек. Требует отдельной проверки/исправления при работе с VerifyEmailScreen.
 
+14. **Реструктуризация `presentation/auth`** — актуальные пути:
+  - `presentation/auth/login/*`
+  - `presentation/auth/register/*`
+  - `presentation/auth/forgot/*`
+  Если инструмент/IDE показывает старый путь `presentation/auth/RegisterScreen.kt`, ориентироваться на фактические файлы в подпапках.
+
+15. **`home` временно заморожен** — модуль/экраны Home не рефакторить и не дорабатывать до утверждения нормального дизайна; текущая реализация считается временной заглушкой.
+
+16. **Ссылки в legal-блоке регистрации** — использовать `LinkAnnotation` (Compose Text links), не возвращаться к deprecated `ClickableText`.
+
 ---
 
 ## API (бэкенд, Python/FastAPI)
 Репозиторий: `smart-tracker/api`
 Эндпоинты авторизации: `POST /auth/register`, `/auth/verify-email`, `/auth/resend-code`, `/auth/login`, `/auth/refresh`
+Password recovery endpoints (`/auth/forgot-password`, `/auth/resend-reset-code`, `/auth/reset-password`) — **пока не реализованы на backend**.
+Android статус: временно используется `MockPasswordRecoveryRepository`; `PasswordRecoveryRepositoryImpl` подготовлен и ждёт backend.
 Последний коммит бэка: `make last_name and middle_name optional` (3 марта, автор qerrij)
 
 ---
@@ -229,7 +256,10 @@ com.example.smarttracker/
 │   └── usecase/                (✅ RegisterUseCase)
 ├── presentation/
 │   ├── MainActivity.kt
-│   ├── auth/                   (✅ RegisterScreen, RegisterViewModel, RegisterUiState, RegisterEvent)
+│   ├── auth/
+│   │   ├── login/              (✅ LoginScreen, LoginViewModel, LoginUiState, LoginEvent)
+│   │   ├── register/           (✅ RegisterScreen, RegisterViewModel, RegisterUiState, RegisterEvent, RegisterComponents, LegalScreens)
+│   │   └── forgot/             (✅ ForgotPasswordScreen, ForgotPasswordViewModel, ForgotPasswordUiState, ForgotPasswordEvent)
 │   ├── common/
 │   ├── navigation/             (✅ Screen.kt + AppNavGraph.kt)
 │   └── theme/

@@ -1,4 +1,4 @@
-package com.example.smarttracker.presentation.auth
+package com.example.smarttracker.presentation.auth.forgot
 
 /**
  * События пользователя для password recovery flow.
@@ -23,4 +23,6 @@ sealed class ForgotPasswordEvent {
     
     // Навигация
     object OnBackPressed : ForgotPasswordEvent()
+    object NavigateToLoginAfterReset : ForgotPasswordEvent()
+    object NavigateToLoginFromBack : ForgotPasswordEvent()
 }
