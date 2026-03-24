@@ -7,9 +7,9 @@ package com.example.smarttracker.domain.model
  */
 data class ForgotPasswordResult(
     val message: String,
-    val email: String,
+    val email: String? = null,
     /** Срок действия кода верификации в секундах (обычно 600 = 10 минут) */
-    val expiresIn: Int,
+    val expiresIn: Int = 600,
     /** Email, на который отправлен код (может отличаться от входного) */
     val emailSent: String? = null
 )

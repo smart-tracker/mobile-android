@@ -7,7 +7,7 @@ import com.example.smarttracker.data.local.TokenStorage
 import com.example.smarttracker.data.local.TokenStorageImpl
 import com.example.smarttracker.data.remote.AuthApiService
 import com.example.smarttracker.data.repository.AuthRepositoryImpl
-import com.example.smarttracker.data.repository.MockPasswordRecoveryRepository
+import com.example.smarttracker.data.repository.PasswordRecoveryRepositoryImpl
 import com.example.smarttracker.domain.repository.AuthRepository
 import com.example.smarttracker.domain.repository.PasswordRecoveryRepository
 import dagger.Binds
@@ -39,13 +39,12 @@ abstract class AuthModule {
 
     @Binds
     @Singleton
-    // Временно используем mock-реализацию, т.к. recovery endpoints ещё не реализованы в backend (smart-tracker/api).
-    // Когда backend-команда добавит:
-    // POST /auth/forgot-password, POST /auth/resend-reset-code, POST /auth/reset-password
-    // нужно переключить binding на PasswordRecoveryRepositoryImpl.
-    // Пример переключения:
-    // abstract fun bindPasswordRecoveryRepository(impl: PasswordRecoveryRepositoryImpl): PasswordRecoveryRepository
-    abstract fun bindPasswordRecoveryRepository(impl: MockPasswordRecoveryRepository): PasswordRecoveryRepository
+    // Backend recovery endpoints доступны в production API:
+    // POST /password-reset/request
+    // POST /password-reset/verify-code
+    // POST /password-reset/resend-verify-code
+    // POST /password-reset/confirm
+    abstract fun bindPasswordRecoveryRepository(impl: PasswordRecoveryRepositoryImpl): PasswordRecoveryRepository
 
     companion object {
 

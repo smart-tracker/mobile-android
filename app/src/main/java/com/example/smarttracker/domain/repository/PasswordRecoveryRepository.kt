@@ -27,6 +27,14 @@ interface PasswordRecoveryRepository {
     suspend fun initiateForgotPassword(request: ForgotPasswordRequest): Result<ForgotPasswordResult>
 
     /**
+     * Проверяет код верификации перед вводом нового пароля.
+     *
+     * @param email Email пользователя
+     * @param code 6-значный код из письма
+     */
+    suspend fun verifyResetCode(email: String, code: String): Result<Unit>
+
+    /**
      * Повторно отправляет код верификации для восстановления пароля.
      * Подчиняется cooldown-таймеру (обычно 120 секунд между отправками).
      *

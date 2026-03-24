@@ -2,6 +2,7 @@ package com.example.smarttracker.presentation.auth.forgot
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.smarttracker.data.local.TokenStorage
 import com.example.smarttracker.domain.model.ForgotPasswordRequest
 import com.example.smarttracker.domain.model.ResetPasswordRequest
 import com.example.smarttracker.domain.repository.PasswordRecoveryRepository
@@ -31,7 +32,8 @@ import javax.inject.Inject
  */
 @HiltViewModel
 class ForgotPasswordViewModel @Inject constructor(
-    private val passwordRecoveryRepository: PasswordRecoveryRepository
+    private val passwordRecoveryRepository: PasswordRecoveryRepository,
+    private val tokenStorage: TokenStorage,
 ) : ViewModel() {
     
     private val _uiState = MutableStateFlow(ForgotPasswordUiState())
@@ -134,9 +136,9 @@ class ForgotPasswordViewModel @Inject constructor(
                 )
                 startCooldown()
             } else {
-                val errorMessage = ApiErrorHandler.translateError(
-                    result.exceptionOrNull()?.message ?: "Unknown error"
-                )
+                val errorMessage = result.exceptionOrNull()
+                    ?.let(ApiErrorHandler::getErrorMessage)
+                    ?: "Неизвестная ошибка"
                 _uiState.value = _uiState.value.copy(
                     generalError = errorMessage,
                     isLoading = false
@@ -162,12 +164,32 @@ class ForgotPasswordViewModel @Inject constructor(
             return
         }
 
-        _uiState.value = _uiState.value.copy(
-            currentStep = 3,
-            newPasswordError = null,
-            confirmPasswordError = null,
-            generalError = null
-        )
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoading = true)
+
+            val result = passwordRecoveryRepository.verifyResetCode(
+                email = _uiState.value.email,
+                code = verificationCode,
+            )
+
+            if (result.isSuccess) {
+                _uiState.value = _uiState.value.copy(
+                    currentStep = 3,
+                    newPasswordError = null,
+                    confirmPasswordError = null,
+                    generalError = null,
+                    isLoading = false,
+                )
+            } else {
+                val errorMessage = result.exceptionOrNull()
+                    ?.let(ApiErrorHandler::getErrorMessage)
+                    ?: "Неизвестная ошибка"
+                _uiState.value = _uiState.value.copy(
+                    verificationCodeError = errorMessage,
+                    isLoading = false,
+                )
+            }
+        }
     }
     
     private fun resendCode() {
@@ -184,9 +206,9 @@ class ForgotPasswordViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(isLoading = false)
                 startCooldown()
             } else {
-                val errorMessage = ApiErrorHandler.translateError(
-                    result.exceptionOrNull()?.message ?: "Unknown error"
-                )
+                val errorMessage = result.exceptionOrNull()
+                    ?.let(ApiErrorHandler::getErrorMessage)
+                    ?: "Неизвестная ошибка"
                 _uiState.value = _uiState.value.copy(
                     generalError = errorMessage,
                     isLoading = false
@@ -247,13 +269,18 @@ class ForgotPasswordViewModel @Inject constructor(
             )
             
             if (result.isSuccess) {
+                tokenStorage.clearAll()
                 // Успешный сброс - переход на экран логина
-                _uiState.value = _uiState.value.copy(isLoading = false)
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    generalError = null,
+                    verificationCodeError = null,
+                )
                 _events.emit(ForgotPasswordEvent.NavigateToLoginAfterReset)
             } else {
-                val errorMessage = ApiErrorHandler.translateError(
-                    result.exceptionOrNull()?.message ?: "Unknown error"
-                )
+                val errorMessage = result.exceptionOrNull()
+                    ?.let(ApiErrorHandler::getErrorMessage)
+                    ?: "Неизвестная ошибка"
                 _uiState.value = _uiState.value.copy(
                     verificationCodeError = errorMessage,
                     isLoading = false

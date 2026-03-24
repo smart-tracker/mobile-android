@@ -1,6 +1,7 @@
 package com.example.smarttracker.data.repository
 
 import com.example.smarttracker.data.remote.AuthApiService
+import com.example.smarttracker.data.remote.dto.EmailVerificationDto
 import com.example.smarttracker.data.remote.dto.ForgotPasswordRequestDto
 import com.example.smarttracker.data.remote.dto.ResendResetCodeRequestDto
 import com.example.smarttracker.data.remote.dto.ResetPasswordRequestDto
@@ -29,6 +30,17 @@ class PasswordRecoveryRepositoryImpl @Inject constructor(
             api.forgotPassword(
                 ForgotPasswordRequestDto(email = request.email)
             ).toDomain()
+        }
+
+    override suspend fun verifyResetCode(email: String, code: String): Result<Unit> =
+        runCatching {
+            api.verifyResetCode(
+                EmailVerificationDto(
+                    email = email,
+                    code = code,
+                )
+            )
+            Unit
         }
 
     override suspend fun resendResetCode(email: String): Result<ResendResetCodeResult> =

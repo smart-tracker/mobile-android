@@ -51,6 +51,21 @@ class MockPasswordRecoveryRepository @Inject constructor() : PasswordRecoveryRep
             )
         )
     }
+
+    override suspend fun verifyResetCode(email: String, code: String): Result<Unit> {
+        delay(300)
+
+        if (code.length != 6 || !code.all { it.isDigit() }) {
+            return Result.failure(Exception("INVALID_CODE"))
+        }
+
+        val validCode = mockValidCodes[email]
+        if (code != validCode && code != "123456") {
+            return Result.failure(Exception("INVALID_CODE"))
+        }
+
+        return Result.success(Unit)
+    }
     
     override suspend fun resendResetCode(email: String): Result<ResendResetCodeResult> {
         delay(300)

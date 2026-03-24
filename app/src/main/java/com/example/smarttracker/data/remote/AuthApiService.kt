@@ -18,6 +18,7 @@ import com.example.smarttracker.data.remote.dto.ResetPasswordRequestDto
 import com.example.smarttracker.data.remote.dto.ResetPasswordResponseDto
 import com.example.smarttracker.data.remote.dto.RoleDto
 import com.example.smarttracker.data.remote.dto.RoleResponseDto
+import com.example.smarttracker.data.remote.dto.VerifyResetCodeResponseDto
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.POST
@@ -82,20 +83,26 @@ interface AuthApiService {
      * Инициация восстановления пароля.
      * Отправляет код подтверждения на email пользователя.
      */
-    @POST("auth/forgot-password")
+    @POST("password-reset/request")
     suspend fun forgotPassword(@Body request: ForgotPasswordRequestDto): ForgotPasswordResponseDto
+
+    /**
+     * Проверка кода подтверждения для сброса пароля.
+     */
+    @POST("password-reset/verify-code")
+    suspend fun verifyResetCode(@Body request: EmailVerificationDto): VerifyResetCodeResponseDto
 
     /**
      * Повторная отправка кода для восстановления пароля.
      */
-    @POST("auth/resend-reset-code")
+    @POST("password-reset/resend-verify-code")
     suspend fun resendResetCode(@Body request: ResendResetCodeRequestDto): ResendResetCodeResponseDto
 
     /**
      * Завершение восстановления пароля.
      * Проверяет код и устанавливает новый пароль.
      */
-    @POST("auth/reset-password")
+    @POST("password-reset/confirm")
     suspend fun resetPassword(@Body request: ResetPasswordRequestDto): ResetPasswordResponseDto
 
     /**
