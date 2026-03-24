@@ -6,12 +6,15 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -100,48 +103,63 @@ fun LoginScreen(
         containerColor = ColorBackground,
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { paddingValues ->
-        Column(
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(horizontal = UiTokens.ScreenHorizontalPadding)
-                .pointerInput(Unit) {
-                    detectTapGestures {
-                        focusManager.clearFocus()
-                        keyboardController?.hide()
-                    }
-                }
-                .verticalScroll(rememberScrollState()),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Top
         ) {
-            // ── Логотип ──────────────────────────────────────────────────────
-            Spacer(modifier = Modifier.height(64.dp))
+            val isCompactHeight = maxHeight < 760.dp
+            val headerTopSpacer = if (isCompactHeight) 24.dp else 64.dp
+            val logoSize = if (isCompactHeight) 96.dp else 120.dp
+            val titleTopSpacer = if (isCompactHeight) 16.dp else UiTokens.SectionSpacing
+            val titleBottomSpacer = if (isCompactHeight) 20.dp else 32.dp
+            val sectionSpacing = if (isCompactHeight) 16.dp else UiTokens.SectionSpacing
+            val socialIconSize = if (isCompactHeight) 48.dp else 56.dp
+            val socialIconsHorizontalPadding = if (isCompactHeight) 16.dp else 32.dp
 
-            Box(
+            Column(
                 modifier = Modifier
-                    .border(UiTokens.BorderWidthThick, Color.Black, RoundedCornerShape(20.dp))
+                    .fillMaxSize()
+                    .padding(horizontal = UiTokens.ScreenHorizontalPadding)
+                    .navigationBarsPadding()
+                    .imePadding()
+                    .pointerInput(Unit) {
+                        detectTapGestures {
+                            focusManager.clearFocus()
+                            keyboardController?.hide()
+                        }
+                    }
+                    .verticalScroll(rememberScrollState()),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Top
             ) {
-                Image(
-                    painter = painterResource(id = R.drawable.ic_logo),
-                    contentDescription = "SmartTracker Logo",
-                    modifier = Modifier.size(120.dp),
-                    contentScale = ContentScale.Fit
+                // ── Логотип ──────────────────────────────────────────────────
+                Spacer(modifier = Modifier.height(headerTopSpacer))
+
+                Box(
+                    modifier = Modifier
+                        .border(UiTokens.BorderWidthThick, Color.Black, RoundedCornerShape(20.dp))
+                ) {
+                    Image(
+                        painter = painterResource(id = R.drawable.ic_logo),
+                        contentDescription = "SmartTracker Logo",
+                        modifier = Modifier.size(logoSize),
+                        contentScale = ContentScale.Fit
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(titleTopSpacer))
+
+                // ── Название приложения ─────────────────────────────────────
+                Text(
+                    text = "SmartTracker",
+                    style = androidx.compose.material3.MaterialTheme.typography.titleLarge,
+                    color = ColorPrimary,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
                 )
-            }
 
-            Spacer(modifier = Modifier.height(UiTokens.SectionSpacing))
-
-            // ── Название приложения ─────────────────────────────────────────
-            Text(
-                text = "SmartTracker",
-                style = androidx.compose.material3.MaterialTheme.typography.titleLarge,
-                color = ColorPrimary,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            Spacer(modifier = Modifier.height(32.dp))
+                Spacer(modifier = Modifier.height(titleBottomSpacer))
 
             // ── Email ────────────────────────────────────────────────────────
             Column {
@@ -332,7 +350,7 @@ fun LoginScreen(
                 )
             }
 
-            Spacer(modifier = Modifier.height(UiTokens.SectionSpacing))
+                Spacer(modifier = Modifier.height(sectionSpacing))
 
             // ── Разделитель "Войти с помощью" ───────────────────────────────
             Row(
@@ -362,24 +380,24 @@ fun LoginScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             // ── Социальные кнопки ────────────────────────────────────────────
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 32.dp),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = socialIconsHorizontalPadding),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                 // ── Яндекс
                 IconButton(
                     onClick = {},
-                    modifier = Modifier.size(56.dp),
+                    modifier = Modifier.size(socialIconSize),
                     enabled = !state.isLoading
                 ) {
                     Image(
                         painter = painterResource(id = R.drawable.ic_yandex),
                         contentDescription = "Yandex",
                         modifier = Modifier
-                            .size(56.dp),
+                            .size(socialIconSize),
                         contentScale = ContentScale.Fit
                     )
                 }
@@ -389,14 +407,14 @@ fun LoginScreen(
                 // ── VK
                 IconButton(
                     onClick = {},
-                    modifier = Modifier.size(56.dp),
+                    modifier = Modifier.size(socialIconSize),
                     enabled = !state.isLoading
                 ) {
                     Image(
                         painter = painterResource(id = R.drawable.ic_vk),
                         contentDescription = "VK",
                         modifier = Modifier
-                            .size(56.dp)
+                            .size(socialIconSize)
                             ,
                         contentScale = ContentScale.Fit
                     )
@@ -407,20 +425,21 @@ fun LoginScreen(
                 // ── Max
                 IconButton(
                     onClick = {},
-                    modifier = Modifier.size(56.dp),
+                    modifier = Modifier.size(socialIconSize),
                     enabled = !state.isLoading
                 ) {
                     Image(
                         painter = painterResource(id = R.drawable.ic_max),
                         contentDescription = "Max",
                         modifier = Modifier
-                            .size(56.dp),
+                            .size(socialIconSize),
                         contentScale = ContentScale.Fit
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(UiTokens.SectionSpacing))
+                Spacer(modifier = Modifier.height(sectionSpacing))
+            }
         }
     }
 }

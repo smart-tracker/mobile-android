@@ -29,13 +29,16 @@ object UiTokens {
     val ContentVerticalPadding: Dp = 8.dp
 
     /** Отступ секции между крупными блоками. */
-    val SectionSpacing: Dp = 24.dp
+    val SectionSpacing: Dp = 16.dp
+
+    /** Верхний отступ перед заголовком шага в пошаговых auth-экранах. */
+    val StepTopSpacer: Dp = 24.dp
 
     /** Отступ контейнера основной кнопки внизу (горизонталь). */
     val BottomActionHorizontalPadding: Dp = 16.dp
 
     /** Отступ контейнера основной кнопки внизу (вертикаль). */
-    val BottomActionVerticalPadding: Dp = 50.dp
+    val BottomActionVerticalPadding: Dp = 16.dp
 
     /** Отступ сверху для inline-ошибок у полей. */
     val InlineErrorTopPadding: Dp = 8.dp

@@ -278,7 +278,7 @@ internal fun RegisterScaffold(
                     vertical = UiTokens.ContentVerticalPadding,
                 ),
         ) {
-            Spacer(Modifier.height(80.dp))
+            Spacer(Modifier.height(UiTokens.StepTopSpacer))
             RegisterStepTitle(title)
             Spacer(Modifier.height(UiTokens.SectionSpacing))
             content()
