@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,6 +20,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -54,7 +56,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -83,6 +89,8 @@ internal fun NicknameField(
     onValueChange: (String) -> Unit,
     checkStatus: NicknameCheckStatus,
 ) {
+    val focusManager = LocalFocusManager.current
+
     val borderColor = when (checkStatus) {
         NicknameCheckStatus.IDLE -> ColorPrimary
         NicknameCheckStatus.CHECKING -> ColorPlaceholder
@@ -128,6 +136,9 @@ internal fun NicknameField(
                 keyboardOptions = KeyboardOptions(
                     keyboardType = KeyboardType.Text,
                     imeAction = ImeAction.Next,
+                ),
+                keyboardActions = KeyboardActions(
+                    onNext = { focusManager.moveFocus(FocusDirection.Down) },
                 ),
                 trailingIcon = {
                     when (checkStatus) {
@@ -206,6 +217,9 @@ internal fun RegisterScaffold(
     isNextEnabled: Boolean = true,
     content: @Composable () -> Unit,
 ) {
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+
     BackHandler { onBack() }
     Scaffold(
         containerColor = ColorBackground,
@@ -252,6 +266,12 @@ internal fun RegisterScaffold(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .pointerInput(Unit) {
+                    detectTapGestures {
+                        focusManager.clearFocus()
+                        keyboardController?.hide()
+                    }
+                }
                 .verticalScroll(rememberScrollState())
                 .padding(
                     horizontal = UiTokens.ScreenHorizontalPadding,
@@ -305,6 +325,9 @@ internal fun RegisterStyledTextField(
     isPasswordVisible: Boolean = false,
     onTogglePasswordVisibility: (() -> Unit)? = null,
 ) {
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+
     val appliedTransformation = when {
         isPassword && !isPasswordVisible -> PasswordVisualTransformation()
         else -> visualTransformation
@@ -338,6 +361,13 @@ internal fun RegisterStyledTextField(
                     keyboardType = keyboardType,
                     capitalization = capitalization,
                     imeAction = imeAction,
+                ),
+                keyboardActions = KeyboardActions(
+                    onNext = { focusManager.moveFocus(FocusDirection.Down) },
+                    onDone = {
+                        focusManager.clearFocus()
+                        keyboardController?.hide()
+                    },
                 ),
                 trailingIcon = if (isPassword && onTogglePasswordVisibility != null) {
                     {
@@ -501,6 +531,8 @@ internal fun DatePickerField(
     onValueChange: (String) -> Unit,
     checkStatus: BirthDateCheckStatus = BirthDateCheckStatus.IDLE,
 ) {
+    val focusManager = LocalFocusManager.current
+
     var showPicker by remember { mutableStateOf(false) }
 
     val borderColor = when (checkStatus) {
@@ -539,6 +571,9 @@ internal fun DatePickerField(
                 keyboardOptions = KeyboardOptions(
                     keyboardType = KeyboardType.Number,
                     imeAction = ImeAction.Next,
+                ),
+                keyboardActions = KeyboardActions(
+                    onNext = { focusManager.moveFocus(FocusDirection.Down) },
                 ),
                 trailingIcon = {
                     when (checkStatus) {

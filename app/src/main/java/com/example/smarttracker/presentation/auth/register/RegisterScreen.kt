@@ -342,6 +342,7 @@ private fun RegisterStep3(
             label = "Повторите пароль",
             placeholder = "Повторите пароль...",
             keyboardType = KeyboardType.Password,
+            imeAction = ImeAction.Done,
             isPassword = true,
             isPasswordVisible = state.isConfirmPasswordVisible,
             onTogglePasswordVisibility = onToggleConfirmPasswordVisibility,
@@ -458,6 +459,7 @@ private fun RegisterStep4(
             label = "Введите код подтверждения",
             placeholder = "Код подтверждения...",
             keyboardType = KeyboardType.Number,
+            imeAction = ImeAction.Done,
         )
 
         Spacer(Modifier.height(25.dp))

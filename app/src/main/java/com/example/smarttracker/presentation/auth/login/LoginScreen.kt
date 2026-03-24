@@ -2,6 +2,7 @@ package com.example.smarttracker.presentation.auth.login
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -40,8 +42,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -86,6 +92,8 @@ fun LoginScreen(
     onNavigateToPasswordRecovery: () -> Unit,
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -97,6 +105,12 @@ fun LoginScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
                 .padding(horizontal = UiTokens.ScreenHorizontalPadding)
+                .pointerInput(Unit) {
+                    detectTapGestures {
+                        focusManager.clearFocus()
+                        keyboardController?.hide()
+                    }
+                }
                 .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Top
@@ -151,6 +165,9 @@ fun LoginScreen(
                         keyboardOptions = KeyboardOptions(
                             keyboardType = KeyboardType.Email,
                             imeAction = ImeAction.Next
+                        ),
+                        keyboardActions = KeyboardActions(
+                            onNext = { focusManager.moveFocus(FocusDirection.Down) },
                         ),
                         shape = RoundedCornerShape(UiTokens.CornerRadiusMedium),
                         colors = OutlinedTextFieldDefaults.colors(
@@ -208,6 +225,12 @@ fun LoginScreen(
                         keyboardOptions = KeyboardOptions(
                             keyboardType = KeyboardType.Password,
                             imeAction = ImeAction.Done
+                        ),
+                        keyboardActions = KeyboardActions(
+                            onDone = {
+                                focusManager.clearFocus()
+                                keyboardController?.hide()
+                            },
                         ),
                         shape = RoundedCornerShape(UiTokens.CornerRadiusMedium),
                         colors = OutlinedTextFieldDefaults.colors(

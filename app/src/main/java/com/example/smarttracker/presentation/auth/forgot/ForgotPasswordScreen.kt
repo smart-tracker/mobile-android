@@ -1,6 +1,7 @@
 package com.example.smarttracker.presentation.auth.forgot
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.background
@@ -38,6 +40,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
@@ -147,6 +153,7 @@ private fun ForgotPasswordStep1Screen(
             label = "Введите почту",
             placeholder = "Почта...",
             keyboardType = KeyboardType.Email,
+            imeAction = ImeAction.Done,
         )
 
         if (emailError != null) {
@@ -219,6 +226,7 @@ private fun ForgotPasswordStep2Screen(
             label = "Введите код подтверждения",
             placeholder = "Код подтверждения...",
             keyboardType = KeyboardType.Number,
+            imeAction = ImeAction.Done,
         )
 
         Spacer(Modifier.height(25.dp))
@@ -344,6 +352,7 @@ private fun ForgotPasswordStep3Screen(
             label = "Повторите новый пароль",
             placeholder = "Повторите пароль...",
             keyboardType = KeyboardType.Password,
+            imeAction = ImeAction.Done,
             isPassword = true,
             isPasswordVisible = confirmPasswordVisibility,
             onTogglePasswordVisibility = onToggleConfirmPasswordVisibility,
@@ -380,6 +389,9 @@ private fun StyledTextField(
     isPasswordVisible: Boolean = false,
     onTogglePasswordVisibility: (() -> Unit)? = null,
 ) {
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+
     val appliedTransformation = when {
         isPassword && !isPasswordVisible -> PasswordVisualTransformation()
         else -> visualTransformation
@@ -414,6 +426,13 @@ private fun StyledTextField(
                     keyboardType = keyboardType,
                     capitalization = capitalization,
                     imeAction = imeAction,
+                ),
+                keyboardActions = KeyboardActions(
+                    onNext = { focusManager.moveFocus(FocusDirection.Down) },
+                    onDone = {
+                        focusManager.clearFocus()
+                        keyboardController?.hide()
+                    },
                 ),
                 trailingIcon = if (isPassword && onTogglePasswordVisibility != null) {
                     {
@@ -462,6 +481,9 @@ private fun GenericStepScaffold(
     isNextEnabled: Boolean,
     content: @Composable () -> Unit
 ) {
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+
     BackHandler { onBack() }
     Scaffold(
         containerColor = ColorBackground,
@@ -516,6 +538,12 @@ private fun GenericStepScaffold(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .pointerInput(Unit) {
+                    detectTapGestures {
+                        focusManager.clearFocus()
+                        keyboardController?.hide()
+                    }
+                }
                 .verticalScroll(rememberScrollState())
                 .padding(
                     horizontal = UiTokens.ScreenHorizontalPadding,
