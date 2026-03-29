@@ -44,11 +44,11 @@ com.example.smarttracker/
 │   ├── remote/
 │   │   ├── dto/        (DTO + mappers)
 │   │   └── AuthApiService.kt
-│   └── repository/     (AuthRepositoryImpl)
+│   └── repository/     (AuthRepositoryImpl, MockWorkoutRepository)
 ├── di/                 (AuthModule.kt)
 ├── domain/
-│   ├── model/
-│   ├── repository/     (интерфейсы)
+│   ├── model/          (WorkoutType и др.)
+│   ├── repository/     (интерфейсы: AuthRepository, WorkoutRepository)
 │   └── usecase/
 ├── presentation/
 │   ├── auth/
@@ -56,7 +56,12 @@ com.example.smarttracker/
 │   │   ├── register/
 │   │   └── forgot/
 │   ├── navigation/     (Screen.kt + AppNavGraph.kt)
-│   └── theme/
+│   ├── theme/
+│   └── workout/
+│       ├── WorkoutHomeScreen.kt   (Scaffold + нижний бар: Старт/Тренировки/Меню)
+│       └── start/
+│           ├── WorkoutStartScreen.kt
+│           └── WorkoutStartViewModel.kt
 └── utils/
 ```
 
@@ -137,8 +142,12 @@ com.example.smarttracker/
 
 ## Текущие ограничения и временные решения
 
-**`home` заморожен** — модуль Home не рефакторить и не дорабатывать
-до утверждения финального дизайна. Текущие экраны — заглушки.
+**`WorkoutHomeScreen` активен** — маршрут `Screen.Home` ведёт на `WorkoutHomeScreen`.
+Вкладки «Тренировки» и «Меню» — заглушки (`PlaceholderScreen`), реализация pending.
+
+**`MockWorkoutRepository`** — временно используется вместо реальной реализации.
+`WorkoutRepositoryImpl` нужно реализовать после появления backend-эндпоинтов для типов тренировок.
+Активировать через DI в `AuthModule` (заменить `bindWorkoutRepository`).
 
 **MockPasswordRecoveryRepository** — временно используется вместо реальной реализации,
 так как backend эндпоинты `/auth/forgot-password`, `/auth/resend-reset-code`,
