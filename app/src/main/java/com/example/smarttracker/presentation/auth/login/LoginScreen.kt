@@ -1,6 +1,7 @@
 package com.example.smarttracker.presentation.auth.login
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.draw.clip
@@ -19,6 +20,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -387,17 +389,18 @@ fun LoginScreen(
                     horizontalArrangement = Arrangement.Center,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                // ── Яндекс
-                IconButton(
-                    onClick = {},
-                    modifier = Modifier.size(socialIconSize),
-                    enabled = !state.isLoading
+                // ── Яндекс (иконка круглая по дизайну — оставляем clip)
+                Box(
+                    modifier = Modifier
+                        .size(socialIconSize)
+                        .clip(CircleShape)
+                        .clickable(enabled = !state.isLoading, onClick = {}),
+                    contentAlignment = Alignment.Center
                 ) {
                     Image(
                         painter = painterResource(id = R.drawable.ic_yandex),
                         contentDescription = "Yandex",
-                        modifier = Modifier
-                            .size(socialIconSize),
+                        modifier = Modifier.size(socialIconSize),
                         contentScale = ContentScale.Fit
                     )
                 }
@@ -405,17 +408,16 @@ fun LoginScreen(
                 Spacer(modifier = Modifier.width(16.dp))
 
                 // ── VK
-                IconButton(
-                    onClick = {},
-                    modifier = Modifier.size(socialIconSize),
-                    enabled = !state.isLoading
+                Box(
+                    modifier = Modifier
+                        .size(socialIconSize)
+                        .clickable(enabled = !state.isLoading, onClick = {}),
+                    contentAlignment = Alignment.Center
                 ) {
                     Image(
                         painter = painterResource(id = R.drawable.ic_vk),
                         contentDescription = "VK",
-                        modifier = Modifier
-                            .size(socialIconSize)
-                            ,
+                        modifier = Modifier.size(socialIconSize),
                         contentScale = ContentScale.Fit
                     )
                 }
@@ -423,16 +425,16 @@ fun LoginScreen(
                 Spacer(modifier = Modifier.width(16.dp))
 
                 // ── Max
-                IconButton(
-                    onClick = {},
-                    modifier = Modifier.size(socialIconSize),
-                    enabled = !state.isLoading
+                Box(
+                    modifier = Modifier
+                        .size(socialIconSize)
+                        .clickable(enabled = !state.isLoading, onClick = {}),
+                    contentAlignment = Alignment.Center
                 ) {
                     Image(
                         painter = painterResource(id = R.drawable.ic_max),
                         contentDescription = "Max",
-                        modifier = Modifier
-                            .size(socialIconSize),
+                        modifier = Modifier.size(socialIconSize),
                         contentScale = ContentScale.Fit
                     )
                 }
