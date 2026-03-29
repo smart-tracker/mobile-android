@@ -20,7 +20,7 @@ import com.example.smarttracker.presentation.auth.register.RegisterEvent
 import com.example.smarttracker.presentation.auth.register.RegisterScreen
 import com.example.smarttracker.presentation.auth.register.RegisterViewModel
 import com.example.smarttracker.presentation.auth.register.TermsOfServiceScreen
-import com.example.smarttracker.presentation.home.HomeScreen
+import com.example.smarttracker.presentation.workout.WorkoutHomeScreen
 
 @Composable
 fun AppNavGraph(
@@ -150,7 +150,9 @@ fun AppNavGraph(
         }
 
         composable(Screen.Home.route) {
-            HomeScreen()
+            WorkoutHomeScreen(
+                onBack = { navController.popBackStack() },
+            )
         }
     }
 }

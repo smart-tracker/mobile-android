@@ -7,9 +7,11 @@ import com.example.smarttracker.data.local.TokenStorage
 import com.example.smarttracker.data.local.TokenStorageImpl
 import com.example.smarttracker.data.remote.AuthApiService
 import com.example.smarttracker.data.repository.AuthRepositoryImpl
+import com.example.smarttracker.data.repository.MockWorkoutRepository
 import com.example.smarttracker.data.repository.PasswordRecoveryRepositoryImpl
 import com.example.smarttracker.domain.repository.AuthRepository
 import com.example.smarttracker.domain.repository.PasswordRecoveryRepository
+import com.example.smarttracker.domain.repository.WorkoutRepository
 import dagger.Binds
 import dagger.Module
 import dagger.Provides
@@ -36,6 +38,11 @@ abstract class AuthModule {
     @Binds
     @Singleton
     abstract fun bindAuthRepository(impl: AuthRepositoryImpl): AuthRepository
+
+    @Binds
+    @Singleton
+    // Временный мок. Заменить на реальную реализацию после готовности backend-эндпоинтов.
+    abstract fun bindWorkoutRepository(impl: MockWorkoutRepository): WorkoutRepository
 
     @Binds
     @Singleton
