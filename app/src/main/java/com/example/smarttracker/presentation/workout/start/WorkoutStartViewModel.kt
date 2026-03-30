@@ -95,8 +95,8 @@ class WorkoutStartViewModel @Inject constructor(
          * java.time доступен нативно при minSdk=26 — desugaring не нужен.
          */
         fun formatCurrentDate(): String {
-            // Используем системную локаль, чтобы день недели отображался на языке устройства
-            val locale = Locale.getDefault()
+            // Принудительно используем русскую локаль, чтобы день недели всегда был на русском
+            val locale = Locale("ru")
             val date = LocalDate.now()
             val dateStr = date.format(DateTimeFormatter.ofPattern("dd.MM.yyyy", locale))
             // EEEE даёт "среда" — капитализируем первую букву
