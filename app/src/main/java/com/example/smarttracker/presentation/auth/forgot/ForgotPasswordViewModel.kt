@@ -125,7 +125,6 @@ class ForgotPasswordViewModel @Inject constructor(
             )
             
             if (result.isSuccess) {
-                val forgotResult = result.getOrNull()!!
                 _uiState.value = _uiState.value.copy(
                     currentStep = 2,
                     verificationCode = "",
