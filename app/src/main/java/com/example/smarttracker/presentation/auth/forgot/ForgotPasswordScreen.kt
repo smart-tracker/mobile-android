@@ -1,64 +1,37 @@
 package com.example.smarttracker.presentation.auth.forgot
 
-import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusDirection
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.smarttracker.presentation.common.StepScaffold
+import com.example.smarttracker.presentation.common.StyledTextField
 import com.example.smarttracker.presentation.common.UiTokens
-import com.example.smarttracker.presentation.theme.ColorPlaceholder
-import com.example.smarttracker.presentation.theme.ColorPrimary
 import com.example.smarttracker.presentation.theme.ColorBackground
 import com.example.smarttracker.presentation.theme.ColorLink
+import com.example.smarttracker.presentation.theme.ColorPlaceholder
+import com.example.smarttracker.presentation.theme.ColorPrimary
 import com.example.smarttracker.presentation.theme.ColorWhite
 import java.util.Locale
 
@@ -139,7 +112,7 @@ private fun ForgotPasswordStep1Screen(
     onContinue: () -> Unit,
     onBack: () -> Unit
 ) {
-    GenericStepScaffold(
+    StepScaffold(
         title = "Восстановление пароля (1/3)",
         onBack = onBack,
         onNext = onContinue,
@@ -191,7 +164,7 @@ private fun ForgotPasswordStep2Screen(
     val cooldown = resendCodeCooldown
     val cooldownFormatted = String.format(Locale.ROOT, "%02d:%02d", cooldown / 60, cooldown % 60)
 
-    GenericStepScaffold(
+    StepScaffold(
         title = "Восстановление пароля (2/3)",
         onBack = onBack,
         onNext = onContinue,
@@ -267,7 +240,7 @@ private fun ForgotPasswordStep2Screen(
                 disabledContainerColor = ColorPlaceholder,
                 disabledContentColor = ColorWhite,
             ),
-            border = androidx.compose.foundation.BorderStroke(
+            border = BorderStroke(
                 width = UiTokens.BorderWidthThick,
                 color = if (cooldown == 0) ColorPrimary else ColorPlaceholder,
             ),
@@ -314,7 +287,7 @@ private fun ForgotPasswordStep3Screen(
     onResetPassword: () -> Unit,
     onBack: () -> Unit
 ) {
-    GenericStepScaffold(
+    StepScaffold(
         title = "Восстановление пароля (3/3)",
         onBack = onBack,
         onNext = onResetPassword,
@@ -371,219 +344,6 @@ private fun ForgotPasswordStep3Screen(
         if (generalError != null) {
             ErrorText(generalError, modifier = Modifier.padding(top = 16.dp, start = 32.dp))
         }
-    }
-}
-
-/** Текстовое поле с лейблом в стиле макета */
-@Composable
-private fun StyledTextField(
-    value: String,
-    onValueChange: (String) -> Unit,
-    label: String,
-    placeholder: String,
-    keyboardType: KeyboardType = KeyboardType.Text,
-    capitalization: KeyboardCapitalization = KeyboardCapitalization.None,
-    imeAction: ImeAction = ImeAction.Next,
-    visualTransformation: VisualTransformation = VisualTransformation.None,
-    isPassword: Boolean = false,
-    isPasswordVisible: Boolean = false,
-    onTogglePasswordVisibility: (() -> Unit)? = null,
-) {
-    val focusManager = LocalFocusManager.current
-    val keyboardController = LocalSoftwareKeyboardController.current
-
-    val appliedTransformation = when {
-        isPassword && !isPasswordVisible -> PasswordVisualTransformation()
-        else -> visualTransformation
-    }
-
-    Column {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = ColorPrimary,
-            modifier = Modifier
-                .padding(start = 15.dp),
-        )
-        Spacer(Modifier.height(4.dp))
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .border(UiTokens.BorderWidthThick, ColorPrimary, RoundedCornerShape(UiTokens.CornerRadiusMedium))
-        ) {
-            OutlinedTextField(
-                value = value,
-                onValueChange = onValueChange,
-                placeholder = {
-                    Text(
-                        text = placeholder,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = ColorPlaceholder,
-                    )
-                },
-                visualTransformation = appliedTransformation,
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = keyboardType,
-                    capitalization = capitalization,
-                    imeAction = imeAction,
-                ),
-                keyboardActions = KeyboardActions(
-                    onNext = { focusManager.moveFocus(FocusDirection.Down) },
-                    onDone = {
-                        focusManager.clearFocus()
-                        keyboardController?.hide()
-                    },
-                ),
-                trailingIcon = if (isPassword && onTogglePasswordVisibility != null) {
-                    {
-                        IconButton(onClick = onTogglePasswordVisibility) {
-                            Icon(
-                                imageVector = if (isPasswordVisible) Icons.Filled.Visibility
-                                              else Icons.Filled.VisibilityOff,
-                                contentDescription = if (isPasswordVisible) "Скрыть пароль"
-                                                     else "Показать пароль",
-                                tint = ColorPlaceholder,
-                            )
-                        }
-                    }
-                } else null,
-                singleLine = true,
-                shape = RoundedCornerShape(UiTokens.CornerRadiusMedium),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = ColorPrimary,
-                    unfocusedBorderColor = ColorPrimary,
-                    focusedContainerColor = ColorBackground,
-                    unfocusedContainerColor = ColorBackground,
-                    cursorColor = ColorPrimary,
-                    focusedTextColor = ColorPrimary,
-                    unfocusedTextColor = ColorPrimary,
-                ),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(UiTokens.ButtonHeight),
-            )
-        }
-    }
-}
-
-/**
- * Общий Scaffold для всех шагов восстановления пароля
- * Содержит TopBar, контент и кнопку внизу (как в RegisterScreen)
- */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun GenericStepScaffold(
-    title: String,
-    onBack: () -> Unit,
-    onNext: () -> Unit,
-    isLoading: Boolean,
-    nextLabel: String,
-    isNextEnabled: Boolean,
-    content: @Composable () -> Unit
-) {
-    val focusManager = LocalFocusManager.current
-    val keyboardController = LocalSoftwareKeyboardController.current
-
-    BackHandler { onBack() }
-    Scaffold(
-        containerColor = ColorBackground,
-        topBar = {
-            TopAppBar(
-                title = {},
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = ColorBackground,
-                ),
-            )
-        },
-        bottomBar = {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(
-                        horizontal = UiTokens.BottomActionHorizontalPadding,
-                        vertical = UiTokens.BottomActionVerticalPadding,
-                    ),
-            ) {
-                Button(
-                    onClick = onNext,
-                    enabled = !isLoading && isNextEnabled,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(UiTokens.ButtonHeight),
-                    shape = RoundedCornerShape(UiTokens.CornerRadiusMedium),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = ColorPrimary,
-                        contentColor = ColorWhite,
-                        disabledContainerColor = ColorPlaceholder,
-                        disabledContentColor = ColorWhite,
-                    ),
-                ) {
-                    if (isLoading) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(UiTokens.ButtonLoadingIndicatorSize),
-                            color = ColorWhite,
-                            strokeWidth = 2.dp
-                        )
-                    } else {
-                        Text(
-                            text = nextLabel,
-                            style = MaterialTheme.typography.labelLarge,
-                        )
-                    }
-                }
-            }
-        },
-    ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .pointerInput(Unit) {
-                    detectTapGestures {
-                        focusManager.clearFocus()
-                        keyboardController?.hide()
-                    }
-                }
-                .verticalScroll(rememberScrollState())
-                .padding(
-                    horizontal = UiTokens.ScreenHorizontalPadding,
-                    vertical = UiTokens.ContentVerticalPadding,
-                ),
-        ) {
-            Spacer(Modifier.height(UiTokens.StepTopSpacer))
-            StepTitle(title)
-            Spacer(Modifier.height(UiTokens.SectionSpacing))
-            content()
-        }
-    }
-}
-
-/**
- * Компонент заголовка с горизонтальными разделителями по бокам
- * (как в RegisterScreen)
- */
-@Composable
-private fun StepTitle(text: String) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        HorizontalDivider(
-            modifier = Modifier.weight(1f),
-            thickness = 1.dp,
-            color = ColorPrimary,
-        )
-        Text(
-            text = text,
-            style = MaterialTheme.typography.headlineSmall,
-            color = ColorPrimary,
-            modifier = Modifier.padding(horizontal = 8.dp),
-        )
-        HorizontalDivider(
-            modifier = Modifier.weight(1f),
-            thickness = 1.dp,
-            color = ColorPrimary,
-        )
     }
 }
 

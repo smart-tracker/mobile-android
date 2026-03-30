@@ -21,6 +21,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -68,8 +69,8 @@ fun WorkoutHomeScreen(
                     onFinishClick = viewModel::onFinishClick,
                 )
             }
-            WorkoutTab.WORKOUTS -> PlaceholderScreen(label = "Тренировки", padding = padding)
-            WorkoutTab.MENU    -> PlaceholderScreen(label = "Меню", padding = padding)
+            WorkoutTab.WORKOUTS -> PlaceholderScreen(label = stringResource(R.string.tab_workouts), padding = padding)
+            WorkoutTab.MENU    -> PlaceholderScreen(label = stringResource(R.string.tab_menu), padding = padding)
         }
     }
 }
@@ -88,9 +89,9 @@ private fun WorkoutBottomBar(
         // Все три вкладки имеют одинаковое поведение:
         // при выборе — иконка обёрнута в бирюзовый круг, цвет иконки остаётся тёмным
         listOf(
-            Triple(WorkoutTab.START,    R.drawable.ic_nav_start,    "Старт"),
-            Triple(WorkoutTab.WORKOUTS, R.drawable.ic_nav_workouts, "Тренировки"),
-            Triple(WorkoutTab.MENU,     R.drawable.ic_nav_menu,     "Меню"),
+            Triple(WorkoutTab.START,    R.drawable.ic_nav_start,    stringResource(R.string.tab_start)),
+            Triple(WorkoutTab.WORKOUTS, R.drawable.ic_nav_workouts, stringResource(R.string.tab_workouts)),
+            Triple(WorkoutTab.MENU,     R.drawable.ic_nav_menu,     stringResource(R.string.tab_menu)),
         ).forEach { (tab, iconRes, label) ->
         NavigationBarItem(
             selected = currentTab == tab,

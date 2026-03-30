@@ -1,53 +1,40 @@
 package com.example.smarttracker.presentation.auth.register
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.RadioButtonDefaults
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -58,29 +45,27 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.OffsetMapping
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.smarttracker.domain.model.Gender
 import com.example.smarttracker.domain.model.GoalResponse
+import com.example.smarttracker.presentation.common.StepScaffold
+import com.example.smarttracker.presentation.common.StepTitle
+import com.example.smarttracker.presentation.common.StyledTextField
 import com.example.smarttracker.presentation.common.UiTokens
 import com.example.smarttracker.presentation.theme.ColorBackground
 import com.example.smarttracker.presentation.theme.ColorPlaceholder
 import com.example.smarttracker.presentation.theme.ColorPrimary
 import com.example.smarttracker.presentation.theme.ColorSecondary
-import com.example.smarttracker.presentation.theme.ColorWhite
 import java.util.Calendar
 
 @Composable
@@ -206,7 +191,6 @@ internal fun GoalSelectionItem(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun RegisterScaffold(
     title: String,
@@ -216,100 +200,10 @@ internal fun RegisterScaffold(
     isLoading: Boolean,
     isNextEnabled: Boolean = true,
     content: @Composable () -> Unit,
-) {
-    val focusManager = LocalFocusManager.current
-    val keyboardController = LocalSoftwareKeyboardController.current
-
-    BackHandler { onBack() }
-    Scaffold(
-        containerColor = ColorBackground,
-        topBar = {
-            TopAppBar(
-                title = {},
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = ColorBackground,
-                ),
-            )
-        },
-        bottomBar = {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(
-                        horizontal = UiTokens.BottomActionHorizontalPadding,
-                        vertical = UiTokens.BottomActionVerticalPadding,
-                    ),
-            ) {
-                Button(
-                    onClick = onNext,
-                    enabled = !isLoading && isNextEnabled,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(UiTokens.ButtonHeight),
-                    shape = RoundedCornerShape(UiTokens.CornerRadiusMedium),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = ColorPrimary,
-                        contentColor = ColorWhite,
-                        disabledContainerColor = ColorPlaceholder,
-                        disabledContentColor = ColorWhite,
-                    ),
-                ) {
-                    Text(
-                        text = if (isLoading) "Загрузка..." else nextLabel,
-                        style = androidx.compose.material3.MaterialTheme.typography.labelLarge,
-                    )
-                }
-            }
-        },
-    ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .pointerInput(Unit) {
-                    detectTapGestures {
-                        focusManager.clearFocus()
-                        keyboardController?.hide()
-                    }
-                }
-                .verticalScroll(rememberScrollState())
-                .padding(
-                    horizontal = UiTokens.ScreenHorizontalPadding,
-                    vertical = UiTokens.ContentVerticalPadding,
-                ),
-        ) {
-            Spacer(Modifier.height(UiTokens.StepTopSpacer))
-            RegisterStepTitle(title)
-            Spacer(Modifier.height(UiTokens.SectionSpacing))
-            content()
-        }
-    }
-}
+) = StepScaffold(title, onBack, onNext, nextLabel, isLoading, isNextEnabled, content)
 
 @Composable
-internal fun RegisterStepTitle(text: String) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        HorizontalDivider(
-            modifier = Modifier.weight(1f),
-            thickness = 1.dp,
-            color = ColorPrimary,
-        )
-        Text(
-            text = text,
-            style = androidx.compose.material3.MaterialTheme.typography.headlineSmall,
-            color = ColorPrimary,
-            modifier = Modifier.padding(horizontal = 8.dp),
-        )
-        HorizontalDivider(
-            modifier = Modifier.weight(1f),
-            thickness = 1.dp,
-            color = ColorPrimary,
-        )
-    }
-}
+internal fun RegisterStepTitle(text: String) = StepTitle(text)
 
 @Composable
 internal fun RegisterStyledTextField(
@@ -324,81 +218,7 @@ internal fun RegisterStyledTextField(
     isPassword: Boolean = false,
     isPasswordVisible: Boolean = false,
     onTogglePasswordVisibility: (() -> Unit)? = null,
-) {
-    val focusManager = LocalFocusManager.current
-    val keyboardController = LocalSoftwareKeyboardController.current
-
-    val appliedTransformation = when {
-        isPassword && !isPasswordVisible -> PasswordVisualTransformation()
-        else -> visualTransformation
-    }
-
-    Column {
-        Text(
-            text = label,
-            style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
-            color = ColorPrimary,
-            modifier = Modifier.padding(start = 15.dp),
-        )
-        Spacer(Modifier.height(4.dp))
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .border(UiTokens.BorderWidthThick, ColorPrimary, RoundedCornerShape(UiTokens.CornerRadiusMedium))
-        ) {
-            OutlinedTextField(
-                value = value,
-                onValueChange = onValueChange,
-                placeholder = {
-                    Text(
-                        text = placeholder,
-                        style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
-                        color = ColorPlaceholder,
-                    )
-                },
-                visualTransformation = appliedTransformation,
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = keyboardType,
-                    capitalization = capitalization,
-                    imeAction = imeAction,
-                ),
-                keyboardActions = KeyboardActions(
-                    onNext = { focusManager.moveFocus(FocusDirection.Down) },
-                    onDone = {
-                        focusManager.clearFocus()
-                        keyboardController?.hide()
-                    },
-                ),
-                trailingIcon = if (isPassword && onTogglePasswordVisibility != null) {
-                    {
-                        IconButton(onClick = onTogglePasswordVisibility, modifier = Modifier.size(40.dp)) {
-                            Icon(
-                                imageVector = if (isPasswordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                                contentDescription = if (isPasswordVisible) "Скрыть пароль" else "Показать пароль",
-                                tint = ColorPlaceholder,
-                                modifier = Modifier.size(24.dp),
-                            )
-                        }
-                    }
-                } else null,
-                singleLine = true,
-                shape = RoundedCornerShape(UiTokens.CornerRadiusMedium),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = ColorPrimary,
-                    unfocusedBorderColor = ColorPrimary,
-                    focusedContainerColor = ColorBackground,
-                    unfocusedContainerColor = ColorBackground,
-                    cursorColor = ColorPrimary,
-                    focusedTextColor = ColorPrimary,
-                    unfocusedTextColor = ColorPrimary,
-                ),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(UiTokens.ButtonHeight),
-            )
-        }
-    }
-}
+) = StyledTextField(value, onValueChange, label, placeholder, keyboardType, capitalization, imeAction, visualTransformation, isPassword, isPasswordVisible, onTogglePasswordVisibility)
 
 @Composable
 internal fun GenderSelector(

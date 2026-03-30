@@ -6,6 +6,6 @@ package com.example.smarttracker.domain.model
  */
 data class NicknameCheckResponse(
     val nickname: String,
-    val is_available: Boolean,
+    val isAvailable: Boolean,
     val message: String,
 )

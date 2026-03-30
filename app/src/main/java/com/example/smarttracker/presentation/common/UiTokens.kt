@@ -38,7 +38,7 @@ object UiTokens {
     val BottomActionHorizontalPadding: Dp = 16.dp
 
     /** Отступ контейнера основной кнопки внизу (вертикаль). */
-    val BottomActionVerticalPadding: Dp = 16.dp
+    val BottomActionVerticalPadding: Dp = 36.dp
 
     /** Отступ сверху для inline-ошибок у полей. */
     val InlineErrorTopPadding: Dp = 8.dp

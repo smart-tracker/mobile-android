@@ -1,5 +1,7 @@
 package com.example.smarttracker.data.repository
 
+import android.util.Log
+import com.example.smarttracker.data.local.TokenStorage
 import com.example.smarttracker.data.remote.AuthApiService
 import com.example.smarttracker.data.remote.dto.EmailVerificationDto
 import com.example.smarttracker.data.remote.dto.ForgotPasswordRequestDto
@@ -23,6 +25,7 @@ import javax.inject.Inject
  */
 class PasswordRecoveryRepositoryImpl @Inject constructor(
     private val api: AuthApiService,
+    private val tokenStorage: TokenStorage,
 ) : PasswordRecoveryRepository {
 
     override suspend fun initiateForgotPassword(request: ForgotPasswordRequest): Result<ForgotPasswordResult> =
@@ -52,13 +55,24 @@ class PasswordRecoveryRepositoryImpl @Inject constructor(
 
     override suspend fun resetPassword(request: ResetPasswordRequest): Result<ResetPasswordResult> =
         runCatching {
-            api.resetPassword(
+            val response = api.resetPassword(
                 ResetPasswordRequestDto(
                     email = request.email,
                     code = request.code,
                     newPassword = request.newPassword,
                     confirmPassword = request.confirmPassword,
                 )
-            ).toDomain()
+            )
+
+            // Backend возвращает токены после успешного сброса пароля —
+            // сохраняем их, чтобы пользователь был автоматически авторизован.
+            tokenStorage.saveTokens(
+                accessToken = response.accessToken,
+                refreshToken = response.refreshToken,
+                roleIds = tokenStorage.getUserRoles(), // Роли не меняются при сбросе пароля
+            )
+            Log.d("PasswordRecovery", "Токены сохранены после сброса пароля")
+
+            response.toDomain()
         }
 }

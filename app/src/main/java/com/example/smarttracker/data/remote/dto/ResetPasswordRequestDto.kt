@@ -7,15 +7,14 @@ import com.google.gson.annotations.SerializedName
  * Пользователь вводит код верификации и новый пароль на третьем шаге.
  */
 data class ResetPasswordRequestDto(
-    @SerializedName("email")
     val email: String,
-    
-    @SerializedName("code")
+
     val code: String,
-    
+
+    /** Domain использует `newPassword`, API ожидает `password` */
     @SerializedName("password")
     val newPassword: String,
-    
+
     @SerializedName("confirm_password")
     val confirmPassword: String
 )

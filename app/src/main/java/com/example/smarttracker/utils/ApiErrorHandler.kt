@@ -63,6 +63,10 @@ object ApiErrorHandler {
         "Password too short" to "Пароль слишком короткий (минимум 8 символов)",
         "password too short" to "Пароль слишком короткий (минимум 8 символов)",
         
+        // Email sending errors (SMTP недоступен на сервере)
+        "Не удалось отправить письмо" to "Не удалось отправить письмо. Попробуйте позже или обратитесь в поддержку",
+        "No route to host" to "Сервис временно недоступен. Попробуйте позже",
+
         // Server errors
         "Internal server error" to "Ошибка сервера. Попробуйте позже",
         "internal server error" to "Ошибка сервера. Попробуйте позже",

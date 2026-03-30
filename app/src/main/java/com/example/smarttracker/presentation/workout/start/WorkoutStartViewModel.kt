@@ -37,6 +37,8 @@ class WorkoutStartViewModel @Inject constructor(
         val isTypesLoading: Boolean = true,
         /** true когда тренировка запущена — переключает кнопку "Начать" на "Пауза"+"Завершить" */
         val isTracking: Boolean = false,
+        /** Сообщение об ошибке загрузки типов тренировок (null = нет ошибки) */
+        val errorMessage: String? = null,
     )
 
     private val _state = MutableStateFlow(UiState())
@@ -58,8 +60,11 @@ class WorkoutStartViewModel @Inject constructor(
                         isTypesLoading = false,
                     ) }
                 }
-                .onFailure {
-                    _state.update { it.copy(isTypesLoading = false) }
+                .onFailure { error ->
+                    _state.update { it.copy(
+                        isTypesLoading = false,
+                        errorMessage = error.localizedMessage ?: "Ошибка загрузки типов тренировок",
+                    ) }
                 }
         }
     }
@@ -90,7 +95,8 @@ class WorkoutStartViewModel @Inject constructor(
          * java.time доступен нативно при minSdk=26 — desugaring не нужен.
          */
         fun formatCurrentDate(): String {
-            val locale = Locale("ru")
+            // Используем системную локаль, чтобы день недели отображался на языке устройства
+            val locale = Locale.getDefault()
             val date = LocalDate.now()
             val dateStr = date.format(DateTimeFormatter.ofPattern("dd.MM.yyyy", locale))
             // EEEE даёт "среда" — капитализируем первую букву
