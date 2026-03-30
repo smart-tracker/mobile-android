@@ -45,9 +45,6 @@ class MockPasswordRecoveryRepository @Inject constructor() : PasswordRecoveryRep
         return Result.success(
             ForgotPasswordResult(
                 message = "Код восстановления отправлен на вашу почту",
-                email = request.email,
-                expiresIn = 600, // 10 minutes
-                emailSent = request.email
             )
         )
     }
@@ -87,8 +84,6 @@ class MockPasswordRecoveryRepository @Inject constructor() : PasswordRecoveryRep
         return Result.success(
             ResendResetCodeResult(
                 message = "Код повторно отправлен на вашу почту",
-                expiresAt = "2025-06-10T10:15:30Z",
-                remainingSeconds = 600
             )
         )
     }

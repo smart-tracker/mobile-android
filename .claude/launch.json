@@ -1,0 +1,23 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "Build Debug APK",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "gradlew.bat", "assembleDebug"],
+      "port": 8080
+    },
+    {
+      "name": "Install & Run on Device",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "gradlew.bat", "installDebug"],
+      "port": 8081
+    },
+    {
+      "name": "Run Unit Tests",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "gradlew.bat", "test"],
+      "port": 8082
+    }
+  ]
+}

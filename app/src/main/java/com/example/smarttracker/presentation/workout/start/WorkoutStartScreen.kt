@@ -30,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -99,7 +100,7 @@ fun WorkoutStartScreen(
                 color = ColorPrimary,
             )
             Text(
-                text = "Продолжительность",
+                text = stringResource(R.string.workout_duration),
                 fontFamily = geologicaFontFamily,
                 fontWeight = FontWeight.Thin,
                 fontStyle = FontStyle.Italic,
@@ -117,9 +118,9 @@ fun WorkoutStartScreen(
                 .padding(horizontal = 16.dp),
             horizontalArrangement = Arrangement.SpaceEvenly,
         ) {
-            StatItem(value = "0.00 км",      label = "Дистанция")
-            StatItem(value = "00:00 мин/км", label = "Средняя скорость")
-            StatItem(value = "0 кКал",       label = "Калории")
+            StatItem(value = "0.00 км",      label = stringResource(R.string.workout_distance))
+            StatItem(value = "00:00 мин/км", label = stringResource(R.string.workout_avg_speed))
+            StatItem(value = "0 кКал",       label = stringResource(R.string.workout_calories))
         }
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -144,7 +145,7 @@ fun WorkoutStartScreen(
             if (state.workoutTypes.size < 4) {
                 WorkoutTypeIcon(
                     iconRes = R.drawable.ic_activity_other,
-                    contentDescription = "Ещё",
+                    contentDescription = stringResource(R.string.workout_more),
                     isActive = false,
                     onClick = {},
                 )
@@ -189,7 +190,7 @@ fun WorkoutStartScreen(
                     colors = ButtonDefaults.buttonColors(containerColor = ColorPrimary),
                 ) {
                     Text(
-                        text = "Начать тренировку",
+                        text = stringResource(R.string.workout_start),
                         fontFamily = geologicaFontFamily,
                         fontWeight = FontWeight.Light,
                         fontSize = 20.sp,
@@ -221,7 +222,7 @@ fun WorkoutStartScreen(
                         border = BorderStroke(1.dp, ColorPrimary),
                     ) {
                         Text(
-                            text = "Пауза",
+                            text = stringResource(R.string.workout_pause),
                             fontFamily = geologicaFontFamily,
                             fontWeight = FontWeight.Light,
                             fontSize = 20.sp,
@@ -240,7 +241,7 @@ fun WorkoutStartScreen(
                         colors = ButtonDefaults.buttonColors(containerColor = ColorPrimary),
                     ) {
                         Text(
-                            text = "Завершить",
+                            text = stringResource(R.string.workout_finish),
                             fontFamily = geologicaFontFamily,
                             fontWeight = FontWeight.Light,
                             fontSize = 20.sp,

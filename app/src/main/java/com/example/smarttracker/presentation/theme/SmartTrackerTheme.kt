@@ -2,7 +2,6 @@ package com.example.smarttracker.presentation.theme
 
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
-import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.text.TextStyle
@@ -79,7 +78,6 @@ val SmartTrackerTypography = Typography(
 )
 
 private val LightColorScheme = lightColorScheme()
-private val DarkColorScheme = darkColorScheme()
 
 @Composable
 fun SmartTrackerTheme(

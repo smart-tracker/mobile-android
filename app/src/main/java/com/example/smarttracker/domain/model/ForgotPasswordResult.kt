@@ -3,13 +3,10 @@ package com.example.smarttracker.domain.model
 /**
  * Результат успешной инициализации восстановления пароля.
  * Возвращается после первого шага (confirm email).
- * Contains information about verification code expiration and resend cooldown.
+ *
+ * Backend POST /password-reset/request возвращает пустой объект `{}`.
+ * Поле `message` заполняется дефолтным значением на стороне маппера.
  */
 data class ForgotPasswordResult(
     val message: String,
-    val email: String? = null,
-    /** Срок действия кода верификации в секундах (обычно 600 = 10 минут) */
-    val expiresIn: Int = 600,
-    /** Email, на который отправлен код (может отличаться от входного) */
-    val emailSent: String? = null
 )

@@ -479,11 +479,11 @@ class RegisterViewModel @Inject constructor(
 
             authRepository.checkNickname(nickname)
                 .onSuccess { response ->
-                    nicknameCheckCache[nickname] = response.is_available
+                    nicknameCheckCache[nickname] = response.isAvailable
                     
                     _state.update { state ->
                         state.copy(
-                            nicknameCheckStatus = if (response.is_available) {
+                            nicknameCheckStatus = if (response.isAvailable) {
                                 NicknameCheckStatus.SUCCESS("✓ Никнейм доступен")
                             } else {
                                 NicknameCheckStatus.ERROR("✗ Никнейм занят")

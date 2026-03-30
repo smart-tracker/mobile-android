@@ -1,17 +1,16 @@
 package com.example.smarttracker.data.remote.dto
 
-import com.google.gson.annotations.SerializedName
 import com.example.smarttracker.domain.model.ForgotPasswordResult
 
 /**
  * DTO для ответа на запрос initiateForgotPassword (POST /password-reset/request).
- * Возвращается когда пользователь вводит email для восстановления пароля.
+ * Backend возвращает пустой объект `{}` при успехе,
+ * поэтому все поля nullable с дефолтами.
  */
 data class ForgotPasswordResponseDto(
-    @SerializedName("message")
-    val message: String
+    val message: String? = null
 )
 
 fun ForgotPasswordResponseDto.toDomain(): ForgotPasswordResult = ForgotPasswordResult(
-    message = message
+    message = message ?: "Код отправлен на email"
 )

@@ -1,4 +1,44 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">SmartTracker</string>
+
+    <!-- Общие -->
+    <string name="loading">Загрузка…</string>
+    <string name="hide_password">Скрыть пароль</string>
+    <string name="show_password">Показать пароль</string>
+
+    <!-- Экран тренировки -->
+    <string name="workout_duration">Продолжительность</string>
+    <string name="workout_distance">Дистанция</string>
+    <string name="workout_avg_speed">Средняя скорость</string>
+    <string name="workout_calories">Калории</string>
+    <string name="workout_more">Ещё</string>
+    <string name="workout_start">Начать тренировку</string>
+    <string name="workout_pause">Пауза</string>
+    <string name="workout_finish">Завершить</string>
+    <string name="tab_start">Старт</string>
+    <string name="tab_workouts">Тренировки</string>
+    <string name="tab_menu">Меню</string>
+
+    <!-- Восстановление пароля -->
+    <string name="forgot_step1_title">Восстановление пароля (1/3)</string>
+    <string name="forgot_step2_title">Восстановление пароля (2/3)</string>
+    <string name="forgot_step3_title">Восстановление пароля (3/3)</string>
+    <string name="forgot_continue">Продолжить</string>
+    <string name="forgot_reset_password">Сбросить пароль</string>
+
+    <!-- Верификация кода -->
+    <string name="verification_code_sent">Код отправлен на </string>
+    <string name="verification_code_label">Введите код подтверждения</string>
+    <string name="verification_code_placeholder">Код подтверждения…</string>
+    <string name="verification_cooldown_prefix">Запросить новый код можно через </string>
+    <string name="verification_resend">Отправить код повторно</string>
+
+    <!-- Регистрация -->
+    <string name="register_step1_title">Регистрация (1/4)</string>
+    <string name="register_step2_title">Выбор роли (2/4)</string>
+    <string name="register_step3_title">Регистрация (3/4)</string>
+    <string name="register_step4_title">Подтверждение почты (4/4)</string>
+    <string name="register_create_account">Создать аккаунт</string>
+    <string name="register_next">Далее</string>
 </resources>

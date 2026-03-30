@@ -19,7 +19,7 @@ data class NicknameCheckResponseDto(
 
 fun NicknameCheckResponseDto.toDomain(): NicknameCheckResponse = NicknameCheckResponse(
     nickname = nickname,
-    is_available = isAvailable,
+    isAvailable = isAvailable,
     message = message
 )
 

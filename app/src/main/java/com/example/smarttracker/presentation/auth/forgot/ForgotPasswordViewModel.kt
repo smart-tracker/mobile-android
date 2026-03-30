@@ -130,7 +130,8 @@ class ForgotPasswordViewModel @Inject constructor(
                     currentStep = 2,
                     verificationCode = "",
                     verificationCodeError = null,
-                    verificationCodeExpiresIn = forgotResult.expiresIn,
+                    // Backend не возвращает expiresIn — используем дефолт 600 сек (10 минут)
+                    verificationCodeExpiresIn = 600,
                     isLoading = false,
                     generalError = null
                 )

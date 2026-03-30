@@ -3,9 +3,8 @@ package com.example.smarttracker.domain.usecase
 import com.example.smarttracker.domain.model.RegisterRequest
 import com.example.smarttracker.domain.model.RegisterResult
 import com.example.smarttracker.domain.repository.AuthRepository
+import com.example.smarttracker.domain.validation.EmailValidator
 import javax.inject.Inject
-
-private val EMAIL_REGEX = Regex("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$")
 
 /**
  * МОБ-1.4 — UseCase регистрации нового пользователя.
@@ -64,7 +63,7 @@ class RegisterUseCase @Inject constructor(
         if (request.email.isBlank()) {
             return "Введите email"
         }
-        if (!EMAIL_REGEX.matches(request.email)) {
+        if (!EmailValidator.isValid(request.email)) {
             return "Введите корректный email"
         }
 

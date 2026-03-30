@@ -1,17 +1,16 @@
 package com.example.smarttracker.data.remote.dto
 
-import com.google.gson.annotations.SerializedName
 import com.example.smarttracker.domain.model.ResendResetCodeResult
 
 /**
  * DTO для ответа на запрос resendResetCode (POST /password-reset/resend-verify-code).
- * Возвращается когда пользователь нажал "Отправить код повторно".
+ * Backend возвращает пустой объект `{}` при успехе,
+ * поэтому message nullable с дефолтом.
  */
 data class ResendResetCodeResponseDto(
-    @SerializedName("message")
-    val message: String
+    val message: String? = null
 )
 
 fun ResendResetCodeResponseDto.toDomain(): ResendResetCodeResult = ResendResetCodeResult(
-    message = message
+    message = message ?: "Код отправлен повторно"
 )
