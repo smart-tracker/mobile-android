@@ -284,18 +284,15 @@ fun LoginScreen(
                 }
             }
 
-            // ── Error Message ────────────────────────────────────────────────
-            if (state.errorMessage != null) {
-                Text(
-                    text = state.errorMessage,
-                    color = Color.Red,
-                    fontSize = 12.sp,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp)
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-            }
+            // ── Error Message (место зарезервировано — кнопки не смещаются) ──
+            Text(
+                text = state.errorMessage ?: "",
+                color = Color.Red,
+                fontSize = 12.sp,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp)
+            )
 
             Spacer(modifier = Modifier.height(12.dp))
 
