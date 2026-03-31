@@ -1,4 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.SmartTracker" parent="android:Theme.Material.Light.NoActionBar" />
+    <!--
+        Theme.Material3.Light.NoActionBar даёт все необходимые атрибуты для:
+        - enableEdgeToEdge() — читает R.attr.isLightTheme, определённый в Material3
+        - Material3 Compose компонентов (BottomSheet, NavigationBar и т.д.)
+        Без совместимого родителя android:Theme.Material.Light.NoActionBar
+        не определял R.attr.isLightTheme → "Invalid resource ID 0x00000000" в логах.
+    -->
+    <style name="Theme.SmartTracker" parent="Theme.Material3.Light.NoActionBar" />
 </resources>

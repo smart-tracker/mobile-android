@@ -65,6 +65,11 @@ android {
 }
 
 dependencies {
+    // Google Material — тема Theme.Material3.Light.NoActionBar нужна для enableEdgeToEdge()
+    // Без неё android:Theme.Material.Light.NoActionBar не определяет R.attr.isLightTheme,
+    // что вызывает "Invalid resource ID 0x00000000" в логах при запуске.
+    implementation(libs.google.material)
+
     // Core AndroidX
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
@@ -104,6 +109,9 @@ dependencies {
 
     // DataStore — хранение настроек
     implementation(libs.androidx.datastore.preferences)
+
+    // Coil — отображение изображений из File, URL и drawable через AsyncImage
+    implementation(libs.coil.compose)
 
     // Debug
     debugImplementation(libs.androidx.ui.tooling)

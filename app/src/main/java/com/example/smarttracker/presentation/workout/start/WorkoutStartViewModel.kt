@@ -29,8 +29,14 @@ class WorkoutStartViewModel @Inject constructor(
     data class UiState(
         /** Текущая дата в формате "DD.MM.YYYY (День недели)" */
         val currentDate: String = formatCurrentDate(),
-        /** Список доступных типов тренировок, подгружается с сервера */
+        /** Полный список типов тренировок с сервера */
         val workoutTypes: List<WorkoutType> = emptyList(),
+        /**
+         * Три типа, отображаемых в строке быстрого выбора.
+         * При выборе типа он перемещается на первое место, остальные сдвигаются вправо,
+         * крайний правый (3-й) вытесняется. Инициализируется первыми 3 типами из API.
+         */
+        val pinnedTypes: List<WorkoutType> = emptyList(),
         /** Выбранный тип — устанавливается после загрузки или после клика по иконке */
         val selectedType: WorkoutType? = null,
         /** true пока список типов загружается */
@@ -55,6 +61,7 @@ class WorkoutStartViewModel @Inject constructor(
                 .onSuccess { types ->
                     _state.update { it.copy(
                         workoutTypes = types,
+                        pinnedTypes  = types.take(3),
                         // Первый тип из списка выбран по умолчанию
                         selectedType = types.firstOrNull(),
                         isTypesLoading = false,
@@ -74,9 +81,17 @@ class WorkoutStartViewModel @Inject constructor(
         _state.update { it.copy(isTracking = true) }
     }
 
-    /** Пользователь кликнул на иконку типа — меняет выбранный тип */
-    fun onWorkoutTypeSelected(type: WorkoutType) {
+    /** Клик по иконке в быстром ряду — только меняет selectedType, порядок не трогает */
+    fun onQuickTypeSelected(type: WorkoutType) {
         _state.update { it.copy(selectedType = type) }
+    }
+
+    /** Выбор из шторки — тип встаёт на первое место, остальные сдвигаются */
+    fun onSheetTypeSelected(type: WorkoutType) {
+        _state.update { state ->
+            val newPinned = (listOf(type) + state.pinnedTypes.filter { it.id != type.id }).take(3)
+            state.copy(selectedType = type, pinnedTypes = newPinned)
+        }
     }
 
     /** Нажатие «Пауза» — приостанавливает трекинг, возвращает кнопку "Начать" */

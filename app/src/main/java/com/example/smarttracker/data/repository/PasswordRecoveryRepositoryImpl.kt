@@ -1,7 +1,5 @@
 package com.example.smarttracker.data.repository
 
-import android.util.Log
-import com.example.smarttracker.data.local.TokenStorage
 import com.example.smarttracker.data.remote.AuthApiService
 import com.example.smarttracker.data.remote.dto.EmailVerificationDto
 import com.example.smarttracker.data.remote.dto.ForgotPasswordRequestDto
@@ -18,14 +16,10 @@ import javax.inject.Inject
 
 /**
  * Реальная реализация PasswordRecoveryRepository через production API.
- *
- * ВНИМАНИЕ:
- * В текущий момент может быть не активирована через DI, если backend ещё не
- * реализовал recovery endpoints. Переключение производится в AuthModule.
+ * Активирована в AuthModule через @Binds.
  */
 class PasswordRecoveryRepositoryImpl @Inject constructor(
     private val api: AuthApiService,
-    private val tokenStorage: TokenStorage,
 ) : PasswordRecoveryRepository {
 
     override suspend fun initiateForgotPassword(request: ForgotPasswordRequest): Result<ForgotPasswordResult> =
@@ -55,24 +49,14 @@ class PasswordRecoveryRepositoryImpl @Inject constructor(
 
     override suspend fun resetPassword(request: ResetPasswordRequest): Result<ResetPasswordResult> =
         runCatching {
-            val response = api.resetPassword(
+            // Токены из ответа не сохраняем — ViewModel перенаправляет на логин через clearAll().
+            api.resetPassword(
                 ResetPasswordRequestDto(
                     email = request.email,
                     code = request.code,
                     newPassword = request.newPassword,
                     confirmPassword = request.confirmPassword,
                 )
-            )
-
-            // Backend возвращает токены после успешного сброса пароля —
-            // сохраняем их, чтобы пользователь был автоматически авторизован.
-            tokenStorage.saveTokens(
-                accessToken = response.accessToken,
-                refreshToken = response.refreshToken,
-                roleIds = tokenStorage.getUserRoles(), // Роли не меняются при сбросе пароля
-            )
-            Log.d("PasswordRecovery", "Токены сохранены после сброса пароля")
-
-            response.toDomain()
+            ).toDomain()
         }
 }

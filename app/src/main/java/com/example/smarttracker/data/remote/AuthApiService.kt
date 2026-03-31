@@ -4,6 +4,7 @@ import com.example.smarttracker.data.remote.dto.AuthResponseDto
 import com.example.smarttracker.data.remote.dto.EmailVerificationDto
 import com.example.smarttracker.data.remote.dto.ForgotPasswordRequestDto
 import com.example.smarttracker.data.remote.dto.ForgotPasswordResponseDto
+import com.example.smarttracker.data.remote.dto.ActivityTypeDto
 import com.example.smarttracker.data.remote.dto.GoalResponseDto
 import com.example.smarttracker.data.remote.dto.LoginRequestDto
 import com.example.smarttracker.data.remote.dto.NicknameCheckRequestDto
@@ -113,15 +114,14 @@ interface AuthApiService {
 
     /**
      * МОБ-6.2 — Получение ролей пользователя.
-     * API endpoint: GET /role/user_roles?email=...
-     * Возвращает список ролей, назначенных пользователю (из таблицы user_and_role).
-     * Используется после верификации email для инициализации BottomNavigation.
+     * API endpoint: GET /role/user_roles
+     * Авторизация через Bearer токен (OkHttp-интерцептор добавляет заголовок автоматически).
+     * Email-параметр убран — бэкенд определяет пользователя по токену.
      *
-     * @param email Email пользователя (используется для поиска в БД)
      * @return Список ролей с полями role_id и name
      */
     @GET("role/user_roles")
-    suspend fun getUserRoles(@Query("email") email: String): List<RoleDto>
+    suspend fun getUserRoles(): List<RoleDto>
 
     /**
      * МОБ-6 — Получение целей для регистрации (Step 2).
@@ -134,4 +134,13 @@ interface AuthApiService {
      */
     @GET("goal/")
     suspend fun getGoals(): List<GoalResponseDto>
+
+    /**
+     * Получение доступных типов активности.
+     * API endpoint: GET /training/types_activity
+     * Возвращает список типов с id, name и опциональным image_url.
+     * image_url будет добавлен бэкендом позже — пока всегда null.
+     */
+    @GET("training/types_activity")
+    suspend fun getActivityTypes(): List<ActivityTypeDto>
 }

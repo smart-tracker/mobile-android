@@ -67,32 +67,34 @@ class AuthRepositoryImpl @Inject constructor(
     override suspend fun verifyEmail(email: String, code: String): Result<AuthResult> =
         runCatching {
             val result = api.verifyEmail(EmailVerificationDto(email, code)).toDomain()
-            
-            // МОБ-6 — Проверить сохраненные роли из Step 2 регистрации
+
+            // Сначала сохраняем токены (без ролей) — чтобы интерцептор добавил Bearer
+            // в последующий вызов getUserRoles() (тот же принцип, что и в login()).
+            tokenStorage.saveTokens(result.accessToken, result.refreshToken, emptyList())
+
+            // МОБ-6 — Проверить сохранённые роли из Step 2 регистрации
             var roleIds = roleConfigStorage.getSelectedRoles()
-            
-            // Если ролей не было сохранено (переустановка приложения или регистрация без выбора) —
-            // пытаемся загрузить с API
+
+            // Если ролей нет (переустановка или EXPLORING без выбора) — грузим с API.
+            // Токен уже в хранилище → интерцептор добавит Authorization: Bearer.
             if (roleIds.isEmpty()) {
                 val rolesResult = runCatching {
-                    api.getUserRoles(email).map { it.roleId }
+                    api.getUserRoles().map { it.roleId }
                 }
-                
+
                 rolesResult
                     .onSuccess { roles -> roleIds = roles }
                     .onFailure { error ->
-                        // Логируем ошибку, но не блокируем верификацию
-                        // Может быть, это EXPLORING пользователь или сервер недоступен
                         Log.w(
                             "AuthRepository",
                             "Failed to load user roles during email verification: ${error.message}"
                         )
                     }
             }
-            
-            // Сохранить токены И роли (даже если roleIds пуста из-за ошибки или EXPLORING регистрации)
+
+            // Обновляем хранилище с ролями (токены те же)
             tokenStorage.saveTokens(result.accessToken, result.refreshToken, roleIds)
-            
+
             result
         }
 
@@ -115,12 +117,19 @@ class AuthRepositoryImpl @Inject constructor(
     override suspend fun login(email: String, password: String): Result<AuthResult> =
         runCatching {
             val result = api.login(LoginRequestDto(email, password)).toDomain()
-            
-            // Загрузить роли пользователя (свежие данные с API)
+
+            // Сначала сохраняем токены (без ролей), чтобы OkHttp-интерцептор мог добавить
+            // Authorization-заголовок в следующий запрос getUserRoles().
+            // Если записать токены ПОСЛЕ getUserRoles() — интерцептор прочитает пустое хранилище
+            // и запрос уйдёт без Bearer-токена → 401.
+            tokenStorage.saveTokens(result.accessToken, result.refreshToken, emptyList())
+
+            // Загрузить роли пользователя (свежие данные с API).
+            // Теперь токен уже в хранилище — интерцептор добавит Authorization: Bearer.
             val rolesResult = runCatching {
-                api.getUserRoles(email).map { it.roleId }
+                api.getUserRoles().map { it.roleId }
             }
-            
+
             val roleIds = rolesResult
                 .onFailure { error ->
                     Log.w(
@@ -129,7 +138,8 @@ class AuthRepositoryImpl @Inject constructor(
                     )
                 }
                 .getOrElse { emptyList() }
-            
+
+            // Обновляем роли (токены те же, только roleIds теперь заполнены)
             tokenStorage.saveTokens(result.accessToken, result.refreshToken, roleIds)
             result
         }

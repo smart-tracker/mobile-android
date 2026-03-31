@@ -149,11 +149,9 @@ com.example.smarttracker/
 `WorkoutRepositoryImpl` нужно реализовать после появления backend-эндпоинтов для типов тренировок.
 Активировать через DI в `AuthModule` (заменить `bindWorkoutRepository`).
 
-**MockPasswordRecoveryRepository** — временно используется вместо реальной реализации,
-так как backend эндпоинты `/auth/forgot-password`, `/auth/resend-reset-code`,
-`/auth/reset-password` пока не готовы.
-`PasswordRecoveryRepositoryImpl` подготовлен в коде — активировать через DI
-в `AuthModule` после готовности backend.
+**`PasswordRecoveryRepositoryImpl` активирован** — backend эндпоинты готовы:
+`POST /password-reset/request`, `/verify-code`, `/resend-verify-code`, `/confirm`.
+`MockPasswordRecoveryRepository` остался в коде, но в DI не используется.
 
 ---
 
@@ -164,6 +162,12 @@ com.example.smarttracker/
 - `POST /auth/login` → access_token, refresh_token
 - `POST /auth/refresh` → access_token, refresh_token (**query param!**)
 - `POST /auth/check-nickname` → is_available
+
+## API эндпоинты (восстановление пароля)
+- `POST /password-reset/request` → `{}` (тело пустое)
+- `POST /password-reset/verify-code` → `{}` (тело пустое)
+- `POST /password-reset/resend-verify-code` → `{}` (тело пустое)
+- `POST /password-reset/confirm` → access_token, refresh_token, token_type
 
 ---
 
