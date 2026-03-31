@@ -262,13 +262,29 @@ fun LoginScreen(
                     )
                 }
 
-                // ── Ссылка "Забыли пароль?" ──────────────────────────────
+                // ── Ошибка (слева) + "Забыли пароль?" (справа) в одной строке ──
+                // Высота Row всегда = высота TextButton → кнопки не смещаются.
+                // Отдельного блока под ошибку нет — место не резервируется.
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = UiTokens.InlineErrorTopPadding),
-                    horizontalArrangement = Arrangement.End
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
+                    if (state.errorMessage != null) {
+                        Text(
+                            text = state.errorMessage,
+                            color = Color.Red,
+                            fontSize = 12.sp,
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(start = 4.dp)
+                        )
+                    } else {
+                        // Spacer не добавляет высоты в Row — только занимает ширину,
+                        // чтобы "Забыли пароль?" оставалась прижатой вправо
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
                     TextButton(
                         onClick = onNavigateToPasswordRecovery,
                         enabled = !state.isLoading,
@@ -283,16 +299,6 @@ fun LoginScreen(
                     }
                 }
             }
-
-            // ── Error Message (место зарезервировано — кнопки не смещаются) ──
-            Text(
-                text = state.errorMessage ?: "",
-                color = Color.Red,
-                fontSize = 12.sp,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp)
-            )
 
             Spacer(modifier = Modifier.height(12.dp))
 

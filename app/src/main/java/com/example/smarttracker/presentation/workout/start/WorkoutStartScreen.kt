@@ -15,6 +15,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.LocationOn
@@ -22,9 +25,18 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.ui.graphics.ColorFilter
+import coil.compose.AsyncImage
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -33,7 +45,6 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.smarttracker.R
@@ -52,6 +63,7 @@ import com.example.smarttracker.presentation.theme.geologicaFontFamily
  *
  * Тип активности выбирается кликом напрямую по иконке в строке активностей.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WorkoutStartScreen(
     state: WorkoutStartViewModel.UiState,
@@ -59,9 +71,13 @@ fun WorkoutStartScreen(
     onBack: () -> Unit,
     onStartClick: () -> Unit,
     onTypeSelected: (WorkoutType) -> Unit,
+    onSheetTypeSelected: (WorkoutType) -> Unit,
     onPauseClick: () -> Unit,
     onFinishClick: () -> Unit,
 ) {
+    // Локальное состояние шторки выбора активности — чисто UI, не нужно в ViewModel
+    var showTypeSelector by remember { mutableStateOf(false) }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -134,22 +150,24 @@ fun WorkoutStartScreen(
                 .padding(horizontal = 8.dp, vertical = 6.dp),
             horizontalArrangement = Arrangement.SpaceEvenly,
         ) {
-            state.workoutTypes.take(4).forEach { type ->
+            // Первые 3 из pinnedTypes — быстрый выбор; порядок меняется при выборе
+            state.pinnedTypes.forEach { type ->
                 WorkoutTypeIcon(
-                    iconRes = iconResForKey(type.iconKey),
+                    // Приоритет: локальный файл → URL (Coil загружает сам) → drawable fallback
+                    iconModel = type.iconFile ?: type.imageUrl ?: iconResForKey(type.iconKey),
                     contentDescription = type.name,
-                    isActive = type.id == state.selectedType?.id,
+                    isActive = !showTypeSelector && type.id == state.selectedType?.id,
                     onClick = { onTypeSelected(type) },
                 )
             }
-            if (state.workoutTypes.size < 4) {
-                WorkoutTypeIcon(
-                    iconRes = R.drawable.ic_activity_other,
-                    contentDescription = stringResource(R.string.workout_more),
-                    isActive = false,
-                    onClick = {},
-                )
-            }
+            // 4-я кнопка — всегда ic_activity_other, открывает полный список
+            // Подсвечивается бирюзовым пока шторка открыта
+            WorkoutTypeIcon(
+                iconModel = R.drawable.ic_activity_other,
+                contentDescription = stringResource(R.string.workout_more),
+                isActive = showTypeSelector,
+                onClick = { showTypeSelector = true },
+            )
         }
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -252,6 +270,51 @@ fun WorkoutStartScreen(
             }
         }
     }
+
+    // ── Шторка выбора активности ─────────────────────────────────────────────
+    if (showTypeSelector) {
+        ModalBottomSheet(
+            onDismissRequest = { showTypeSelector = false },
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            containerColor = Color.White,
+            scrimColor = Color(0x4D0A1928), // rgba(10,25,40,0.30) — как в Figma
+        ) {
+            LazyColumn(
+                modifier = Modifier.fillMaxWidth(),
+                contentPadding = PaddingValues(bottom = 24.dp),
+            ) {
+                items(state.workoutTypes) { type ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                onSheetTypeSelected(type)
+                                showTypeSelector = false
+                            }
+                            .padding(horizontal = 16.dp, vertical = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        AsyncImage(
+                            model = type.iconFile ?: type.imageUrl ?: iconResForKey(type.iconKey),
+                            contentDescription = type.name,
+                            colorFilter = ColorFilter.tint(ColorPrimary),
+                            placeholder = painterResource(R.drawable.placeholder),
+                            error = painterResource(R.drawable.placeholder),
+                            modifier = Modifier.size(32.dp),
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            text = type.name,
+                            fontFamily = geologicaFontFamily,
+                            fontWeight = FontWeight.Normal,
+                            fontSize = 14.sp,
+                            color = ColorPrimary,
+                        )
+                    }
+                }
+            }
+        }
+    }
 }
 
 // ── Вспомогательные composable-ы ──────────────────────────────────────────────
@@ -281,11 +344,14 @@ private fun StatItem(value: String, label: String) {
 /**
  * Иконка типа активности.
  * Контейнер 42dp, иконка 32dp, border ColorPrimary 1dp, corners 5dp.
- * Активная: ColorSecondary фон + белая иконка. Неактивная: белый фон + тёмная иконка.
+ * Активная: ColorSecondary фон + белая иконка. Неактивная: белый фон + ColorPrimary иконка.
+ *
+ * @param iconModel Any? — принимает File (скачанная иконка) или Int (R.drawable.*).
+ *   Coil прозрачно обрабатывает оба типа. При ошибке загрузки показывает placeholder.
  */
 @Composable
 private fun WorkoutTypeIcon(
-    iconRes: Int,
+    iconModel: Any?,
     contentDescription: String,
     isActive: Boolean,
     onClick: () -> Unit,
@@ -299,19 +365,41 @@ private fun WorkoutTypeIcon(
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(
-            painter = painterResource(iconRes),
+        AsyncImage(
+            model = iconModel,
             contentDescription = contentDescription,
-            tint = ColorPrimary,
+            colorFilter = ColorFilter.tint(ColorPrimary),
+            placeholder = painterResource(R.drawable.placeholder),
+            error = painterResource(R.drawable.placeholder),
             modifier = Modifier.size(36.dp),
         )
     }
 }
 
-/** Маппинг iconKey → drawable resource id */
+/**
+ * Маппинг type_activ_id → drawable resource id. Один тип — одна иконка.
+ * Если для данного ID нет своей иконки — возвращается placeholder.png.
+ * ic_activity_other — иконка кнопки меню выбора активностей, здесь не используется.
+ * При добавлении новых иконок — добавить соответствующий ID в when.
+ *
+ * Текущий список API (GET /training/types_activity):
+ *  1  — Бег
+ *  2  — Северная ходьба
+ *  3  — Велосипед
+ *  4  — Силовая
+ *  5  — Ходьба
+ *  6  — Спортивное ориентирование бегом
+ *  7  — Спортивное ориентирование на лыжах
+ *  8  — Спортивное ориентирование на велосипеде
+ *  9  — Свободное катание на лыжах
+ *  10 — Классическое катание на лыжах
+ *  11 — Свободное катание на роллерах
+ *  12 — Классическое катание на роллерах
+ *  13 — Бег на беговой дорожке
+ */
 private fun iconResForKey(key: String): Int = when (key) {
-    "running" -> R.drawable.ic_activity_running
-    "walking" -> R.drawable.ic_activity_walking
-    "cycling" -> R.drawable.ic_activity_cycling
-    else      -> R.drawable.ic_activity_other
+    "1"  -> R.drawable.ic_activity_running  // Бег
+    "2"  -> R.drawable.ic_activity_walking  // Северная ходьба
+    "3"  -> R.drawable.ic_activity_cycling  // Велосипед
+    else -> R.drawable.placeholder          // нет своей иконки
 }

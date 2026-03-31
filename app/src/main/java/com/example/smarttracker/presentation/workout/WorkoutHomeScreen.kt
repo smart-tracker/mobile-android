@@ -64,7 +64,8 @@ fun WorkoutHomeScreen(
                     padding = padding,
                     onBack = onBack,
                     onStartClick = viewModel::onStartWorkoutClick,
-                    onTypeSelected = viewModel::onWorkoutTypeSelected,
+                    onTypeSelected = viewModel::onQuickTypeSelected,
+                    onSheetTypeSelected = viewModel::onSheetTypeSelected,
                     onPauseClick = viewModel::onPauseClick,
                     onFinishClick = viewModel::onFinishClick,
                 )

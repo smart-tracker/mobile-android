@@ -5,9 +5,10 @@ import com.example.smarttracker.data.local.RoleConfigStorage
 import com.example.smarttracker.data.local.RoleConfigStorageImpl
 import com.example.smarttracker.data.local.TokenStorage
 import com.example.smarttracker.data.local.TokenStorageImpl
+import okhttp3.Interceptor
 import com.example.smarttracker.data.remote.AuthApiService
 import com.example.smarttracker.data.repository.AuthRepositoryImpl
-import com.example.smarttracker.data.repository.MockWorkoutRepository
+import com.example.smarttracker.data.repository.WorkoutRepositoryImpl
 import com.example.smarttracker.data.repository.PasswordRecoveryRepositoryImpl
 import com.example.smarttracker.domain.repository.AuthRepository
 import com.example.smarttracker.domain.repository.PasswordRecoveryRepository
@@ -41,8 +42,9 @@ abstract class AuthModule {
 
     @Binds
     @Singleton
-    // Временный мок. Заменить на реальную реализацию после готовности backend-эндпоинтов.
-    abstract fun bindWorkoutRepository(impl: MockWorkoutRepository): WorkoutRepository
+    // Реальная реализация через GET /training/types_activity.
+    // Иконки скачиваются в фоне и кэшируются в filesDir при наличии image_url от бэкенда.
+    abstract fun bindWorkoutRepository(impl: WorkoutRepositoryImpl): WorkoutRepository
 
     @Binds
     @Singleton
@@ -57,12 +59,28 @@ abstract class AuthModule {
 
         @Provides
         @Singleton
-        fun provideOkHttpClient(): OkHttpClient {
+        fun provideOkHttpClient(tokenStorage: TokenStorage): OkHttpClient {
+            // Интерцептор авторизации: добавляет Bearer-токен ко всем запросам.
+            // Читает токен из TokenStorage — он уже должен быть сохранён к моменту вызова.
+            // Порядок важен: authInterceptor добавляется ДО logging, чтобы Authorization-заголовок
+            // был виден в логах.
+            val authInterceptor = Interceptor { chain ->
+                val token = tokenStorage.getAccessToken()
+                val request = if (token != null) {
+                    chain.request().newBuilder()
+                        .addHeader("Authorization", "Bearer $token")
+                        .build()
+                } else {
+                    chain.request()
+                }
+                chain.proceed(request)
+            }
             val logging = HttpLoggingInterceptor().apply {
                 level = if (BuildConfig.DEBUG) HttpLoggingInterceptor.Level.BODY
                         else HttpLoggingInterceptor.Level.NONE
             }
             return OkHttpClient.Builder()
+                .addInterceptor(authInterceptor)
                 .addInterceptor(logging)
                 .build()
         }
