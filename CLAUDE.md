@@ -40,11 +40,12 @@ API Docs: https://runtastic.gottland.ru/docs
 ```
 com.example.smarttracker/
 ├── data/
-│   ├── local/          (TokenStorage + TokenStorageImpl)
+│   ├── local/          (TokenStorage + TokenStorageImpl + IconCacheManager)
 │   ├── remote/
-│   │   ├── dto/        (DTO + mappers)
+│   │   ├── dto/        (DTO + mappers, в т.ч. ActivityTypeDto)
 │   │   └── AuthApiService.kt
-│   └── repository/     (AuthRepositoryImpl, MockWorkoutRepository)
+│   └── repository/     (AuthRepositoryImpl, WorkoutRepositoryImpl,
+│                        PasswordRecoveryRepositoryImpl)
 ├── di/                 (AuthModule.kt)
 ├── domain/
 │   ├── model/          (WorkoutType и др.)
@@ -138,6 +139,33 @@ com.example.smarttracker/
 
 10. **Legal-блок регистрации** — использовать `LinkAnnotation`, не `ClickableText` (deprecated).
 
+11. **Auth-интерцептор в OkHttpClient** — добавляет `Authorization: Bearer <token>` ко всем
+    запросам автоматически. Токен читается из `TokenStorage` в момент запроса.
+    Применяется ко всем эндпоинтам включая публичные (сервер игнорирует лишний заголовок).
+
+12. **Тайминг `getUserRoles` в `login()` и `verifyEmail()`** — токены СНАЧАЛА сохраняются
+    в `TokenStorage`, и только ПОТОМ вызывается `getUserRoles()`. Если сохранить после —
+    интерцептор прочитает пустое хранилище → 401. Паттерн: `saveTokens(emptyList)` →
+    `getUserRoles()` → `saveTokens(roleIds)`.
+
+13. **`GET /role/user_roles`** — не принимает `@Query("email")`. Использует Bearer-токен.
+    В `AuthApiService`: `suspend fun getUserRoles(): List<RoleDto>` (без параметров).
+
+14. **`iconKey` в `WorkoutType`** — это `type_activ_id.toString()` (не название!).
+    Маппинг в `iconResForKey()` в `WorkoutStartScreen.kt`: `"1"→бег`, `"2"→сев.ходьба`, `"3"→вело`.
+    Не использовать название для маппинга — оно зависит от языка API.
+
+15. **`WorkoutType.imageUrl`** — URL иконки с сервера. Coil использует его напрямую если
+    `iconFile == null` (файл ещё не скачан `IconCacheManager`). Цепочка: `iconFile ?: imageUrl ?: iconResForKey(iconKey)`.
+
+16. **Тема приложения** — `Theme.Material3.Light.NoActionBar` (из `com.google.android.material`).
+    Старая `android:Theme.Material.Light.NoActionBar` не определяет `R.attr.isLightTheme`,
+    что вызывает `Invalid resource ID 0x00000000` при вызове `enableEdgeToEdge()`.
+
+17. **Worktree + коммиты** — в worktree `.git` — это файл, а не директория.
+    Python-путь для `COMMIT_MSG`: читать реальный git-dir через `git rev-parse --git-dir`,
+    затем писать в `{git-dir}/COMMIT_MSG`.
+
 ---
 
 ## Текущие ограничения и временные решения
@@ -145,9 +173,13 @@ com.example.smarttracker/
 **`WorkoutHomeScreen` активен** — маршрут `Screen.Home` ведёт на `WorkoutHomeScreen`.
 Вкладки «Тренировки» и «Меню» — заглушки (`PlaceholderScreen`), реализация pending.
 
-**`MockWorkoutRepository`** — временно используется вместо реальной реализации.
-`WorkoutRepositoryImpl` нужно реализовать после появления backend-эндпоинтов для типов тренировок.
-Активировать через DI в `AuthModule` (заменить `bindWorkoutRepository`).
+**`WorkoutRepositoryImpl` активирован** — загружает типы активностей из `GET /training/types_activity`.
+Иконки кэшируются в `filesDir/activity_icons/{id}.png` через `IconCacheManager`.
+`MockWorkoutRepository` остался в коде, но в DI не используется.
+
+**Иконки активностей** — `image_path` возвращается бэкендом. Для некоторых типов
+(например, Ходьба id=5) URL может быть недоступен — показывается `placeholder.png`.
+На следующий запуск после успешного скачивания иконка отобразится из `filesDir`.
 
 **`PasswordRecoveryRepositoryImpl` активирован** — backend эндпоинты готовы:
 `POST /password-reset/request`, `/verify-code`, `/resend-verify-code`, `/confirm`.
@@ -162,6 +194,12 @@ com.example.smarttracker/
 - `POST /auth/login` → access_token, refresh_token
 - `POST /auth/refresh` → access_token, refresh_token (**query param!**)
 - `POST /auth/check-nickname` → is_available
+- `GET /role/user_roles` → `[{role_id, name}]` (**Bearer-токен обязателен**)
+
+## API эндпоинты (тренировки)
+- `GET /training/types_activity` → `[{type_activ_id, name, image_path}]`
+  - `image_path` — URL иконки (может быть `placeholder.png` для типов без иконки)
+  - Публичный эндпоинт, Bearer-токен не нужен (но интерцептор добавит его автоматически)
 
 ## API эндпоинты (восстановление пароля)
 - `POST /password-reset/request` → `{}` (тело пустое)
@@ -180,10 +218,13 @@ Scope — kebab-case: `feat(nickname-validation)`, не `feat(МОБ-2.3)`
 Надёжный способ — Python-скрипт с Unicode-эскейпами:
 ```python
 msg = u'feat(auth-validation): описание'
-with open(r'.git\COMMIT_MSG', 'wb') as f:
+# В worktree .git — файл, а не директория. Путь к git-dir:
+# git rev-parse --git-dir  →  C:/.../.git/worktrees/serene-haibt
+git_dir = 'C:/Users/novsm/Documents/GitHub/mobile/.git/worktrees/serene-haibt'
+with open(f'{git_dir}/COMMIT_MSG', 'wb') as f:
     f.write(msg.encode('utf-8'))
 ```
-Затем: `git commit -F .git/COMMIT_MSG`
+Затем: `git commit -F "<git_dir>/COMMIT_MSG"`
 
 ---
 
