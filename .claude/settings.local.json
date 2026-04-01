@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(cp /c/Users/novsm/Documents/GitHub/mobile/local.properties /c/Users/novsm/Documents/GitHub/mobile/.claude/worktrees/silly-napier/local.properties)",
-      "Bash(./gradlew assembleDebug)"
+      "Bash(./gradlew assembleDebug)",
+      "WebFetch(domain:maplibre.org)",
+      "WebSearch"
     ]
   }
 }
