@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -23,6 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -45,6 +47,8 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.smarttracker.R
@@ -53,6 +57,7 @@ import com.example.smarttracker.presentation.theme.ColorBackground
 import com.example.smarttracker.presentation.theme.ColorPrimary
 import com.example.smarttracker.presentation.theme.ColorSecondary
 import com.example.smarttracker.presentation.theme.geologicaFontFamily
+import com.example.smarttracker.presentation.workout.permission.LocationPermissionHandler
 
 /**
  * Экран начала / активной тренировки.
@@ -75,6 +80,11 @@ fun WorkoutStartScreen(
     onPauseClick: () -> Unit,
     onFinishClick: () -> Unit,
 ) {
+    // Запрашиваем разрешения при открытии экрана.
+    // Результат в ViewModel не передаётся: сервис сам обработает SecurityException при отказе,
+    // а ViewModel переведёт gpsStatus в UNAVAILABLE по таймауту.
+    LocationPermissionHandler(onPermissionsResult = { /* обработка в сервисе */ })
+
     // Локальное состояние шторки выбора активности — чисто UI, не нужно в ViewModel
     var showTypeSelector by remember { mutableStateOf(false) }
 
@@ -109,7 +119,7 @@ fun WorkoutStartScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
-                text = "00:00:00",
+                text = state.timerDisplay,
                 fontFamily = geologicaFontFamily,
                 fontWeight = FontWeight.Bold,
                 fontSize = 32.sp,
@@ -134,9 +144,11 @@ fun WorkoutStartScreen(
                 .padding(horizontal = 16.dp),
             horizontalArrangement = Arrangement.SpaceEvenly,
         ) {
-            StatItem(value = "0.00 км",      label = stringResource(R.string.workout_distance))
-            StatItem(value = "00:00 мин/км", label = stringResource(R.string.workout_avg_speed))
-            StatItem(value = "0 кКал",       label = stringResource(R.string.workout_calories))
+            // valueMinWidth фиксирует ширину блока по самому длинному ожидаемому значению,
+            // чтобы SpaceEvenly не прыгал при смене "0.99" → "1.00", "9" → "10" и т.д.
+            StatItem(value = state.distanceDisplay, label = stringResource(R.string.workout_distance), valueMinWidth = 100.dp)
+            StatItem(value = state.avgSpeedDisplay, label = stringResource(R.string.workout_avg_speed), valueMinWidth = 140.dp)
+            StatItem(value = state.caloriesDisplay, label = stringResource(R.string.workout_calories), valueMinWidth = 110.dp)
         }
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -195,8 +207,68 @@ fun WorkoutStartScreen(
                 )
             }
 
+            // ── GPS-оверлей — поверх карты, под кнопками ──────────────────────
+            // Показывается только во время активного трекинга, пока нет фикса или сигнал слабый
+            if (state.isTracking) {
+                when (state.gpsStatus) {
+                    WorkoutStartViewModel.GpsStatus.SEARCHING -> {
+                        // Полупрозрачный тёмный фон + спиннер + подпись
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color(0xAA000000)),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                CircularProgressIndicator(color = Color.White, strokeWidth = 3.dp)
+                                Text(
+                                    text = "Поиск GPS-сигнала...",
+                                    fontFamily = geologicaFontFamily,
+                                    fontWeight = FontWeight.Normal,
+                                    fontSize = 16.sp,
+                                    color = Color.White,
+                                )
+                                Text(
+                                    text = "Не закрывайте приложение",
+                                    fontFamily = geologicaFontFamily,
+                                    fontWeight = FontWeight.Thin,
+                                    fontSize = 13.sp,
+                                    color = Color.White,
+                                )
+                            }
+                        }
+                    }
+                    WorkoutStartViewModel.GpsStatus.UNAVAILABLE -> {
+                        // Предупреждение без блокировки экрана — пользователь должен выйти на улицу
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .align(Alignment.TopCenter)
+                                .background(Color(0xCC1A1A1A))
+                                .padding(horizontal = 16.dp, vertical = 10.dp),
+                        ) {
+                            Text(
+                                text = "GPS-сигнал слабый. Выйдите на открытое место.",
+                                fontFamily = geologicaFontFamily,
+                                fontWeight = FontWeight.Normal,
+                                fontSize = 13.sp,
+                                color = Color.White,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
+                    }
+                    WorkoutStartViewModel.GpsStatus.ACQUIRED -> { /* оверлей не нужен */ }
+                }
+            }
+
             // Кнопка(и) — поверх карты, прижата к низу
             if (!state.isTracking) {
+                // isPaused = пауза (таймер уже шёл), иначе — старт с нуля
+                val isPaused = state.elapsedMs > 0
                 Button(
                     onClick = onStartClick,
                     modifier = Modifier
@@ -208,7 +280,9 @@ fun WorkoutStartScreen(
                     colors = ButtonDefaults.buttonColors(containerColor = ColorPrimary),
                 ) {
                     Text(
-                        text = stringResource(R.string.workout_start),
+                        text = stringResource(
+                            if (isPaused) R.string.workout_resume else R.string.workout_start
+                        ),
                         fontFamily = geologicaFontFamily,
                         fontWeight = FontWeight.Light,
                         fontSize = 20.sp,
@@ -319,9 +393,15 @@ fun WorkoutStartScreen(
 
 // ── Вспомогательные composable-ы ──────────────────────────────────────────────
 
-/** Одна статистика: крупное значение + мелкий лейбл под ним */
+/**
+ * Одна статистика: крупное значение + мелкий лейбл под ним.
+ *
+ * @param valueMinWidth Минимальная ширина текста значения. Фиксирует ширину блока по
+ *   самому длинному ожидаемому значению, чтобы SpaceEvenly не делал рывков при смене
+ *   цифр (например, "0.99 км" → "1.00 км" меняет ширину на одну цифру слева).
+ */
 @Composable
-private fun StatItem(value: String, label: String) {
+private fun StatItem(value: String, label: String, valueMinWidth: Dp = Dp.Unspecified) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
             text = value,
@@ -329,6 +409,11 @@ private fun StatItem(value: String, label: String) {
             fontWeight = FontWeight.Bold,
             fontSize = 20.sp,
             color = ColorPrimary,
+            textAlign = TextAlign.Center,
+            modifier = if (valueMinWidth != Dp.Unspecified)
+                Modifier.widthIn(min = valueMinWidth)
+            else
+                Modifier,
         )
         Text(
             text = label,

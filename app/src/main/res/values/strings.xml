@@ -14,6 +14,7 @@
     <string name="workout_calories">Калории</string>
     <string name="workout_more">Ещё</string>
     <string name="workout_start">Начать тренировку</string>
+    <string name="workout_resume">Продолжить</string>
     <string name="workout_pause">Пауза</string>
     <string name="workout_finish">Завершить</string>
     <string name="tab_start">Старт</string>

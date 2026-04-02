@@ -113,6 +113,11 @@ dependencies {
     // Coil — отображение изображений из File, URL и drawable через AsyncImage
     implementation(libs.coil.compose)
 
+    // Room — локальная база данных GPS-точек тренировок
+    implementation(libs.room.runtime)
+    implementation(libs.room.ktx)
+    kapt(libs.room.compiler)
+
     // Debug
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
