@@ -16,6 +16,7 @@ coroutines = "1.8.1"
 securityCrypto = "1.1.0-alpha06"
 datastorePreferences = "1.1.1"
 coil = "2.7.0"
+room = "2.6.1"
 
 [libraries]
 # Google Material — тема для совместимости с enableEdgeToEdge() и Material3
@@ -64,6 +65,11 @@ androidx-datastore-preferences = { group = "androidx.datastore", name = "datasto
 
 # Coil — загрузка изображений из File, URL, drawable
 coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }
+
+# Room — локальная база данных (GPS-точки тренировок)
+room-runtime  = { group = "androidx.room", name = "room-runtime",  version.ref = "room" }
+room-ktx      = { group = "androidx.room", name = "room-ktx",      version.ref = "room" }
+room-compiler = { group = "androidx.room", name = "room-compiler",  version.ref = "room" }
 
 # Test
 junit = { group = "junit", name = "junit", version = "4.13.2" }

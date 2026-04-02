@@ -1,22 +1,29 @@
 package com.example.smarttracker.di
 
+import android.content.Context
+import androidx.room.Room
 import com.example.smarttracker.BuildConfig
 import com.example.smarttracker.data.local.RoleConfigStorage
 import com.example.smarttracker.data.local.RoleConfigStorageImpl
 import com.example.smarttracker.data.local.TokenStorage
 import com.example.smarttracker.data.local.TokenStorageImpl
+import com.example.smarttracker.data.local.db.GpsPointDao
+import com.example.smarttracker.data.local.db.SmartTrackerDatabase
 import okhttp3.Interceptor
 import com.example.smarttracker.data.remote.AuthApiService
 import com.example.smarttracker.data.repository.AuthRepositoryImpl
 import com.example.smarttracker.data.repository.WorkoutRepositoryImpl
 import com.example.smarttracker.data.repository.PasswordRecoveryRepositoryImpl
+import com.example.smarttracker.data.repository.location.LocationRepositoryImpl
 import com.example.smarttracker.domain.repository.AuthRepository
+import com.example.smarttracker.domain.repository.LocationRepository
 import com.example.smarttracker.domain.repository.PasswordRecoveryRepository
 import com.example.smarttracker.domain.repository.WorkoutRepository
 import dagger.Binds
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
+import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
@@ -54,6 +61,11 @@ abstract class AuthModule {
     // POST /password-reset/resend-verify-code
     // POST /password-reset/confirm
     abstract fun bindPasswordRecoveryRepository(impl: PasswordRecoveryRepositoryImpl): PasswordRecoveryRepository
+
+    @Binds
+    @Singleton
+    // Реализация через GpsPointDao (Room). Используется в Этапах 2–5.
+    abstract fun bindLocationRepository(impl: LocationRepositoryImpl): LocationRepository
 
     companion object {
 
@@ -98,5 +110,18 @@ abstract class AuthModule {
         @Singleton
         fun provideAuthApiService(retrofit: Retrofit): AuthApiService =
             retrofit.create(AuthApiService::class.java)
+
+        @Provides
+        @Singleton
+        fun provideDatabase(@ApplicationContext context: Context): SmartTrackerDatabase =
+            Room.databaseBuilder(
+                context,
+                SmartTrackerDatabase::class.java,
+                "smart_tracker.db"
+            ).build()
+
+        @Provides
+        @Singleton
+        fun provideGpsPointDao(db: SmartTrackerDatabase): GpsPointDao = db.gpsPointDao()
     }
 }
