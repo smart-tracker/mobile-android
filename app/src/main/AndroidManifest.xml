@@ -4,6 +4,17 @@
     <!-- Доступ к интернету для Retrofit -->
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- GPS -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
+    <!-- Foreground Service -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+
+    <!-- Уведомления (Android 13+) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <application
         android:name=".SmartTrackerApp"
         android:allowBackup="true"
@@ -25,6 +36,12 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- GPS Foreground Service — собирает координаты тренировки в фоне -->
+        <service
+            android:name=".data.location.LocationTrackingService"
+            android:foregroundServiceType="location"
+            android:exported="false" />
 
     </application>
 
