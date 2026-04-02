@@ -30,6 +30,29 @@ data class TrainingStats(
  */
 class CalculateTrainingStatsUseCase @Inject constructor() {
 
+    /**
+     * Вычисляет дополнительную дистанцию в метрах только для новых точек.
+     *
+     * Принимает полный список точек и количество уже обработанных.
+     * Обрабатывает только пары начиная с (fromIndex - 1), включая последнюю «старую» точку,
+     * чтобы не потерять отрезок между ней и первой новой.
+     *
+     * Используется для инкрементального расчёта статистики: O(n_new) вместо O(n_total).
+     *
+     * @param points   полный список GPS-точек тренировки
+     * @param fromIndex количество точек, уже обработанных в предыдущем вызове
+     * @return дельта дистанции в метрах для новых пар точек
+     */
+    fun calculateDeltaDistance(points: List<LocationPoint>, fromIndex: Int): Double {
+        if (points.size < 2) return 0.0
+        // Начинаем с (fromIndex - 1), чтобы соединить последнюю старую точку с первой новой
+        val startIdx = maxOf(0, fromIndex - 1)
+        if (startIdx >= points.size - 1) return 0.0
+        return points.subList(startIdx, points.size)
+            .zipWithNext()
+            .sumOf { (p1, p2) -> haversineMeters(p1, p2) }
+    }
+
     fun execute(points: List<LocationPoint>): TrainingStats {
         if (points.size < 2) {
             return TrainingStats(

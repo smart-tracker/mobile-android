@@ -12,14 +12,17 @@ import com.example.smarttracker.domain.repository.WorkoutRepository
 import com.example.smarttracker.domain.usecase.CalculateTrainingStatsUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -187,38 +190,70 @@ class WorkoutStartViewModel @Inject constructor(
     /**
      * Единый наблюдатель за GPS-точками текущей тренировки.
      *
-     * Параллельно запускает:
-     * - Таймаут 30 сек → UNAVAILABLE (если нет ни одной точки)
-     * - collect на Flow: первая точка → ACQUIRED, пересчёт статистики на каждое обновление
+     * Инкрементальный расчёт статистики: вместо полного прохода по всем точкам (O(n²))
+     * на каждое событие Flow обрабатываются только новые пары точек (O(n_new)).
+     * Тяжёлый расчёт выполняется на Dispatchers.Default, не блокируя UI.
+     * collectLatest отменяет предыдущий блок при поступлении нового события.
+     *
+     * GPS-таймаут: 30 сек без новых точек → UNAVAILABLE; перезапускается после каждой точки,
+     * поэтому потеря сигнала после ACQUIRED тоже корректно обнаруживается.
      */
     private fun observeTrackingData(trainingId: String) {
         observerJob?.cancel()
         observerJob = viewModelScope.launch {
-            // Дочерний Job: срабатывает через 30 сек если нет GPS-фикса
-            val timeoutJob = launch {
-                delay(LocationConfig.GPS_FIX_TIMEOUT_MS)
-                _state.update { state ->
-                    if (state.gpsStatus == GpsStatus.SEARCHING)
-                        state.copy(gpsStatus = GpsStatus.UNAVAILABLE)
-                    else
-                        state
+            // Инкрементальный счётчик живёт в скоупе coroutine — синхронизация не нужна
+            var accumulatedDistanceM = 0.0
+            var processedCount = 0
+
+            // Дочерний Job таймаута: перезапускается после каждой новой точки,
+            // чтобы корректно обнаруживать потерю сигнала и после ACQUIRED.
+            var timeoutJob: Job? = null
+            fun restartTimeout() {
+                timeoutJob?.cancel()
+                timeoutJob = launch {
+                    delay(LocationConfig.GPS_FIX_TIMEOUT_MS)
+                    _state.update { it.copy(gpsStatus = GpsStatus.UNAVAILABLE) }
                 }
             }
+            restartTimeout()
 
             locationRepository.observePointsForTraining(trainingId)
-                .collect { points ->
-                    // GPS-статус: первая точка с хорошей accuracy (отфильтровано сервисом) → ACQUIRED
-                    if (points.isNotEmpty() && _state.value.gpsStatus != GpsStatus.ACQUIRED) {
-                        timeoutJob.cancel()
-                        _state.update { it.copy(gpsStatus = GpsStatus.ACQUIRED) }
+                .collectLatest { points ->
+                    // GPS-статус: первая точка → ACQUIRED; таймаут перезапускается на каждой точке
+                    if (points.isNotEmpty()) {
+                        if (_state.value.gpsStatus != GpsStatus.ACQUIRED) {
+                            _state.update { it.copy(gpsStatus = GpsStatus.ACQUIRED) }
+                        }
+                        restartTimeout()
                     }
 
-                    // Статистика пересчитывается на каждое новое событие Flow
-                    val stats = calculateTrainingStatsUseCase.execute(points)
+                    // Инкрементальный расчёт на фоновом потоке, чтобы не блокировать UI.
+                    // Внутри withContext нет точек приостановки, поэтому collectLatest
+                    // не может прервать блок посередине — accumulatedDistanceM и processedCount
+                    // всегда обновляются атомарно (вместе или не обновляются вовсе).
+                    val (newDistanceM, avgSpeedMps, kilocalories) = withContext(Dispatchers.Default) {
+                        val delta = calculateTrainingStatsUseCase.calculateDeltaDistance(
+                            points, processedCount
+                        )
+                        accumulatedDistanceM += delta
+                        processedCount = points.size
+
+                        // Длительность по монотонным часам (elapsedNanos) — не зависит от NTP/смены времени.
+                        // Известное ограничение: elapsedNanos продолжает тикать во время паузы,
+                        // поэтому пауза включается в итоговую длительность.
+                        val durationSeconds = if (points.size >= 2)
+                            (points.last().elapsedNanos - points.first().elapsedNanos) / 1_000_000_000L
+                        else 0L
+
+                        val speed = if (durationSeconds > 0) accumulatedDistanceM / durationSeconds else 0.0
+                        val kcal = (accumulatedDistanceM / 1000.0 * 70.0).toFloat()
+                        Triple(accumulatedDistanceM, speed, kcal)
+                    }
+
                     _state.update { it.copy(
-                        distanceDisplay = "%.2f км".format(stats.distanceMeters / 1000.0),
-                        avgSpeedDisplay = formatPace(stats.avgSpeedMps),
-                        caloriesDisplay = "${stats.kilocalories.toInt()} кКал",
+                        distanceDisplay = "%.2f км".format(newDistanceM / 1000.0),
+                        avgSpeedDisplay = formatPace(avgSpeedMps),
+                        caloriesDisplay = "${kilocalories.toInt()} кКал",
                     ) }
                 }
         }
