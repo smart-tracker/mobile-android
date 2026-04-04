@@ -198,6 +198,7 @@ fun WorkoutStartScreen(
                 modifier = Modifier.fillMaxSize(),
                 currentLocation = state.trackPoints.lastOrNull(),
                 trackPoints = state.trackPoints,
+                isTracking = state.isTracking,
                 mapTilesFailed = state.mapTilesFailed,
                 onMapTilesFailed = onMapTilesFailed,
             )

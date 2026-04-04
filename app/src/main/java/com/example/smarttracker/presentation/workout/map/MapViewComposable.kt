@@ -1,11 +1,11 @@
 package com.example.smarttracker.presentation.workout.map
 
+import android.animation.ValueAnimator
+import android.view.Gravity
+import android.view.animation.LinearInterpolator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
@@ -32,23 +32,32 @@ import org.maplibre.geojson.Point
  * Жизненный цикл MapView привязан к Compose lifecycle через [DisposableEffect] +
  * [LocalLifecycleOwner]. Карта загружает OpenFreeMap-стиль (без API-ключа).
  *
- * Два слоя поверх базовой карты:
+ * Три слоя поверх базовой карты:
  * - "track-layer" — LineLayer с цветом ColorSecondary, рисует GPS-трек тренировки
  * - "location-layer" — CircleLayer (синяя точка), показывает текущее положение
  *
- * Офлайн: при [mapTilesFailed] == true сразу показывает [OfflineMapFallback].
- * Пока тайлы грузятся из авто-кэша (даже в авиарежиме) — карта показывается штатно.
+ * Поведение камеры (Tweak 2):
+ * - [isTracking] == true: камера плавно следует за маркером (animateCamera, 800 мс)
+ * - [isTracking] == false (пауза/стоп): камера не двигается — пользователь может листать карту
  *
- * @param currentLocation последняя GPS-точка; при первом получении камера анимируется к ней
+ * Плавное движение маркера (Tweak 3):
+ * - Переход между GPS-точками анимируется через ValueAnimator (800 мс, LinearInterpolator)
+ * - Предыдущий аниматор отменяется при появлении новой точки
+ *
+ * Офлайн: при [mapTilesFailed] == true сразу показывает [OfflineMapFallback].
+ *
+ * @param currentLocation последняя GPS-точка
  * @param trackPoints все точки текущей тренировки для рисования трека
- * @param mapTilesFailed true когда MapLibre отрапортовал об ошибке загрузки тайлов
- * @param onMapTilesFailed колбэк при onDidFailLoadingMap; устанавливает mapTilesFailed в ViewModel
+ * @param isTracking true пока тренировка запущена (не на паузе); управляет следованием камеры
+ * @param mapTilesFailed true когда MapLibre не смог загрузить тайлы (нет сети + нет кэша)
+ * @param onMapTilesFailed колбэк при onDidFailLoadingMap
  */
 @Composable
 fun MapViewComposable(
     modifier: Modifier = Modifier,
     currentLocation: LocationPoint?,
     trackPoints: List<LocationPoint>,
+    isTracking: Boolean,
     mapTilesFailed: Boolean,
     onMapTilesFailed: () -> Unit,
 ) {
@@ -58,17 +67,29 @@ fun MapViewComposable(
         return
     }
 
-    // Держим ссылку на MapView чтобы lifecycle observer мог вызывать его методы
-    var mapViewRef by remember { mutableStateOf<MapView?>(null) }
-    // Флаг первой анимации камеры: одноразово центрируем на первом GPS-fix
-    var cameraMovedToFirstFix by remember { mutableStateOf(false) }
+    /**
+     * Весь мутируемый внутренний стейт карты в одном holder-е.
+     * Не нужен mutableStateOf — изменения не должны триггерить recompose:
+     * все операции происходят в обратных вызовах getMapAsync / ValueAnimator.
+     */
+    val state = remember {
+        object {
+            var mapView: MapView? = null
+            // Tweak 3: предыдущая позиция маркера для интерполяции
+            var prevMarkerLatLng: LatLng? = null
+            // Tweak 3: текущий аниматор маркера (отменяется при новом fix)
+            var markerAnimator: ValueAnimator? = null
+            // Tweak 2: флаг первого fix — нужен чтобы первый раз задать zoom 16
+            var cameraMovedToFirstFix: Boolean = false
+        }
+    }
 
     val lifecycleOwner = LocalLifecycleOwner.current
 
     // Lifecycle observer: пробрасывает события Activity в MapView
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
-            val mapView = mapViewRef ?: return@LifecycleEventObserver
+            val mapView = state.mapView ?: return@LifecycleEventObserver
             when (event) {
                 Lifecycle.Event.ON_START   -> mapView.onStart()
                 Lifecycle.Event.ON_RESUME  -> mapView.onResume()
@@ -92,10 +113,28 @@ fun MapViewComposable(
                 mapView.onCreate(null)
 
                 mapView.getMapAsync { map ->
-                    // Подписка на ошибку загрузки тайлов — только когда нет сети И кэш пуст
                     mapView.addOnDidFailLoadingMapListener {
                         onMapTilesFailed()
                     }
+
+                    // ── Tweak 1: логотип и attribution — верхний левый угол ───────────
+                    // MapLibre требует attribution по лицензии OpenStreetMap; мы лишь
+                    // перемещаем элементы, чтобы они не перекрывали кнопки внизу.
+                    val density = context.resources.displayMetrics.density
+                    val margin8px  = (8  * density).toInt()
+                    val margin92px = (92 * density).toInt()
+
+                    map.uiSettings.apply {
+                        logoGravity = Gravity.TOP or Gravity.START
+                        setLogoMargins(margin8px, margin8px, 0, 0)
+                        attributionGravity = Gravity.TOP or Gravity.START
+                        setAttributionMargins(margin92px, margin8px, 0, 0)
+                    }
+                    // Уменьшение размера логотипа: MapLibre UiSettings не предоставляет
+                    // публичного API для изменения размера (нет logoSize / setLogoSize).
+                    // Доступ через mapView.logoView отсутствует в публичном интерфейсе 11.8.2.
+                    // Обход через reflection или org.maplibre.android.R.id.logoView является
+                    // внутренним API и потому пропущен согласно требованию задачи.
 
                     map.setStyle(OfflineMapManager.STYLE_URL) { style ->
                         // ── Источник и слой трека ──────────────────────────────────
@@ -126,28 +165,25 @@ fun MapViewComposable(
                         style.addLayer(
                             CircleLayer("location-layer", "location-source").withProperties(
                                 PropertyFactory.circleColor(
-                                    android.graphics.Color.rgb(59, 130, 246) // #3B82F6 — синий
+                                    android.graphics.Color.rgb(59, 130, 246) // #3B82F6
                                 ),
                                 PropertyFactory.circleRadius(8f),
-                                PropertyFactory.circleStrokeColor(
-                                    android.graphics.Color.WHITE
-                                ),
+                                PropertyFactory.circleStrokeColor(android.graphics.Color.WHITE),
                                 PropertyFactory.circleStrokeWidth(2f),
                             )
                         )
                     }
                 }
 
-                mapViewRef = mapView
+                state.mapView = mapView
             }
         },
         update = { _ ->
             // getMapAsync выполняет колбэк сразу если карта готова, иначе ставит в очередь.
-            // Безопасно вызывать при каждом recompose (при смене trackPoints/currentLocation).
-            mapViewRef?.getMapAsync { map ->
+            state.mapView?.getMapAsync { map ->
                 val style = map.style ?: return@getMapAsync
 
-                // Обновляем трек-линию
+                // ── Обновляем трек-линию ───────────────────────────────────────────
                 val coordinates = trackPoints.map { Point.fromLngLat(it.longitude, it.latitude) }
                 val trackFc = if (coordinates.size >= 2) {
                     FeatureCollection.fromFeatures(
@@ -158,26 +194,72 @@ fun MapViewComposable(
                 }
                 style.getSourceAs<GeoJsonSource>("track-source")?.setGeoJson(trackFc)
 
-                // Обновляем точку текущей позиции
-                if (currentLocation != null) {
-                    val locFc = FeatureCollection.fromFeatures(
-                        listOf(Feature.fromGeometry(
-                            Point.fromLngLat(currentLocation.longitude, currentLocation.latitude)
-                        ))
-                    )
-                    style.getSourceAs<GeoJsonSource>("location-source")?.setGeoJson(locFc)
+                // ── Маркер текущей позиции + камера ───────────────────────────────
+                if (currentLocation == null) return@getMapAsync
 
-                    // Первый GPS-fix: анимируем камеру к позиции с zoom 16
-                    if (!cameraMovedToFirstFix) {
-                        cameraMovedToFirstFix = true
+                val newLatLng = LatLng(currentLocation.latitude, currentLocation.longitude)
+                val prev = state.prevMarkerLatLng
+
+                val positionChanged = prev == null
+                    || prev.latitude  != newLatLng.latitude
+                    || prev.longitude != newLatLng.longitude
+
+                if (positionChanged) {
+                    // Tweak 3: плавная анимация маркера между GPS-точками
+                    state.markerAnimator?.cancel()
+
+                    if (prev == null) {
+                        // Первая точка — сразу ставим маркер без анимации
+                        val locFc = FeatureCollection.fromFeatures(listOf(
+                            Feature.fromGeometry(Point.fromLngLat(newLatLng.longitude, newLatLng.latitude))
+                        ))
+                        style.getSourceAs<GeoJsonSource>("location-source")?.setGeoJson(locFc)
+                    } else {
+                        // Интерполируем позицию от prev до newLatLng за 800 мс
+                        val startLat = prev.latitude
+                        val startLng = prev.longitude
+                        val endLat   = newLatLng.latitude
+                        val endLng   = newLatLng.longitude
+
+                        state.markerAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
+                            duration = 800
+                            interpolator = LinearInterpolator()
+                            addUpdateListener { va ->
+                                val f = va.animatedValue as Float
+                                val lat = startLat + (endLat - startLat) * f
+                                val lng = startLng + (endLng - startLng) * f
+                                // Используем map.style вместо захваченного style —
+                                // на случай если стиль был перезагружен во время анимации
+                                val locFc = FeatureCollection.fromFeatures(listOf(
+                                    Feature.fromGeometry(Point.fromLngLat(lng, lat))
+                                ))
+                                map.style?.getSourceAs<GeoJsonSource>("location-source")
+                                    ?.setGeoJson(locFc)
+                            }
+                            start()
+                        }
+                    }
+
+                    state.prevMarkerLatLng = newLatLng
+                }
+
+                // Tweak 2: камера следует маркеру только во время активной тренировки.
+                // На паузе пользователь может свободно листать карту.
+                if (isTracking) {
+                    if (!state.cameraMovedToFirstFix) {
+                        // Первый fix: устанавливаем zoom 16 + позицию
+                        state.cameraMovedToFirstFix = true
                         map.animateCamera(
-                            CameraUpdateFactory.newLatLngZoom(
-                                LatLng(currentLocation.latitude, currentLocation.longitude),
-                                16.0,
-                            )
+                            CameraUpdateFactory.newLatLngZoom(newLatLng, 16.0), 800
+                        )
+                    } else {
+                        // Последующие fix: только следуем, zoom не трогаем
+                        map.animateCamera(
+                            CameraUpdateFactory.newLatLng(newLatLng), 800
                         )
                     }
                 }
+                // isTracking == false → камера не двигается, пользователь листает карту
             }
         },
     )
