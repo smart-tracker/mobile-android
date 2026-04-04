@@ -15,6 +15,7 @@ import android.net.NetworkCapabilities
 import android.os.Build
 import android.os.IBinder
 import android.os.Looper
+import android.os.PowerManager
 import androidx.core.app.NotificationCompat
 import com.example.smarttracker.R
 import com.example.smarttracker.domain.model.LocationPoint
@@ -50,6 +51,14 @@ class LocationTrackingService : Service() {
 
     // SupervisorJob: сбой одной корутины не отменяет остальные
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+
+    /**
+     * PARTIAL_WAKE_LOCK удерживает CPU активным при выключенном экране.
+     * Без него LocationManager может не доставлять колбэки когда телефон засыпает.
+     * Foreground Service с foregroundServiceType="location" освобождён от Doze,
+     * но WakeLock дополнительно гарантирует работу CPU на старых устройствах (API 26–28).
+     */
+    private var wakeLock: PowerManager.WakeLock? = null
 
     private lateinit var locationManager: LocationManager
     private var trainingId: String = ""
@@ -95,6 +104,13 @@ class LocationTrackingService : Service() {
         } else {
             startForeground(LocationConfig.NOTIFICATION_ID, notification)
         }
+
+        // Захватываем WakeLock после startForeground — CPU не засыпает при экране off
+        val pm = getSystemService(POWER_SERVICE) as PowerManager
+        wakeLock = pm.newWakeLock(
+            PowerManager.PARTIAL_WAKE_LOCK,
+            "SmartTracker:LocationTracking",
+        ).also { it.acquire() }
 
         startLocationUpdates(intervalMs)
         return START_STICKY
@@ -164,6 +180,9 @@ class LocationTrackingService : Service() {
         scope.cancel()
         stopForeground(STOP_FOREGROUND_REMOVE)
         firstFixDone = false
+        // Освобождаем WakeLock только если он ещё удерживается — isHeld защищает от двойного release
+        wakeLock?.let { if (it.isHeld) it.release() }
+        wakeLock = null
     }
 
     /**

@@ -15,6 +15,9 @@
     <!-- Уведомления (Android 13+) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- WakeLock: удерживает CPU активным при выключенном экране для работы GPS -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
     <application
         android:name=".SmartTrackerApp"
         android:allowBackup="true"
@@ -37,10 +40,13 @@
             </intent-filter>
         </activity>
 
-        <!-- GPS Foreground Service — собирает координаты тренировки в фоне -->
+        <!-- GPS Foreground Service — собирает координаты тренировки в фоне.
+             stopWithTask="false": сервис продолжает работать когда пользователь
+             смахивает приложение из Recents (актуально для Samsung, Xiaomi и др.). -->
         <service
             android:name=".data.location.LocationTrackingService"
             android:foregroundServiceType="location"
+            android:stopWithTask="false"
             android:exported="false" />
 
     </application>
