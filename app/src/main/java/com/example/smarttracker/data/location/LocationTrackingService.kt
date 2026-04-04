@@ -10,6 +10,8 @@ import android.content.pm.ServiceInfo
 import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.os.Build
 import android.os.IBinder
 import android.os.Looper
@@ -23,6 +25,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import org.maplibre.android.geometry.LatLng
 import javax.inject.Inject
 
 /**
@@ -42,12 +45,17 @@ class LocationTrackingService : Service() {
     @Inject
     lateinit var locationRepository: LocationRepository
 
+    @Inject
+    lateinit var offlineMapManager: OfflineMapManager
+
     // SupervisorJob: сбой одной корутины не отменяет остальные
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     private lateinit var locationManager: LocationManager
     private var trainingId: String = ""
     private var accuracyThreshold: Float = LocationConfig.MAX_ACCURACY_RUNNING
+    // Флаг первого хорошего GPS-fix — триггер для тихой предзагрузки офлайн-карты
+    private var firstFixDone = false
 
     /**
      * LocationListener на основе android.location (не FusedLocationProvider).
@@ -122,6 +130,15 @@ class LocationTrackingService : Service() {
         // hasAccuracy() = false бывает только на очень старых устройствах — принимаем как есть.
         if (location.hasAccuracy() && location.accuracy > accuracyThreshold) return
 
+        // При первом хорошем fix — тихо запустить предзагрузку офлайн-региона (только при Wi-Fi)
+        if (!firstFixDone) {
+            firstFixDone = true
+            offlineMapManager.downloadRegionIfNeeded(
+                LatLng(location.latitude, location.longitude),
+                isWifiConnected(),
+            )
+        }
+
         val point = LocationPoint(
             trainingId    = trainingId,
             timestampUtc  = location.time,
@@ -146,6 +163,18 @@ class LocationTrackingService : Service() {
         }
         scope.cancel()
         stopForeground(STOP_FOREGROUND_REMOVE)
+        firstFixDone = false
+    }
+
+    /**
+     * Проверяет наличие Wi-Fi соединения. Используется перед запуском предзагрузки
+     * офлайн-региона — скачиваем только при Wi-Fi, чтобы не расходовать мобильный трафик.
+     */
+    private fun isWifiConnected(): Boolean {
+        val cm = getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
+        val network = cm.activeNetwork ?: return false
+        val caps = cm.getNetworkCapabilities(network) ?: return false
+        return caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
     }
 
     private fun createNotificationChannel() {

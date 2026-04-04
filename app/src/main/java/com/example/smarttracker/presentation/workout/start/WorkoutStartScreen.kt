@@ -54,6 +54,7 @@ import androidx.compose.ui.unit.sp
 import com.example.smarttracker.R
 import com.example.smarttracker.domain.model.WorkoutType
 import com.example.smarttracker.presentation.theme.ColorBackground
+import com.example.smarttracker.presentation.workout.map.MapViewComposable
 import com.example.smarttracker.presentation.theme.ColorPrimary
 import com.example.smarttracker.presentation.theme.ColorSecondary
 import com.example.smarttracker.presentation.theme.geologicaFontFamily
@@ -79,6 +80,7 @@ fun WorkoutStartScreen(
     onSheetTypeSelected: (WorkoutType) -> Unit,
     onPauseClick: () -> Unit,
     onFinishClick: () -> Unit,
+    onMapTilesFailed: () -> Unit,
 ) {
     // Запрашиваем разрешения при открытии экрана.
     // Результат в ViewModel не передаётся: сервис сам обработает SecurityException при отказе,
@@ -191,21 +193,14 @@ fun WorkoutStartScreen(
                 .fillMaxWidth()
                 .weight(1f),
         ) {
-            // Карта (заглушка) — занимает весь Box включая область под кнопкой
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color(0xFFEEEEEE))
-                    .border(width = 1.dp, color = ColorPrimary),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.LocationOn,
-                    contentDescription = "Локация",
-                    tint = ColorSecondary,
-                    modifier = Modifier.size(48.dp),
-                )
-            }
+            // Карта — занимает весь Box включая область под кнопкой
+            MapViewComposable(
+                modifier = Modifier.fillMaxSize(),
+                currentLocation = state.trackPoints.lastOrNull(),
+                trackPoints = state.trackPoints,
+                mapTilesFailed = state.mapTilesFailed,
+                onMapTilesFailed = onMapTilesFailed,
+            )
 
             // ── GPS-оверлей — поверх карты, под кнопками ──────────────────────
             // Показывается только во время активного трекинга, пока нет фикса или сигнал слабый

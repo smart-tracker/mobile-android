@@ -17,6 +17,7 @@ securityCrypto = "1.1.0-alpha06"
 datastorePreferences = "1.1.1"
 coil = "2.7.0"
 room = "2.6.1"
+maplibre = "11.8.2"
 
 [libraries]
 # Google Material — тема для совместимости с enableEdgeToEdge() и Material3
@@ -70,6 +71,9 @@ coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coi
 room-runtime  = { group = "androidx.room", name = "room-runtime",  version.ref = "room" }
 room-ktx      = { group = "androidx.room", name = "room-ktx",      version.ref = "room" }
 room-compiler = { group = "androidx.room", name = "room-compiler",  version.ref = "room" }
+
+# MapLibre — векторная карта без API-ключа (OpenFreeMap)
+maplibre-android = { group = "org.maplibre.gl", name = "android-sdk", version.ref = "maplibre" }
 
 # Test
 junit = { group = "junit", name = "junit", version = "4.13.2" }

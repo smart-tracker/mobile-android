@@ -68,6 +68,7 @@ fun WorkoutHomeScreen(
                     onSheetTypeSelected = viewModel::onSheetTypeSelected,
                     onPauseClick = viewModel::onPauseClick,
                     onFinishClick = viewModel::onFinishClick,
+                    onMapTilesFailed = viewModel::onMapTilesFailed,
                 )
             }
             WorkoutTab.WORKOUTS -> PlaceholderScreen(label = stringResource(R.string.tab_workouts), padding = padding)

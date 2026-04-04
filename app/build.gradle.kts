@@ -118,6 +118,9 @@ dependencies {
     implementation(libs.room.ktx)
     kapt(libs.room.compiler)
 
+    // MapLibre — карта с OpenFreeMap тайлами, без API-ключа
+    implementation(libs.maplibre.android)
+
     // Debug
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
