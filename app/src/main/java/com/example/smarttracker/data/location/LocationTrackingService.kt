@@ -414,10 +414,14 @@ class LocationTrackingService : Service() {
 
         // Финальный сброс буфера + попытка синхронизации оставшихся точек
         scope.launch {
-            bufferMutex.withLock { flushBufferLocked() }
-            syncUnsentPoints()
-        }.invokeOnCompletion {
-            scope.cancel()
+            try {
+                bufferMutex.withLock { flushBufferLocked() }
+                syncUnsentPoints()
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to flush and sync unsent points during service shutdown", e)
+            } finally {
+                scope.cancel()
+            }
         }
 
         stopForeground(STOP_FOREGROUND_REMOVE)
