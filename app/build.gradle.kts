@@ -121,6 +121,12 @@ dependencies {
     // MapLibre — карта с OpenFreeMap тайлами, без API-ключа
     implementation(libs.maplibre.android)
 
+    // GPS мульти-рантайм: GMS (Google) + HMS (Huawei) в одном APK.
+    // На устройстве без одного из SDK RuntimeDetector поймает NoClassDefFoundError
+    // и использует оставшийся провайдер или AOSP-fallback.
+    implementation(libs.gms.location)
+    implementation(libs.hms.location)
+
     // Debug
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)

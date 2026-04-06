@@ -1,6 +1,5 @@
 package com.example.smarttracker.data.location
 
-import android.annotation.SuppressLint
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -8,16 +7,17 @@ import android.app.Service
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.location.Location
-import android.location.LocationListener
-import android.location.LocationManager
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.Build
 import android.os.IBinder
-import android.os.Looper
 import android.os.PowerManager
 import androidx.core.app.NotificationCompat
 import com.example.smarttracker.R
+import com.example.smarttracker.data.location.model.TrackingConfig
+import com.example.smarttracker.data.location.model.TrackingPriority
+import com.example.smarttracker.data.location.model.toAndroidLocation
+import com.example.smarttracker.data.location.tracker.LocationTracker
 import com.example.smarttracker.domain.model.LocationPoint
 import com.example.smarttracker.domain.repository.LocationRepository
 import dagger.hilt.android.AndroidEntryPoint
@@ -60,20 +60,17 @@ class LocationTrackingService : Service() {
      */
     private var wakeLock: PowerManager.WakeLock? = null
 
-    private lateinit var locationManager: LocationManager
+    /**
+     * Активный трекер геолокации (GMS / HMS / AOSP).
+     * Создаётся в [startLocationUpdates] через [LocationTrackerFactory],
+     * освобождается в [onDestroy].
+     */
+    private var activeTracker: LocationTracker? = null
+
     private var trainingId: String = ""
     private var accuracyThreshold: Float = LocationConfig.MAX_ACCURACY_RUNNING
     // Флаг первого хорошего GPS-fix — триггер для тихой предзагрузки офлайн-карты
     private var firstFixDone = false
-
-    /**
-     * LocationListener на основе android.location (не FusedLocationProvider).
-     * onLocationChanged вызывается на Main Looper (см. requestLocationUpdates ниже),
-     * тяжёлая работа (сохранение в БД) выполняется в scope (Dispatchers.IO).
-     */
-    private val locationListener = LocationListener { location ->
-        onLocationReceived(location)
-    }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -116,28 +113,18 @@ class LocationTrackingService : Service() {
         return START_STICKY
     }
 
-    @SuppressLint("MissingPermission")
     private fun startLocationUpdates(intervalMs: Long) {
-        locationManager = getSystemService(LOCATION_SERVICE) as LocationManager
-
-        if (!locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
-            // GPS отключён на устройстве — завершаем сервис.
-            // ViewModel обнаружит отсутствие точек через 30-секундный таймаут (UNAVAILABLE).
-            stopSelf()
-            return
-        }
-
-        try {
-            locationManager.requestLocationUpdates(
-                LocationManager.GPS_PROVIDER,
-                intervalMs,
-                LocationConfig.MIN_DISTANCE_M,
-                locationListener,
-                Looper.getMainLooper(),
-            )
-        } catch (e: SecurityException) {
-            // Разрешение было отозвано после запуска сервиса
-            stopSelf()
+        val config = TrackingConfig(
+            intervalMs        = intervalMs,
+            minDistanceMeters = LocationConfig.MIN_DISTANCE_M,
+            priority          = TrackingPriority.HIGH_ACCURACY,
+        )
+        val tracker = LocationTrackerFactory.create(this)
+        activeTracker = tracker
+        // onLocationReceived не изменяется — получает стандартный android.location.Location
+        // через обратный маппинг toAndroidLocation() для совместимости с фильтрацией / Room.
+        tracker.startTracking(config) { trackLoc ->
+            onLocationReceived(trackLoc.toAndroidLocation())
         }
     }
 
@@ -173,10 +160,8 @@ class LocationTrackingService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
-        // removeUpdates безопасен даже если requestLocationUpdates не был вызван
-        if (::locationManager.isInitialized) {
-            locationManager.removeUpdates(locationListener)
-        }
+        activeTracker?.stopTracking()
+        activeTracker = null
         scope.cancel()
         stopForeground(STOP_FOREGROUND_REMOVE)
         firstFixDone = false
