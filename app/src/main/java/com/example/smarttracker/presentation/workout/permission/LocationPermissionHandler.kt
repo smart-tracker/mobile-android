@@ -7,10 +7,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 
@@ -37,9 +34,6 @@ fun LocationPermissionHandler(
     onPermissionsResult: (Boolean) -> Unit = {},
 ) {
     val context = LocalContext.current
-
-    // Шаг 1 уже выполнен → переходим к шагу 2 без нового диалога
-    var step1Done by remember { mutableStateOf(false) }
 
     // ── Шаг 2: фоновый доступ (только Android Q+) ──────────────────────────────
     val backgroundLauncher = rememberLauncherForActivityResult(
@@ -75,7 +69,6 @@ fun LocationPermissionHandler(
         }
 
         onLocationGranted()
-        step1Done = true
 
         // Шаг 2: фоновый доступ запрашиваем только если выдан Fine (Coarse недостаточно)
         // и только на Android Q+.
@@ -106,7 +99,6 @@ fun LocationPermissionHandler(
         if (fineAlready || coarseAlready) {
             onPermissionsResult(true)
             onLocationGranted()
-            step1Done = true
 
             if (fineAlready && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 val bgGranted = ContextCompat.checkSelfPermission(
