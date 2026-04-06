@@ -333,8 +333,8 @@ class LocationTrackingService : Service() {
     private suspend fun flushBufferLocked() {
         if (pointBuffer.isEmpty()) return
         val batch = pointBuffer.toList()
-        pointBuffer.clear()
         locationRepository.savePoints(batch)
+        pointBuffer.subList(0, batch.size).clear()
     }
 
     override fun onDestroy() {
