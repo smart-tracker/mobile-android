@@ -15,6 +15,9 @@ interface LocationRepository {
     /** Сохранить одну GPS-точку. */
     suspend fun savePoint(point: LocationPoint)
 
+    /** Batch-вставка нескольких GPS-точек за одну транзакцию (буфер из Service). */
+    suspend fun savePoints(points: List<LocationPoint>)
+
     /** Получить все точки тренировки (единовременно). */
     suspend fun getPointsForTraining(trainingId: String): List<LocationPoint>
 

@@ -17,6 +17,8 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // Huawei HMS SDK — нужен для HmsLocationTracker (com.huawei.hms:location)
+        maven { url = uri("https://developer.huawei.com/repo/") }
     }
 }
 

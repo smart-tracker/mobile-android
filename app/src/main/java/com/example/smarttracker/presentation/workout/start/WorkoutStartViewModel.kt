@@ -6,6 +6,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.smarttracker.data.location.LocationConfig
 import com.example.smarttracker.data.location.LocationTrackingService
+import com.example.smarttracker.data.location.OfflineMapManager
+import com.example.smarttracker.domain.model.LocationPoint
 import com.example.smarttracker.domain.model.WorkoutType
 import com.example.smarttracker.domain.repository.LocationRepository
 import com.example.smarttracker.domain.repository.WorkoutRepository
@@ -44,6 +46,7 @@ class WorkoutStartViewModel @Inject constructor(
     private val workoutRepository: WorkoutRepository,
     private val locationRepository: LocationRepository,
     private val calculateTrainingStatsUseCase: CalculateTrainingStatsUseCase,
+    private val offlineMapManager: OfflineMapManager,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
 
@@ -80,6 +83,14 @@ class WorkoutStartViewModel @Inject constructor(
         val caloriesDisplay: String = "0 кКал",
         /** Сообщение об ошибке загрузки типов (null = нет ошибки) */
         val errorMessage: String? = null,
+        /** GPS-точки текущей тренировки для рисования трека на карте */
+        val trackPoints: List<LocationPoint> = emptyList(),
+        /**
+         * true когда MapLibre не смог загрузить тайлы (нет сети + нет кэша).
+         * Устанавливается через callback onDidFailLoadingMap из MapViewComposable.
+         * При завершении тренировки сбрасывается в false.
+         */
+        val mapTilesFailed: Boolean = false,
     )
 
     private val _state = MutableStateFlow(UiState())
@@ -168,10 +179,19 @@ class WorkoutStartViewModel @Inject constructor(
             distanceDisplay = "0.00 км",
             avgSpeedDisplay = "00:00 мин/км",
             caloriesDisplay = "0 кКал",
+            trackPoints     = emptyList(),
+            mapTilesFailed  = false,
         ) }
         stopLocationService()
         observerJob?.cancel()
         currentTrainingId = null
+        // Сбрасываем флаг офлайн-загрузки: следующая тренировка может быть в другом месте
+        offlineMapManager.reset()
+    }
+
+    /** Карта сообщила, что тайлы недоступны (нет сети + нет кэша). Показываем fallback. */
+    fun onMapTilesFailed() {
+        _state.update { it.copy(mapTilesFailed = true) }
     }
 
     /** Клик по иконке в быстром ряду — только меняет selectedType */
@@ -212,7 +232,13 @@ class WorkoutStartViewModel @Inject constructor(
                 timeoutJob?.cancel()
                 timeoutJob = launch {
                     delay(LocationConfig.GPS_FIX_TIMEOUT_MS)
-                    _state.update { it.copy(gpsStatus = GpsStatus.UNAVAILABLE) }
+                    // Сигнал недоступности GPS — переводим трекинг в тот же режим,
+                    // что и ручная пауза, чтобы корректно остановить таймер,
+                    // сохранить elapsed-время паузы и синхронно обновить UI.
+                    onPauseClick()
+                    _state.update { it.copy(
+                        gpsStatus = GpsStatus.UNAVAILABLE,
+                    ) }
                 }
             }
             restartTimeout()
@@ -254,6 +280,7 @@ class WorkoutStartViewModel @Inject constructor(
                         distanceDisplay = "%.2f км".format(newDistanceM / 1000.0),
                         avgSpeedDisplay = formatPace(avgSpeedMps),
                         caloriesDisplay = "${kilocalories.toInt()} кКал",
+                        trackPoints     = points,
                     ) }
                 }
         }

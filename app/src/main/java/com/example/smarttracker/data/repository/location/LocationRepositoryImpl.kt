@@ -26,6 +26,10 @@ class LocationRepositoryImpl @Inject constructor(
         dao.insert(point.toEntity())
     }
 
+    override suspend fun savePoints(points: List<LocationPoint>) {
+        dao.insertAll(points.map { it.toEntity() })
+    }
+
     override suspend fun getPointsForTraining(trainingId: String): List<LocationPoint> =
         dao.getPointsForTraining(trainingId).map { it.toDomain() }
 

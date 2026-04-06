@@ -6,16 +6,16 @@ import androidx.room.RoomDatabase
 /**
  * Единственная Room-база данных приложения.
  *
- * version = 1 — начальная схема. При изменении полей GpsPointEntity нужно
- * увеличить version и добавить Migration, иначе Room выбросит исключение при запуске.
- * exportSchema = false — отключает генерацию JSON-схемы (не нужна в production без CI-проверок).
+ * **version = 2:** добавлены поля [GpsPointEntity.bearing] (Float?) и [GpsPointEntity.externalId] (String?).
+ * Используется [fallbackToDestructiveMigration] — данные тренировок хранятся только на устройстве,
+ * а не являются критичными для пользователя (production-миграция будет добавлена в Этапе 5).
  *
+ * exportSchema = false — отключает генерацию JSON-схемы.
  * Экземпляр создаётся один раз через Hilt в AuthModule (Singleton).
- * Доступ к DAO — через gpsPointDao().
  */
 @Database(
     entities = [GpsPointEntity::class],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class SmartTrackerDatabase : RoomDatabase() {

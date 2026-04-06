@@ -10,3 +10,12 @@
 
 # Keep data classes for Gson
 -keep class com.example.smarttracker.data.remote.dto.** { *; }
+
+# GMS Location — FusedLocationProviderClient и LocationCallback
+-keep class com.google.android.gms.location.** { *; }
+-keep class * extends com.google.android.gms.location.LocationCallback { *; }
+
+# HMS Location Kit — HuaweiApiAvailability, FusedLocationProviderClient и LocationCallback
+-keep class com.huawei.hms.location.** { *; }
+-keep class com.huawei.hms.api.** { *; }
+-keep class * extends com.huawei.hms.location.LocationCallback { *; }
