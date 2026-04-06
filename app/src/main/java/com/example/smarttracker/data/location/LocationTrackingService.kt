@@ -122,11 +122,18 @@ class LocationTrackingService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         recoveryPrefs = getSharedPreferences(LocationConfig.PREFS_RECOVERY, MODE_PRIVATE)
 
-        // Команда переключения записи: сервис уже запущен, только меняем флаг.
-        // Не требует повторной инициализации уведомления, трекера и т.д.
+        // Команда переключения записи: применяем только если сервис уже инициализирован.
+        // Если trainingId пустой (сервис убит ОС и перезапущен START_STICKY),
+        // команда EXTRA_RECORDING пришла «в пустой» сервис — останавливаемся,
+        // чтобы не оставить его в неконсистентном состоянии без трекера/уведомления.
         if (intent?.hasExtra(EXTRA_RECORDING) == true) {
-            isRecording = intent.getBooleanExtra(EXTRA_RECORDING, true)
-            return START_STICKY
+            if (trainingId.isNotBlank() && activeTracker != null) {
+                isRecording = intent.getBooleanExtra(EXTRA_RECORDING, true)
+                return START_STICKY
+            } else {
+                stopSelf()
+                return START_NOT_STICKY
+            }
         }
 
         // При перезапуске системой (START_STICKY) после OOM intent == null.
