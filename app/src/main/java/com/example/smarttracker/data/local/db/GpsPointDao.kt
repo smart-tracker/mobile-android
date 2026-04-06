@@ -63,10 +63,10 @@ interface GpsPointDao {
      *
      * Возвращает null если после применения фильтра подходящих тренировок ещё не было.
      */
-    @Query(
-        "SELECT * FROM gps_points " +
-            "WHERE (:excludedTrainingId IS NULL OR trainingId != :excludedTrainingId) " +
-            "ORDER BY timestampUtc DESC LIMIT 1"
-    )
+    @Query("""
+        SELECT * FROM gps_points
+        WHERE (:excludedTrainingId IS NULL OR trainingId != :excludedTrainingId)
+        ORDER BY timestampUtc DESC LIMIT 1
+    """)
     suspend fun getLastPoint(excludedTrainingId: String?): GpsPointEntity?
 }
