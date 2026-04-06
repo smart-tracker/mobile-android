@@ -41,9 +41,10 @@ interface GpsPointDao {
 
     /**
      * Назначить batchId группе точек перед отправкой.
-     * Позволяет атомарно пометить весь батч после успешной загрузки.
+     * batchId выставляется только один раз и не перезаписывается при ретраях,
+     * чтобы сохранить идемпотентность синхронизации.
      */
-    @Query("UPDATE gps_points SET batchId = :batchId WHERE id IN (:pointIds)")
+    @Query("UPDATE gps_points SET batchId = :batchId WHERE id IN (:pointIds) AND batchId IS NULL")
     suspend fun assignBatchId(pointIds: List<Long>, batchId: String)
 
     /**
