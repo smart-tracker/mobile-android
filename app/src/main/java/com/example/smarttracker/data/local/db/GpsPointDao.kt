@@ -52,4 +52,12 @@ interface GpsPointDao {
      */
     @Query("SELECT * FROM gps_points WHERE trainingId = :trainingId ORDER BY timestampUtc ASC")
     fun observePointsForTraining(trainingId: String): Flow<List<GpsPointEntity>>
+
+    /**
+     * Последняя сохранённая GPS-точка из всех тренировок.
+     * Используется для начального центрирования карты до получения GPS-сигнала.
+     * Возвращает null если тренировок ещё не было.
+     */
+    @Query("SELECT * FROM gps_points ORDER BY timestampUtc DESC LIMIT 1")
+    suspend fun getLastPoint(): GpsPointEntity?
 }

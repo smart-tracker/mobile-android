@@ -69,6 +69,11 @@ class WorkoutStartViewModel @Inject constructor(
         val isTypesLoading: Boolean = true,
         /** true когда тренировка запущена — переключает кнопку "Начать" на "Пауза"+"Завершить" */
         val isTracking: Boolean = false,
+        /**
+         * true с момента первого нажатия «Начать» и до нажатия «Завершить».
+         * При isWorkoutStarted = true выбор типа активности заблокирован.
+         */
+        val isWorkoutStarted: Boolean = false,
         /** Статус GPS: меняется после старта трекинга */
         val gpsStatus: GpsStatus = GpsStatus.SEARCHING,
         /** Накопленное время в миллисекундах (для сохранения при паузе) */
@@ -91,7 +96,26 @@ class WorkoutStartViewModel @Inject constructor(
          * При завершении тренировки сбрасывается в false.
          */
         val mapTilesFailed: Boolean = false,
-    )
+        /** Множество iconKey избранных типов активностей, хранится в SharedPreferences */
+        val favoriteIds: Set<String> = emptySet(),
+        /** Поисковый запрос в шторке выбора активности */
+        val searchQuery: String = "",
+        /**
+         * Последняя точка из любой предыдущей тренировки (из Room).
+         * Используется для начального центрирования карты до получения GPS-сигнала.
+         * null = тренировок ещё не было, карта покажет дефолтное положение.
+         */
+        val lastKnownLocation: LocationPoint? = null,
+    ) {
+        /** true когда GPS-сигнал получен */
+        val isGpsActive: Boolean get() = gpsStatus == GpsStatus.ACQUIRED
+
+        /** Типы активностей, отфильтрованные по запросу и отсортированные: избранные сверху */
+        val filteredAndSortedTypes: List<WorkoutType>
+            get() = workoutTypes
+                .filter { searchQuery.isBlank() || it.name.contains(searchQuery, ignoreCase = true) }
+                .sortedWith(compareByDescending { it.iconKey in favoriteIds })
+    }
 
     private val _state = MutableStateFlow(UiState())
     val state: StateFlow<UiState> = _state.asStateFlow()
@@ -99,6 +123,19 @@ class WorkoutStartViewModel @Inject constructor(
     // UUID тренировки: генерируется при первом старте, сохраняется при паузе/возобновлении,
     // сбрасывается в null при завершении (onFinishClick).
     private var currentTrainingId: String? = null
+
+    /**
+     * Количество точек в Room на момент паузы.
+     * При возобновлении observeTrackingData использует max(processedCount, якорь),
+     * чтобы пропустить дистанцию от последней точки до паузы до первой точки после.
+     * @Volatile: пишется из Main-thread (onPauseClick), читается из Dispatchers.Default.
+     */
+    @Volatile private var resumeAnchorPointCount: Int = 0
+
+    // UUID и Job discovery-фазы: GPS ищется сразу при открытии экрана,
+    // до того как пользователь нажмёт «Начать тренировку».
+    private var discoveryTrainingId: String? = null
+    private var discoveryObserverJob: Job? = null
 
     // Таймер — отдельный Job, считает wall-clock время с учётом паузы
     private var timerJob: Job? = null
@@ -110,6 +147,15 @@ class WorkoutStartViewModel @Inject constructor(
 
     init {
         loadWorkoutTypes()
+        val favIds = loadFavoriteIds()
+        if (favIds.isNotEmpty()) _state.update { it.copy(favoriteIds = favIds) }
+        // GPS стартует сразу при открытии экрана — иконка видна без нажатия «Начать»
+        startDiscoveryGps()
+        // Загружаем последнюю точку для начального центрирования карты до получения GPS
+        viewModelScope.launch {
+            val last = locationRepository.getLastKnownPoint()
+            if (last != null) _state.update { it.copy(lastKnownLocation = last) }
+        }
     }
 
     private fun loadWorkoutTypes() {
@@ -133,8 +179,19 @@ class WorkoutStartViewModel @Inject constructor(
         }
     }
 
-    /** Нажатие «Начать тренировку» — запускает таймер и сервис трекинга */
+    /** Нажатие «Начать тренировку» или «Продолжить» после паузы */
     fun onStartWorkoutClick() {
+        // Первый старт: discovery-сервис останавливается, запускается реальный трекинг.
+        // Возобновление после паузы: сервис уже работает, достаточно перезапустить таймер.
+        val isFirstStart = currentTrainingId == null
+
+        if (isFirstStart) {
+            discoveryObserverJob?.cancel()
+            discoveryObserverJob = null
+            stopLocationService()
+            discoveryTrainingId = null
+        }
+
         // trainingId генерируется один раз за сессию; при паузе/возобновлении ID не меняется
         val trainingId = currentTrainingId ?: UUID.randomUUID().toString()
             .also { currentTrainingId = it }
@@ -152,41 +209,57 @@ class WorkoutStartViewModel @Inject constructor(
             }
         }
 
-        _state.update { it.copy(isTracking = true, gpsStatus = GpsStatus.SEARCHING) }
+        _state.update { it.copy(
+            isTracking      = true,
+            isWorkoutStarted = true,
+            // При первом старте переходим в SEARCHING, при возобновлении GPS уже работает
+            gpsStatus       = if (isFirstStart) GpsStatus.SEARCHING else _state.value.gpsStatus,
+        ) }
 
-        startLocationService(trainingId)
-        observeTrackingData(trainingId)
+        if (isFirstStart) {
+            startLocationService(trainingId)
+            observeTrackingData(trainingId)
+        } else {
+            // Возобновление после паузы: разрешаем запись точек снова
+            LocationTrackingService.setRecording(context, true)
+        }
     }
 
-    /** Нажатие «Пауза» — замораживает таймер, останавливает сервис */
+    /** Нажатие «Пауза» — замораживает таймер; GPS продолжает работать, запись в Room останавливается */
     fun onPauseClick() {
         pausedElapsedMs = _state.value.elapsedMs
         timerJob?.cancel()
         _state.update { it.copy(isTracking = false) }
-        stopLocationService()
-        observerJob?.cancel()
+        // Запоминаем сколько точек было до паузы — observeTrackingData пропустит
+        // расстояние от этих точек до первой точки после возобновления
+        resumeAnchorPointCount = _state.value.trackPoints.size
+        // GPS-трекер продолжает работать (сервис жив), но точки в Room не пишутся
+        LocationTrackingService.setRecording(context, false)
     }
 
-    /** Нажатие «Завершить» — останавливает всё и сбрасывает статистику в ноль */
+    /** Нажатие «Завершить» — останавливает всё, сбрасывает статистику, перезапускает поиск GPS */
     fun onFinishClick() {
         timerJob?.cancel()
         pausedElapsedMs = 0L
         _state.update { it.copy(
-            isTracking      = false,
-            gpsStatus       = GpsStatus.SEARCHING,
-            elapsedMs       = 0L,
-            timerDisplay    = "00:00:00",
-            distanceDisplay = "0.00 км",
-            avgSpeedDisplay = "00:00 мин/км",
-            caloriesDisplay = "0 кКал",
-            trackPoints     = emptyList(),
-            mapTilesFailed  = false,
+            isTracking       = false,
+            isWorkoutStarted = false,
+            gpsStatus        = GpsStatus.SEARCHING,
+            elapsedMs        = 0L,
+            timerDisplay     = "00:00:00",
+            distanceDisplay  = "0.00 км",
+            avgSpeedDisplay  = "00:00 мин/км",
+            caloriesDisplay  = "0 кКал",
+            trackPoints      = emptyList(),
+            mapTilesFailed   = false,
         ) }
         stopLocationService()
         observerJob?.cancel()
         currentTrainingId = null
         // Сбрасываем флаг офлайн-загрузки: следующая тренировка может быть в другом месте
         offlineMapManager.reset()
+        // Сразу перезапускаем discovery-GPS: иконка остаётся живой между тренировками
+        startDiscoveryGps()
     }
 
     /** Карта сообщила, что тайлы недоступны (нет сети + нет кэша). Показываем fallback. */
@@ -196,11 +269,29 @@ class WorkoutStartViewModel @Inject constructor(
 
     /** Клик по иконке в быстром ряду — только меняет selectedType */
     fun onQuickTypeSelected(type: WorkoutType) {
+        if (_state.value.isWorkoutStarted) return // тип заблокирован во время тренировки
         _state.update { it.copy(selectedType = type) }
+    }
+
+    /** Переключает избранность типа активности и сохраняет в SharedPreferences */
+    fun onToggleFavorite(typeActivId: String) {
+        val current = _state.value.favoriteIds
+        val updated = if (typeActivId in current) current - typeActivId else current + typeActivId
+        context.getSharedPreferences("workout_prefs", Context.MODE_PRIVATE)
+            .edit()
+            .putString("favorite_activity_ids", updated.joinToString(","))
+            .apply()
+        _state.update { it.copy(favoriteIds = updated) }
+    }
+
+    /** Обновляет поисковый запрос в шторке выбора активности */
+    fun onSearchQueryChange(query: String) {
+        _state.update { it.copy(searchQuery = query) }
     }
 
     /** Выбор из шторки — тип встаёт на первое место */
     fun onSheetTypeSelected(type: WorkoutType) {
+        if (_state.value.isWorkoutStarted) return // тип заблокирован во время тренировки
         _state.update { state ->
             val newPinned = (listOf(type) + state.pinnedTypes.filter { it.id != type.id }).take(3)
             state.copy(selectedType = type, pinnedTypes = newPinned)
@@ -258,11 +349,17 @@ class WorkoutStartViewModel @Inject constructor(
                     // не может прервать блок посередине — accumulatedDistanceM и processedCount
                     // всегда обновляются атомарно (вместе или не обновляются вовсе).
                     val (newDistanceM, avgSpeedMps, kilocalories) = withContext(Dispatchers.Default) {
+                        // effectiveCount: при первом вызове после возобновления с паузы
+                        // пропускаем точки от якоря до сейчас, чтобы не засчитать движение
+                        // совершённое пока запись была выключена (пауза).
+                        val effectiveCount = maxOf(processedCount, resumeAnchorPointCount)
                         val delta = calculateTrainingStatsUseCase.calculateDeltaDistance(
-                            points, processedCount
+                            points, effectiveCount
                         )
                         accumulatedDistanceM += delta
                         processedCount = points.size
+                        // Якорь одноразовый — сбрасываем после первого применения
+                        if (resumeAnchorPointCount > 0) resumeAnchorPointCount = 0
 
                         // Длительность по монотонным часам (elapsedNanos) — не зависит от NTP/смены времени.
                         // Известное ограничение: elapsedNanos продолжает тикать во время паузы,
@@ -284,6 +381,59 @@ class WorkoutStartViewModel @Inject constructor(
                     ) }
                 }
         }
+    }
+
+    /**
+     * Запускает GPS в «discovery»-режиме: сервис пишет точки под временным UUID,
+     * наблюдатель обновляет только gpsStatus (статистика не считается).
+     * Вызывается при инициализации ViewModel и после завершения тренировки.
+     */
+    private fun startDiscoveryGps() {
+        val id = UUID.randomUUID().toString()
+        discoveryTrainingId = id
+        startLocationService(id)
+        startGpsStatusObserver(id)
+    }
+
+    /**
+     * Лёгкий наблюдатель за GPS-точками для discovery-фазы.
+     * Обновляет gpsStatus (SEARCHING → ACQUIRED → UNAVAILABLE), не трогает статистику.
+     * При таймауте переводит в UNAVAILABLE — сервис продолжает работать и ждать фикс.
+     */
+    private fun startGpsStatusObserver(trainingId: String) {
+        discoveryObserverJob?.cancel()
+        discoveryObserverJob = viewModelScope.launch {
+            var timeoutJob: Job? = null
+            fun restartTimeout() {
+                timeoutJob?.cancel()
+                timeoutJob = launch {
+                    delay(LocationConfig.GPS_FIX_TIMEOUT_MS)
+                    _state.update { it.copy(gpsStatus = GpsStatus.UNAVAILABLE) }
+                }
+            }
+            restartTimeout()
+
+            locationRepository.observePointsForTraining(trainingId).collectLatest { points ->
+                if (points.isNotEmpty()) {
+                    if (_state.value.gpsStatus != GpsStatus.ACQUIRED) {
+                        _state.update { it.copy(gpsStatus = GpsStatus.ACQUIRED) }
+                    }
+                    restartTimeout()
+                }
+            }
+        }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        // Останавливаем сервис при уничтожении ViewModel (навигация прочь с экрана)
+        stopLocationService()
+    }
+
+    private fun loadFavoriteIds(): Set<String> {
+        val raw = context.getSharedPreferences("workout_prefs", Context.MODE_PRIVATE)
+            .getString("favorite_activity_ids", "") ?: ""
+        return if (raw.isBlank()) emptySet() else raw.split(",").toSet()
     }
 
     private fun startLocationService(trainingId: String) {

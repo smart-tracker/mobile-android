@@ -21,14 +21,20 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.GpsFixed
+import androidx.compose.material.icons.filled.GpsOff
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.ui.graphics.ColorFilter
 import coil.compose.AsyncImage
@@ -41,6 +47,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import android.os.Build
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
@@ -81,6 +90,8 @@ fun WorkoutStartScreen(
     onPauseClick: () -> Unit,
     onFinishClick: () -> Unit,
     onMapTilesFailed: () -> Unit,
+    onToggleFavorite: (String) -> Unit,
+    onSearchQueryChange: (String) -> Unit,
 ) {
     // Запрашиваем разрешения при открытии экрана.
     // Результат в ViewModel не передаётся: сервис сам обработает SecurityException при отказе,
@@ -164,13 +175,15 @@ fun WorkoutStartScreen(
                 .padding(horizontal = 8.dp, vertical = 6.dp),
             horizontalArrangement = Arrangement.SpaceEvenly,
         ) {
-            // Первые 3 из pinnedTypes — быстрый выбор; порядок меняется при выборе
+            // Первые 3 из pinnedTypes — быстрый выбор; порядок меняется при выборе.
+            // Во время тренировки (isWorkoutStarted) иконки визуально отключены.
             state.pinnedTypes.forEach { type ->
                 WorkoutTypeIcon(
                     // Приоритет: локальный файл → URL (Coil загружает сам) → drawable fallback
                     iconModel = type.iconFile ?: type.imageUrl ?: iconResForKey(type.iconKey),
                     contentDescription = type.name,
                     isActive = !showTypeSelector && type.id == state.selectedType?.id,
+                    enabled = !state.isWorkoutStarted,
                     onClick = { onTypeSelected(type) },
                 )
             }
@@ -180,6 +193,7 @@ fun WorkoutStartScreen(
                 iconModel = R.drawable.ic_activity_other,
                 contentDescription = stringResource(R.string.workout_more),
                 isActive = showTypeSelector,
+                enabled = !state.isWorkoutStarted,
                 onClick = { showTypeSelector = true },
             )
         }
@@ -193,73 +207,45 @@ fun WorkoutStartScreen(
                 .fillMaxWidth()
                 .weight(1f),
         ) {
-            // Карта — занимает весь Box включая область под кнопкой
+            // Карта — занимает весь Box включая область под кнопкой.
+            // На API 31+ блюрится через Modifier.blur когда GPS не получен.
+            // На старых API — блюр недоступен, используется скрим ниже.
             MapViewComposable(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .then(
+                        if (!state.isGpsActive && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
+                            Modifier.blur(8.dp)
+                        else
+                            Modifier
+                    ),
                 currentLocation = state.trackPoints.lastOrNull(),
+                lastKnownLocation = state.lastKnownLocation,
                 trackPoints = state.trackPoints,
                 isTracking = state.isTracking,
                 mapTilesFailed = state.mapTilesFailed,
                 onMapTilesFailed = onMapTilesFailed,
             )
 
-            // ── GPS-оверлей — поверх карты, под кнопками ──────────────────────
-            // Показывается только во время активного трекинга, пока нет фикса или сигнал слабый
-            if (state.isTracking) {
-                when (state.gpsStatus) {
-                    WorkoutStartViewModel.GpsStatus.SEARCHING -> {
-                        // Полупрозрачный тёмный фон + спиннер + подпись
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(Color(0xAA000000)),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(12.dp),
-                            ) {
-                                CircularProgressIndicator(color = Color.White, strokeWidth = 3.dp)
-                                Text(
-                                    text = "Поиск GPS-сигнала...",
-                                    fontFamily = geologicaFontFamily,
-                                    fontWeight = FontWeight.Normal,
-                                    fontSize = 16.sp,
-                                    color = Color.White,
-                                )
-                                Text(
-                                    text = "Не закрывайте приложение",
-                                    fontFamily = geologicaFontFamily,
-                                    fontWeight = FontWeight.Thin,
-                                    fontSize = 13.sp,
-                                    color = Color.White,
-                                )
-                            }
-                        }
-                    }
-                    WorkoutStartViewModel.GpsStatus.UNAVAILABLE -> {
-                        // Предупреждение без блокировки экрана — пользователь должен выйти на улицу
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .align(Alignment.TopCenter)
-                                .background(Color(0xCC1A1A1A))
-                                .padding(horizontal = 16.dp, vertical = 10.dp),
-                        ) {
-                            Text(
-                                text = "GPS-сигнал слабый. Выйдите на открытое место.",
-                                fontFamily = geologicaFontFamily,
-                                fontWeight = FontWeight.Normal,
-                                fontSize = 13.sp,
-                                color = Color.White,
-                                textAlign = TextAlign.Center,
-                                modifier = Modifier.fillMaxWidth(),
-                            )
-                        }
-                    }
-                    WorkoutStartViewModel.GpsStatus.ACQUIRED -> { /* оверлей не нужен */ }
-                }
+            // ── Скрим-заглушка для API < 31 (blur недоступен) ─────────────────
+            if (!state.isGpsActive && Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color(0x99000000)),
+                )
             }
+
+            // ── GPS-бейдж — всегда виден в правом верхнем углу карты ─────────
+            Icon(
+                imageVector = if (state.isGpsActive) Icons.Filled.GpsFixed else Icons.Filled.GpsOff,
+                contentDescription = if (state.isGpsActive) "GPS получен" else "GPS не получен",
+                tint = if (state.isGpsActive) Color(0xFF4CAF50) else Color(0xFFF44336),
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(8.dp)
+                    .size(32.dp),
+            )
 
             // Кнопка(и) — поверх карты, прижата к низу
             if (!state.isTracking) {
@@ -344,24 +330,46 @@ fun WorkoutStartScreen(
     // ── Шторка выбора активности ─────────────────────────────────────────────
     if (showTypeSelector) {
         ModalBottomSheet(
-            onDismissRequest = { showTypeSelector = false },
+            onDismissRequest = {
+                showTypeSelector = false
+                onSearchQueryChange("")
+            },
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
             containerColor = Color.White,
             scrimColor = Color(0x4D0A1928), // rgba(10,25,40,0.30) — как в Figma
         ) {
+            // ── Поиск ───────────────────────────────────────────────────────
+            OutlinedTextField(
+                value = state.searchQuery,
+                onValueChange = onSearchQueryChange,
+                placeholder = {
+                    Text(
+                        text = "Поиск активности...",
+                        fontFamily = geologicaFontFamily,
+                        fontWeight = FontWeight.Normal,
+                        fontSize = 14.sp,
+                    )
+                },
+                singleLine = true,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+            )
+
             LazyColumn(
                 modifier = Modifier.fillMaxWidth(),
                 contentPadding = PaddingValues(bottom = 24.dp),
             ) {
-                items(state.workoutTypes) { type ->
+                items(state.filteredAndSortedTypes) { type ->
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable {
                                 onSheetTypeSelected(type)
                                 showTypeSelector = false
+                                onSearchQueryChange("")
                             }
-                            .padding(horizontal = 16.dp, vertical = 5.dp),
+                            .padding(start = 16.dp, end = 4.dp, top = 5.dp, bottom = 5.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         AsyncImage(
@@ -379,7 +387,17 @@ fun WorkoutStartScreen(
                             fontWeight = FontWeight.Normal,
                             fontSize = 14.sp,
                             color = ColorPrimary,
+                            modifier = Modifier.weight(1f),
                         )
+                        // ── Кнопка избранного ──────────────────────────────
+                        val isFav = type.iconKey in state.favoriteIds
+                        IconButton(onClick = { onToggleFavorite(type.iconKey) }) {
+                            Icon(
+                                imageVector = if (isFav) Icons.Filled.Star else Icons.Outlined.StarOutline,
+                                contentDescription = if (isFav) "Убрать из избранного" else "В избранное",
+                                tint = if (isFav) Color(0xFFFFC107) else Color(0xFF9E9E9E),
+                            )
+                        }
                     }
                 }
             }
@@ -435,6 +453,8 @@ private fun WorkoutTypeIcon(
     iconModel: Any?,
     contentDescription: String,
     isActive: Boolean,
+    /** false во время тренировки: alpha 0.38f + клики отключены */
+    enabled: Boolean = true,
     onClick: () -> Unit,
 ) {
     Box(
@@ -443,7 +463,8 @@ private fun WorkoutTypeIcon(
             .clip(RoundedCornerShape(5.dp))
             .background(if (isActive) ColorSecondary else Color.White)
             .border(1.dp, ColorPrimary, RoundedCornerShape(5.dp))
-            .clickable(onClick = onClick),
+            .then(if (enabled) Modifier.clickable(onClick = onClick) else Modifier)
+            .alpha(if (enabled) 1f else 0.38f),
         contentAlignment = Alignment.Center,
     ) {
         AsyncImage(
