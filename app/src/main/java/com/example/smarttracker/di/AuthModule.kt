@@ -11,6 +11,7 @@ import com.example.smarttracker.data.local.db.GpsPointDao
 import com.example.smarttracker.data.local.db.SmartTrackerDatabase
 import okhttp3.Interceptor
 import com.example.smarttracker.data.remote.AuthApiService
+import com.example.smarttracker.data.remote.TrainingApiService
 import com.example.smarttracker.data.repository.AuthRepositoryImpl
 import com.example.smarttracker.data.repository.WorkoutRepositoryImpl
 import com.example.smarttracker.data.repository.PasswordRecoveryRepositoryImpl
@@ -110,6 +111,11 @@ abstract class AuthModule {
         @Singleton
         fun provideAuthApiService(retrofit: Retrofit): AuthApiService =
             retrofit.create(AuthApiService::class.java)
+
+        @Provides
+        @Singleton
+        fun provideTrainingApiService(retrofit: Retrofit): TrainingApiService =
+            retrofit.create(TrainingApiService::class.java)
 
         @Provides
         @Singleton

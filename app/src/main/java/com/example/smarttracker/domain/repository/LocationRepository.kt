@@ -25,8 +25,19 @@ interface LocationRepository {
     suspend fun getUnsentPoints(trainingId: String): List<LocationPoint>
 
     /**
+     * Назначить batchId группе точек перед отправкой на сервер.
+     * Группировка позволяет атомарно помечать весь батч как отправленный.
+     *
+     * @param pointIds список Room-идентификаторов точек
+     * @param batchId UUID батча
+     */
+    suspend fun assignBatchId(pointIds: List<Long>, batchId: String)
+
+    /**
      * Пометить все точки блока как отправленные.
-     * @param batchId UUID блока, установленный перед отправкой (Этап 5).
+     * Вызывается после успешной загрузки батча на сервер.
+     *
+     * @param batchId UUID блока, установленный через [assignBatchId]
      */
     suspend fun markBatchAsSent(batchId: String)
 

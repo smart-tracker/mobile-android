@@ -19,8 +19,10 @@ import com.example.smarttracker.data.location.model.TrackingConfig
 import com.example.smarttracker.data.location.model.TrackingPriority
 import com.example.smarttracker.data.location.model.toAndroidLocation
 import com.example.smarttracker.data.location.tracker.LocationTracker
+import android.util.Log
 import com.example.smarttracker.domain.model.LocationPoint
 import com.example.smarttracker.domain.repository.LocationRepository
+import com.example.smarttracker.domain.repository.WorkoutRepository
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -33,6 +35,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.maplibre.android.geometry.LatLng
+import java.util.UUID
 import javax.inject.Inject
 
 /**
@@ -61,6 +64,9 @@ class LocationTrackingService : Service() {
 
     @Inject
     lateinit var locationRepository: LocationRepository
+
+    @Inject
+    lateinit var workoutRepository: WorkoutRepository
 
     @Inject
     lateinit var offlineMapManager: OfflineMapManager
@@ -103,6 +109,8 @@ class LocationTrackingService : Service() {
     private val pointBuffer = mutableListOf<LocationPoint>()
     private val bufferMutex = Mutex()
     private var flushTimerJob: Job? = null
+    /** Job цикла синхронизации GPS-точек с сервером */
+    private var syncJob: Job? = null
 
     // ── Первый GPS-fix и hint-таймер ─────────────────────────────────────────────
     /** true после получения первого хорошего GPS-fix этой сессии */
@@ -154,8 +162,11 @@ class LocationTrackingService : Service() {
             "SmartTracker:LocationTracking",
         ).also { it.acquire(LocationConfig.WAKELOCK_TIMEOUT_MS) }
 
+        Log.d(TAG, "onStartCommand: trainingId=$trainingId, interval=${intervalMs}ms")
+
         startLocationUpdates(intervalMs)
         startFlushTimer()
+        startSyncLoop()
         startHintTimer()
 
         return START_STICKY
@@ -184,6 +195,62 @@ class LocationTrackingService : Service() {
             while (isActive) {
                 delay(LocationConfig.BUFFER_FLUSH_INTERVAL_MS)
                 flushBuffer()
+            }
+        }
+    }
+
+    /**
+     * Цикл синхронизации GPS-точек с сервером.
+     *
+     * Каждые [LocationConfig.SYNC_INTERVAL_MS] читает из Room неотправленные точки,
+     * разбивает на батчи по [LocationConfig.GPS_BATCH_MAX_SIZE] и отправляет через
+     * WorkoutRepository.uploadGpsPoints(). При успехе — помечает батч как отправленный.
+     * При ошибке — ничего не делает, retry на следующем цикле.
+     *
+     * Ошибки ловятся на уровне каждого батча — один сбой не прерывает остальные батчи.
+     */
+    private fun startSyncLoop() {
+        syncJob?.cancel()
+        syncJob = scope.launch {
+            while (isActive) {
+                delay(LocationConfig.SYNC_INTERVAL_MS)
+                try {
+                    syncUnsentPoints()
+                } catch (e: Exception) {
+                    Log.w(TAG, "syncUnsentPoints failed, retry next cycle", e)
+                }
+            }
+        }
+    }
+
+    /**
+     * Отправляет накопленные в Room неотправленные GPS-точки на сервер.
+     * Вызывается периодически из syncLoop и однократно в onDestroy.
+     */
+    private suspend fun syncUnsentPoints() {
+        if (trainingId.isBlank()) return
+
+        val unsent = locationRepository.getUnsentPoints(trainingId)
+        if (unsent.isEmpty()) return
+
+        Log.d(TAG, "syncUnsentPoints: ${unsent.size} unsent points for training=$trainingId")
+
+        unsent.chunked(LocationConfig.GPS_BATCH_MAX_SIZE).forEach { chunk ->
+            try {
+                val batchId = UUID.randomUUID().toString()
+                val pointIds = chunk.map { it.id }
+                locationRepository.assignBatchId(pointIds, batchId)
+
+                workoutRepository.uploadGpsPoints(trainingId, batchId, chunk)
+                    .onSuccess { saved ->
+                        Log.d(TAG, "GPS batch uploaded: $saved points, batchId=$batchId")
+                        locationRepository.markBatchAsSent(batchId)
+                    }
+                    .onFailure { e ->
+                        Log.w(TAG, "GPS batch upload failed, batchId=$batchId", e)
+                    }
+            } catch (e: Exception) {
+                Log.w(TAG, "GPS sync chunk error", e)
             }
         }
     }
@@ -343,10 +410,12 @@ class LocationTrackingService : Service() {
         activeTracker = null
         hintJob?.cancel()
         flushTimerJob?.cancel()
+        syncJob?.cancel()
 
-        // Финальный сброс буфера: записываем все накопленные точки перед остановкой
+        // Финальный сброс буфера + попытка синхронизации оставшихся точек
         scope.launch {
             bufferMutex.withLock { flushBufferLocked() }
+            syncUnsentPoints()
         }.invokeOnCompletion {
             scope.cancel()
         }
@@ -395,6 +464,8 @@ class LocationTrackingService : Service() {
             .build()
 
     companion object {
+        private const val TAG = "LocationTrackingService"
+
         // ── Intent extras ─────────────────────────────────────────────────────────
         const val EXTRA_TRAINING_ID        = "training_id"
         const val EXTRA_INTERVAL_MS        = "interval_ms"

@@ -25,7 +25,9 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import java.util.UUID
@@ -91,6 +93,8 @@ class WorkoutStartViewModel @Inject constructor(
          * При завершении тренировки сбрасывается в false.
          */
         val mapTilesFailed: Boolean = false,
+        /** true пока выполняется POST /training/start — блокирует кнопку «Начать» */
+        val isStarting: Boolean = false,
     )
 
     private val _state = MutableStateFlow(UiState())
@@ -133,13 +137,51 @@ class WorkoutStartViewModel @Inject constructor(
         }
     }
 
-    /** Нажатие «Начать тренировку» — запускает таймер и сервис трекинга */
+    /**
+     * Нажатие «Начать тренировку» — регистрирует тренировку на сервере,
+     * затем запускает таймер и сервис GPS-трекинга.
+     *
+     * При возобновлении после паузы trainingId уже существует — сервер не вызывается повторно.
+     * При ошибке сети — fallback на локальный UUID с предупреждением пользователю.
+     */
     fun onStartWorkoutClick() {
-        // trainingId генерируется один раз за сессию; при паузе/возобновлении ID не меняется
-        val trainingId = currentTrainingId ?: UUID.randomUUID().toString()
-            .also { currentTrainingId = it }
+        val selectedType = _state.value.selectedType ?: return
 
-        // Таймер стартует от сохранённой паузы: при первом старте pausedElapsedMs = 0
+        // Возобновление после паузы — ID уже получен, сервер не вызываем
+        if (currentTrainingId != null) {
+            resumeTracking()
+            return
+        }
+
+        // Первый старт — регистрируем тренировку на сервере
+        viewModelScope.launch {
+            _state.update { it.copy(isStarting = true) }
+
+            workoutRepository.startTraining(selectedType.id)
+                .onSuccess { result ->
+                    currentTrainingId = result.activeTrainingId
+                    _state.update { it.copy(isStarting = false) }
+                    resumeTracking()
+                }
+                .onFailure {
+                    // Fallback: локальный UUID, тренировка записывается офлайн
+                    currentTrainingId = UUID.randomUUID().toString()
+                    _state.update { it.copy(
+                        isStarting = false,
+                        errorMessage = "Нет связи с сервером. Тренировка сохраняется локально.",
+                    ) }
+                    resumeTracking()
+                }
+        }
+    }
+
+    /**
+     * Запускает таймер и GPS-сервис для текущего trainingId.
+     * Вызывается как при первом старте (после startTraining), так и при возобновлении из паузы.
+     */
+    private fun resumeTracking() {
+        val trainingId = currentTrainingId ?: return
+
         startTimeMs = System.currentTimeMillis() - pausedElapsedMs
         timerJob = viewModelScope.launch {
             while (isActive) {
@@ -167,9 +209,50 @@ class WorkoutStartViewModel @Inject constructor(
         observerJob?.cancel()
     }
 
-    /** Нажатие «Завершить» — останавливает всё и сбрасывает статистику в ноль */
+    /**
+     * Нажатие «Завершить» — останавливает трекинг, отправляет итоги на сервер
+     * и сбрасывает статистику в ноль.
+     *
+     * saveTraining выполняется fire-and-forget: при ошибке данные остаются в Room,
+     * пользователь не блокируется.
+     */
     fun onFinishClick() {
+        val trainingId = currentTrainingId
+        val state = _state.value
+
         timerJob?.cancel()
+        stopLocationService()
+        observerJob?.cancel()
+
+        // Отправить итоги на сервер (fire-and-forget)
+        if (trainingId != null) {
+            viewModelScope.launch {
+                // Ждём пока сервис завершит финальный sync в onDestroy.
+                // Без задержки saveTraining успевает закрыть тренировку на сервере
+                // раньше, чем сервис отправляет последние точки → 404 на gps_points.
+                delay(2000L)
+
+                // Парсим дистанцию из отображаемой строки (формат "1.23 км")
+                val distanceKm = state.distanceDisplay
+                    .replace(" км", "")
+                    .replace(",", ".")
+                    .toDoubleOrNull() ?: 0.0
+                val distanceM = distanceKm * 1000.0
+                val kcal = state.caloriesDisplay
+                    .replace(" кКал", "")
+                    .toDoubleOrNull()
+
+                workoutRepository.saveTraining(
+                    trainingId = trainingId,
+                    timeEnd = Instant.now()
+                        .atZone(ZoneOffset.UTC)
+                        .format(DateTimeFormatter.ISO_OFFSET_DATE_TIME),
+                    totalDistanceMeters = if (distanceM > 0) distanceM else null,
+                    totalKilocalories = kcal,
+                )
+            }
+        }
+
         pausedElapsedMs = 0L
         _state.update { it.copy(
             isTracking      = false,
@@ -182,10 +265,7 @@ class WorkoutStartViewModel @Inject constructor(
             trackPoints     = emptyList(),
             mapTilesFailed  = false,
         ) }
-        stopLocationService()
-        observerJob?.cancel()
         currentTrainingId = null
-        // Сбрасываем флаг офлайн-загрузки: следующая тренировка может быть в другом месте
         offlineMapManager.reset()
     }
 
