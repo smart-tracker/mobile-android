@@ -54,10 +54,19 @@ interface GpsPointDao {
     fun observePointsForTraining(trainingId: String): Flow<List<GpsPointEntity>>
 
     /**
-     * Последняя сохранённая GPS-точка из всех тренировок.
+     * Последняя сохранённая GPS-точка из предыдущих тренировок.
      * Используется для начального центрирования карты до получения GPS-сигнала.
-     * Возвращает null если тренировок ещё не было.
+     *
+     * [excludedTrainingId] позволяет исключить активную discovery/черновую тренировку,
+     * чтобы метод не возвращал точку текущей временной сессии как "последнюю из прошлых".
+     * Если [excludedTrainingId] == null, поведение остаётся прежним.
+     *
+     * Возвращает null если после применения фильтра подходящих тренировок ещё не было.
      */
-    @Query("SELECT * FROM gps_points ORDER BY timestampUtc DESC LIMIT 1")
-    suspend fun getLastPoint(): GpsPointEntity?
+    @Query(
+        "SELECT * FROM gps_points " +
+            "WHERE (:excludedTrainingId IS NULL OR trainingId != :excludedTrainingId) " +
+            "ORDER BY timestampUtc DESC LIMIT 1"
+    )
+    suspend fun getLastPoint(excludedTrainingId: String?): GpsPointEntity?
 }
