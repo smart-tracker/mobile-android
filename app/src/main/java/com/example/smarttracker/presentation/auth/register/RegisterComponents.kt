@@ -68,6 +68,7 @@ import com.example.smarttracker.presentation.theme.ColorPrimary
 import com.example.smarttracker.presentation.theme.ColorSecondary
 import java.util.Calendar
 
+/** Переиспользуемые Compose-компоненты для экранов многошаговой регистрации. */
 @Composable
 internal fun NicknameField(
     value: String,

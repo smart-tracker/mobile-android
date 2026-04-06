@@ -32,4 +32,11 @@ interface LocationRepository {
 
     /** Наблюдать за точками тренировки в реальном времени (для обновления UI). */
     fun observePointsForTraining(trainingId: String): Flow<List<LocationPoint>>
+
+    /**
+     * Последняя сохранённая GPS-точка из любой тренировки.
+     * Используется для начального центрирования карты до получения GPS-сигнала.
+     * Возвращает null если тренировок ещё не было.
+     */
+    suspend fun getLastKnownPoint(): LocationPoint?
 }

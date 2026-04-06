@@ -46,7 +46,9 @@ import org.maplibre.geojson.Point
  *
  * Офлайн: при [mapTilesFailed] == true сразу показывает [OfflineMapFallback].
  *
- * @param currentLocation последняя GPS-точка
+ * @param currentLocation последняя GPS-точка текущей тренировки (null до первого фикса)
+ * @param lastKnownLocation последняя точка из предыдущих тренировок; используется для
+ *   начального центрирования карты пока [currentLocation] == null. Маркер не показывается.
  * @param trackPoints все точки текущей тренировки для рисования трека
  * @param isTracking true пока тренировка запущена (не на паузе); управляет следованием камеры
  * @param mapTilesFailed true когда MapLibre не смог загрузить тайлы (нет сети + нет кэша)
@@ -56,6 +58,7 @@ import org.maplibre.geojson.Point
 fun MapViewComposable(
     modifier: Modifier = Modifier,
     currentLocation: LocationPoint?,
+    lastKnownLocation: LocationPoint? = null,
     trackPoints: List<LocationPoint>,
     isTracking: Boolean,
     mapTilesFailed: Boolean,
@@ -81,6 +84,8 @@ fun MapViewComposable(
             var markerAnimator: ValueAnimator? = null
             // Tweak 2: флаг первого fix — нужен чтобы первый раз задать zoom 16
             var cameraMovedToFirstFix: Boolean = false
+            // Флаг первичного центрирования по lastKnownLocation (выполняется один раз)
+            var lastKnownCentered: Boolean = false
         }
     }
 
@@ -201,7 +206,16 @@ fun MapViewComposable(
                 style.getSourceAs<GeoJsonSource>("track-source")?.setGeoJson(trackFc)
 
                 // ── Маркер текущей позиции + камера ───────────────────────────────
-                if (currentLocation == null) return@getMapAsync
+                if (currentLocation == null) {
+                    // Нет GPS-фикса текущей тренировки. Если есть точка из прошлой тренировки
+                    // — центрируем карту на ней один раз (без маркера пользователя).
+                    if (!state.lastKnownCentered && lastKnownLocation != null) {
+                        state.lastKnownCentered = true
+                        val lkLatLng = LatLng(lastKnownLocation.latitude, lastKnownLocation.longitude)
+                        map.animateCamera(CameraUpdateFactory.newLatLngZoom(lkLatLng, 14.0), 800)
+                    }
+                    return@getMapAsync
+                }
 
                 val newLatLng = LatLng(currentLocation.latitude, currentLocation.longitude)
                 val prev = state.prevMarkerLatLng

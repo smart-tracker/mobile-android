@@ -1,5 +1,6 @@
 package com.example.smarttracker.domain.model
 
+/** Перечисление ролей пользователя, определяющих доступный функционал. */
 enum class UserRole {
     /** Спортсмен — цель ATHLETE */
     ATHLETE,
