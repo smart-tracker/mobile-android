@@ -232,13 +232,12 @@ class WorkoutStartViewModel @Inject constructor(
                 timeoutJob?.cancel()
                 timeoutJob = launch {
                     delay(LocationConfig.GPS_FIX_TIMEOUT_MS)
-                    // Сигнал недоступности GPS — останавливаем обновления местоположения
-                    // чтобы не тратить батарею на поиск сигнала в тоннеле/подвале.
-                    // Трекинг (запись) тоже прекращается — нет смысла записывать пустые интервалы.
-                    stopLocationService()
+                    // Сигнал недоступности GPS — переводим трекинг в тот же режим,
+                    // что и ручная пауза, чтобы корректно остановить таймер,
+                    // сохранить elapsed-время паузы и синхронно обновить UI.
+                    onPauseClick()
                     _state.update { it.copy(
-                        gpsStatus  = GpsStatus.UNAVAILABLE,
-                        isTracking = false,
+                        gpsStatus = GpsStatus.UNAVAILABLE,
                     ) }
                 }
             }
