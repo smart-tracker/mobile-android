@@ -118,7 +118,11 @@ abstract class AuthModule {
                 context,
                 SmartTrackerDatabase::class.java,
                 "smart_tracker.db"
-            ).build()
+            )
+            // version 2 добавила bearing + externalId. Деструктивная миграция допустима
+            // пока данные тренировок не критичны (production-миграция — в Этапе 5).
+            .fallbackToDestructiveMigration()
+            .build()
 
         @Provides
         @Singleton

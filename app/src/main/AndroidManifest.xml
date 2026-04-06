@@ -7,6 +7,9 @@
     <!-- GPS -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- Фоновый доступ к геолокации (Android Q+). Запрашивается отдельным шагом ПОСЛЕ Fine/Coarse.
+         Нужен чтобы LocationTrackingService получал обновления когда экран выключен. -->
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
 
     <!-- Foreground Service -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />

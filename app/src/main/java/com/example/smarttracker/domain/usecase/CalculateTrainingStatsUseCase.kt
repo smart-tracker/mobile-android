@@ -87,6 +87,10 @@ class CalculateTrainingStatsUseCase @Inject constructor() {
      *
      * Формула даёт точность ~0.5% для дистанций до нескольких тысяч км.
      * Земля аппроксимируется сферой радиусом 6 371 000 м.
+     *
+     * **Фильтр по точности:** если вычисленное расстояние меньше максимальной погрешности
+     * из двух точек — сегмент лежит внутри круга неопределённости и не учитывается.
+     * Это исключает накопление "прыгающих" нескольких метров в GPS при стоянии на месте.
      */
     private fun haversineMeters(p1: LocationPoint, p2: LocationPoint): Double {
         val earthRadiusM = 6_371_000.0
@@ -101,7 +105,10 @@ class CalculateTrainingStatsUseCase @Inject constructor() {
                 sin(dLon / 2) * sin(dLon / 2)
 
         val c = 2 * atan2(sqrt(a), sqrt(1 - a))
+        val dist = earthRadiusM * c
 
-        return earthRadiusM * c
+        // Если обе точки имеют данные о точности — пропускаем сегмент внутри "пятна неопределённости"
+        val maxAccuracy = maxOf(p1.accuracy ?: 0f, p2.accuracy ?: 0f).toDouble()
+        return if (maxAccuracy > 0.0 && dist < maxAccuracy) 0.0 else dist
     }
 }

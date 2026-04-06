@@ -88,9 +88,20 @@ class AospLocationTracker(context: Context) : LocationTracker {
         try {
             val gpsLoc     = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)
             val networkLoc = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
-            // Возвращаем более свежую из двух позиций
+            // Берём наиболее свежую из доступных позиций
             val best = listOfNotNull(gpsLoc, networkLoc).maxByOrNull { it.time }
-            callback(best?.toTrackLocation())
+            if (best == null) {
+                callback(null)
+                return
+            }
+            // Проверяем свежесть: позиция старше LAST_LOCATION_MAX_AGE_MS не несёт
+            // актуальной информации и может ввести в заблуждение (старый кэш).
+            val ageMs = System.currentTimeMillis() - best.time
+            if (ageMs > com.example.smarttracker.data.location.LocationConfig.LAST_LOCATION_MAX_AGE_MS) {
+                callback(null)
+            } else {
+                callback(best.toTrackLocation())
+            }
         } catch (e: SecurityException) {
             callback(null)
         }

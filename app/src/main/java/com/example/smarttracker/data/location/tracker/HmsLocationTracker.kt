@@ -75,7 +75,16 @@ class HmsLocationTracker(context: Context) : LocationTracker {
         try {
             client.lastLocation
                 .addOnSuccessListener { location ->
-                    callback(location?.toTrackLocation())
+                    if (location == null) {
+                        callback(null)
+                        return@addOnSuccessListener
+                    }
+                    val ageMs = System.currentTimeMillis() - location.time
+                    if (ageMs > com.example.smarttracker.data.location.LocationConfig.LAST_LOCATION_MAX_AGE_MS) {
+                        callback(null)
+                    } else {
+                        callback(location.toTrackLocation())
+                    }
                 }
                 .addOnFailureListener {
                     callback(null)

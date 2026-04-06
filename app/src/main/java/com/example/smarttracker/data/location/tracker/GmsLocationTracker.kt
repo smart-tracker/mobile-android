@@ -72,7 +72,19 @@ class GmsLocationTracker(context: Context) : LocationTracker {
         try {
             client.lastLocation
                 .addOnSuccessListener { location ->
-                    callback(location?.toTrackLocation())
+                    if (location == null) {
+                        callback(null)
+                        return@addOnSuccessListener
+                    }
+                    // Проверяем свежесть: устаревшая позиция хуже, чем отсутствие позиции.
+                    // Старый кэш (> LAST_LOCATION_MAX_AGE_MS) вводит в заблуждение — камера
+                    // прыгает в другой город при первом запуске после долгого перерыва.
+                    val ageMs = System.currentTimeMillis() - location.time
+                    if (ageMs > com.example.smarttracker.data.location.LocationConfig.LAST_LOCATION_MAX_AGE_MS) {
+                        callback(null)
+                    } else {
+                        callback(location.toTrackLocation())
+                    }
                 }
                 .addOnFailureListener {
                     callback(null)

@@ -2,22 +2,34 @@ package com.example.smarttracker.data.local.db
 
 import androidx.room.Dao
 import androidx.room.Insert
+import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import kotlinx.coroutines.flow.Flow
 
 /**
  * DAO для работы с таблицей GPS-точек.
  *
- * Все suspend-функции безопасно вызываются из корутин Room автоматически
- * переключает их на IO-диспетчер. observePointsForTraining возвращает Flow,
- * который Room обновляет при любом изменении таблицы.
+ * [insert] и [insertAll] используют [OnConflictStrategy.IGNORE]: если точка с таким
+ * же первичным ключом уже существует (редкий кейс при crash-recovery), запись тихо
+ * игнорируется без исключения — дубли не накапливаются.
+ *
+ * [insertAll] принимает батч и вставляет в одной транзакции Room — эффективнее
+ * N отдельных [insert] при сбросе буфера из [LocationTrackingService].
  */
 @Dao
 interface GpsPointDao {
 
     /** Вставить одну GPS-точку. id игнорируется (autoGenerate). */
-    @Insert
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insert(point: GpsPointEntity)
+
+    /**
+     * Batch-вставка списка точек в одной транзакции.
+     * Используется при сбросе in-memory буфера из LocationTrackingService.
+     * IGNORE: при повторной отправке (crash-recovery) дубли не создаются.
+     */
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertAll(points: List<GpsPointEntity>)
 
     /** Все точки тренировки (единовременный снимок). */
     @Query("SELECT * FROM gps_points WHERE trainingId = :trainingId ORDER BY timestampUtc ASC")
