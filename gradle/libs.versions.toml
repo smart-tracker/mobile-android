@@ -1,6 +1,7 @@
 [versions]
 agp = "8.13.2"
 kotlin = "1.9.24"
+composeCompilerExtension = "1.5.14"
 ksp = "1.9.24-1.0.20"
 coreKtx = "1.13.1"
 googleMaterial = "1.12.0"
