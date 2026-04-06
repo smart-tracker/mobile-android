@@ -102,6 +102,12 @@ fun MapViewComposable(
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
+            state.mapView?.let { mapView ->
+                mapView.onPause()
+                mapView.onStop()
+                mapView.onDestroy()
+            }
+            state.mapView = null
         }
     }
 
