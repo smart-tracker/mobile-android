@@ -35,6 +35,7 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 import java.util.UUID
 import javax.inject.Inject
+import androidx.core.content.edit
 
 /**
  * ViewModel экрана начала / активной тренировки.
@@ -60,7 +61,7 @@ class WorkoutStartViewModel @Inject constructor(
 
     data class UiState(
         /** Текущая дата в формате "DD.MM.YYYY (День недели)" */
-        val currentDate: String = formatCurrentDate(),
+        val currentDate: String = "",
         /** Полный список типов тренировок с сервера */
         val workoutTypes: List<WorkoutType> = emptyList(),
         /**
@@ -113,7 +114,6 @@ class WorkoutStartViewModel @Inject constructor(
         val mapTilesFailed: Boolean = false,
         /** true пока выполняется POST /training/start — блокирует кнопку «Начать» */
         val isStarting: Boolean = false,
-    )
         /** Множество iconKey избранных типов активностей, хранится в SharedPreferences */
         val favoriteIds: Set<String> = emptySet(),
         /** Поисковый запрос в шторке выбора активности */
@@ -164,6 +164,10 @@ class WorkoutStartViewModel @Inject constructor(
     private var observerJob: Job? = null
 
     init {
+        // Устанавливаем текущую дату
+        val currentDate = formatCurrentDate()
+        _state.update { it.copy(currentDate = currentDate) }
+
         loadWorkoutTypes()
         val favIds = loadFavoriteIds()
         if (favIds.isNotEmpty()) _state.update { it.copy(favoriteIds = favIds) }
@@ -247,11 +251,7 @@ class WorkoutStartViewModel @Inject constructor(
      */
     private fun resumeTracking() {
         val trainingId = currentTrainingId ?: return
-    /** Нажатие «Начать тренировку» или «Продолжить» после паузы */
-    fun onStartWorkoutClick() {
-        // Первый старт: discovery-сервис останавливается, запускается реальный трекинг.
-        // Возобновление после паузы: сервис уже работает, достаточно перезапустить таймер.
-        val isFirstStart = currentTrainingId == null
+        val isFirstStart = _state.value.isWorkoutStarted.not()
 
         if (isFirstStart) {
             discoveryObserverJob?.cancel()
@@ -259,10 +259,6 @@ class WorkoutStartViewModel @Inject constructor(
             stopLocationService()
             discoveryTrainingId = null
         }
-
-        // trainingId генерируется один раз за сессию; при паузе/возобновлении ID не меняется
-        val trainingId = currentTrainingId ?: UUID.randomUUID().toString()
-            .also { currentTrainingId = it }
 
         startTimeMs = System.currentTimeMillis() - pausedElapsedMs
         timerJob = viewModelScope.launch {
@@ -311,7 +307,6 @@ class WorkoutStartViewModel @Inject constructor(
      * saveTraining выполняется fire-and-forget: при ошибке данные остаются в Room,
      * пользователь не блокируется.
      */
-    /** Нажатие «Завершить» — останавливает всё, сбрасывает статистику, перезапускает поиск GPS */
     fun onFinishClick() {
         val trainingId = currentTrainingId
         val state = _state.value
@@ -382,9 +377,9 @@ class WorkoutStartViewModel @Inject constructor(
         val current = _state.value.favoriteIds
         val updated = if (typeActivId in current) current - typeActivId else current + typeActivId
         context.getSharedPreferences("workout_prefs", Context.MODE_PRIVATE)
-            .edit()
-            .putString("favorite_activity_ids", updated.joinToString(","))
-            .apply()
+            .edit {
+                putString("favorite_activity_ids", updated.joinToString(","))
+            }
         _state.update { it.copy(favoriteIds = updated) }
     }
 
