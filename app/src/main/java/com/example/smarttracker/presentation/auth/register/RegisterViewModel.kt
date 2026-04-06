@@ -27,6 +27,7 @@ import java.time.LocalDate
 import javax.inject.Inject
 import kotlinx.coroutines.FlowPreview
 
+/** ViewModel экрана регистрации: управление шагами, валидация, вызов UseCases. */
 @OptIn(FlowPreview::class)
 @HiltViewModel
 class RegisterViewModel @Inject constructor(

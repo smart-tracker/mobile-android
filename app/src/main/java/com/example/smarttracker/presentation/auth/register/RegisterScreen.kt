@@ -94,6 +94,7 @@ import com.example.smarttracker.presentation.theme.ColorSecondary
 import com.example.smarttracker.presentation.theme.ColorWhite
 import com.example.smarttracker.presentation.theme.SmartTrackerTheme
 
+/** Многошаговый экран регистрации: email, пароль, данные профиля, верификация. */
 // ── Корневой composable ───────────────────────────────────────────────────────
 
 @Composable

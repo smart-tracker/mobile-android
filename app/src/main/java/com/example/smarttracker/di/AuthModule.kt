@@ -31,6 +31,7 @@ import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import javax.inject.Singleton
 
+/** Hilt-модуль: привязки репозиториев, хранилищ, Retrofit, OkHttpClient и Room. */
 @Module
 @InstallIn(SingletonComponent::class)
 abstract class AuthModule {
