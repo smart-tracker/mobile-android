@@ -1,5 +1,6 @@
 package com.example.smarttracker.presentation.workout.start
 
+import android.util.Log
 import android.content.Context
 import android.content.Intent
 import androidx.lifecycle.ViewModel
@@ -17,15 +18,19 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
+import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import java.util.UUID
@@ -86,6 +91,16 @@ class WorkoutStartViewModel @Inject constructor(
         val avgSpeedDisplay: String = "00:00 мин/км",
         /** Сожжённые калории, например "86 кКал" */
         val caloriesDisplay: String = "0 кКал",
+        /**
+         * Пройденное расстояние в метрах — сырое числовое значение.
+         * Используется при сохранении тренировки на сервере вместо парсинга [distanceDisplay].
+         */
+        val distanceMeters: Double = 0.0,
+        /**
+         * Сожжённые калории — сырое числовое значение.
+         * Используется при сохранении тренировки на сервере вместо парсинга [caloriesDisplay].
+         */
+        val kilocalories: Double = 0.0,
         /** Сообщение об ошибке загрузки типов (null = нет ошибки) */
         val errorMessage: String? = null,
         /** GPS-точки текущей тренировки для рисования трека на карте */
@@ -96,6 +111,9 @@ class WorkoutStartViewModel @Inject constructor(
          * При завершении тренировки сбрасывается в false.
          */
         val mapTilesFailed: Boolean = false,
+        /** true пока выполняется POST /training/start — блокирует кнопку «Начать» */
+        val isStarting: Boolean = false,
+    )
         /** Множество iconKey избранных типов активностей, хранится в SharedPreferences */
         val favoriteIds: Set<String> = emptySet(),
         /** Поисковый запрос в шторке выбора активности */
@@ -182,6 +200,53 @@ class WorkoutStartViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Нажатие «Начать тренировку» — регистрирует тренировку на сервере,
+     * затем запускает таймер и сервис GPS-трекинга.
+     *
+     * При возобновлении после паузы trainingId уже существует — сервер не вызывается повторно.
+     * При ошибке сети — fallback на локальный UUID с предупреждением пользователю.
+     */
+    fun onStartWorkoutClick() {
+        val selectedType = _state.value.selectedType ?: return
+
+        // Защита от двойного тапа: пока идёт сетевой запрос, игнорируем повторные нажатия
+        if (_state.value.isStarting) return
+
+        // Возобновление после паузы — ID уже получен, сервер не вызываем
+        if (currentTrainingId != null) {
+            resumeTracking()
+            return
+        }
+
+        // Первый старт — регистрируем тренировку на сервере
+        viewModelScope.launch {
+            _state.update { it.copy(isStarting = true) }
+
+            workoutRepository.startTraining(selectedType.id)
+                .onSuccess { result ->
+                    currentTrainingId = result.activeTrainingId
+                    _state.update { it.copy(isStarting = false) }
+                    resumeTracking()
+                }
+                .onFailure {
+                    // Fallback: локальный UUID, тренировка записывается офлайн
+                    currentTrainingId = UUID.randomUUID().toString()
+                    _state.update { it.copy(
+                        isStarting = false,
+                        errorMessage = "Нет связи с сервером. Тренировка сохраняется локально.",
+                    ) }
+                    resumeTracking()
+                }
+        }
+    }
+
+    /**
+     * Запускает таймер и GPS-сервис для текущего trainingId.
+     * Вызывается как при первом старте (после startTraining), так и при возобновлении из паузы.
+     */
+    private fun resumeTracking() {
+        val trainingId = currentTrainingId ?: return
     /** Нажатие «Начать тренировку» или «Продолжить» после паузы */
     fun onStartWorkoutClick() {
         // Первый старт: discovery-сервис останавливается, запускается реальный трекинг.
@@ -199,7 +264,6 @@ class WorkoutStartViewModel @Inject constructor(
         val trainingId = currentTrainingId ?: UUID.randomUUID().toString()
             .also { currentTrainingId = it }
 
-        // Таймер стартует от сохранённой паузы: при первом старте pausedElapsedMs = 0
         startTimeMs = System.currentTimeMillis() - pausedElapsedMs
         timerJob = viewModelScope.launch {
             while (isActive) {
@@ -240,9 +304,47 @@ class WorkoutStartViewModel @Inject constructor(
         LocationTrackingService.setRecording(context, false)
     }
 
+    /**
+     * Нажатие «Завершить» — останавливает трекинг, отправляет итоги на сервер
+     * и сбрасывает статистику в ноль.
+     *
+     * saveTraining выполняется fire-and-forget: при ошибке данные остаются в Room,
+     * пользователь не блокируется.
+     */
     /** Нажатие «Завершить» — останавливает всё, сбрасывает статистику, перезапускает поиск GPS */
     fun onFinishClick() {
+        val trainingId = currentTrainingId
+        val state = _state.value
+
         timerJob?.cancel()
+        stopLocationService()
+        observerJob?.cancel()
+
+        // Отправить итоги на сервер (fire-and-forget)
+        if (trainingId != null) {
+            viewModelScope.launch {
+                // Ждём сигнала от сервиса о завершении финального flush+sync.
+                // Таймаут 5 сек — если сервис упал или сигнал не пришёл, идём дальше
+                // (худший случай: saveTraining закроет тренировку без последних точек,
+                // но пользователь не блокируется).
+                val syncSignaled = withTimeoutOrNull(5_000L) {
+                    LocationTrackingService.finishSyncFlow.first()
+                }
+                if (syncSignaled == null) {
+                    Log.w(TAG, "Timeout waiting for service sync signal; calling saveTraining anyway")
+                }
+
+                workoutRepository.saveTraining(
+                    trainingId = trainingId,
+                    timeEnd = Instant.now()
+                        .atZone(ZoneOffset.UTC)
+                        .format(DateTimeFormatter.ISO_OFFSET_DATE_TIME),
+                    totalDistanceMeters = state.distanceMeters.takeIf { it > 0 },
+                    totalKilocalories   = state.kilocalories.takeIf { it > 0 },
+                )
+            }
+        }
+
         pausedElapsedMs = 0L
         _state.update { it.copy(
             isTracking       = false,
@@ -253,13 +355,12 @@ class WorkoutStartViewModel @Inject constructor(
             distanceDisplay  = "0.00 км",
             avgSpeedDisplay  = "00:00 мин/км",
             caloriesDisplay  = "0 кКал",
+            distanceMeters   = 0.0,
+            kilocalories     = 0.0,
             trackPoints      = emptyList(),
             mapTilesFailed   = false,
         ) }
-        stopLocationService()
-        observerJob?.cancel()
         currentTrainingId = null
-        // Сбрасываем флаг офлайн-загрузки: следующая тренировка может быть в другом месте
         offlineMapManager.reset()
         // Сразу перезапускаем discovery-GPS: иконка остаётся живой между тренировками
         startDiscoveryGps()
@@ -372,7 +473,7 @@ class WorkoutStartViewModel @Inject constructor(
                         else 0L
 
                         val speed = if (durationSeconds > 0) accumulatedDistanceM / durationSeconds else 0.0
-                        val kcal = (accumulatedDistanceM / 1000.0 * 70.0).toFloat()
+                        val kcal = accumulatedDistanceM / 1000.0 * 70.0
                         Triple(accumulatedDistanceM, speed, kcal)
                     }
 
@@ -380,6 +481,8 @@ class WorkoutStartViewModel @Inject constructor(
                         distanceDisplay = "%.2f км".format(newDistanceM / 1000.0),
                         avgSpeedDisplay = formatPace(avgSpeedMps),
                         caloriesDisplay = "${kilocalories.toInt()} кКал",
+                        distanceMeters  = newDistanceM,
+                        kilocalories    = kilocalories,
                         trackPoints     = points,
                     ) }
                 }
@@ -462,6 +565,8 @@ class WorkoutStartViewModel @Inject constructor(
     }
 
     companion object {
+        private const val TAG = "WorkoutStartViewModel"
+
         /**
          * Форматирует миллисекунды в строку "HH:MM:SS" с ведущими нулями.
          * Используется для таймера тренировки.

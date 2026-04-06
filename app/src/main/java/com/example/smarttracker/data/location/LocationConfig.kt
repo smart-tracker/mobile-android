@@ -97,4 +97,12 @@ object LocationConfig {
     /** SharedPreferences: файл для crash-recovery (хранит trainingId активной тренировки) */
     const val PREFS_RECOVERY       = "location_service_recovery"
     const val KEY_ACTIVE_TRAINING  = "active_training_id"
+
+    // ── Синхронизация GPS-точек с сервером ──────────────────────────────────────
+
+    /** Интервал между попытками отправки GPS-точек на сервер (мс) */
+    const val SYNC_INTERVAL_MS     = 10_000L
+
+    /** Максимум точек в одном батче (ограничение API POST /training/{id}/gps_points) */
+    const val GPS_BATCH_MAX_SIZE   = 100
 }

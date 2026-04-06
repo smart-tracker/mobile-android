@@ -40,8 +40,16 @@ interface GpsPointDao {
     suspend fun getUnsentPoints(trainingId: String): List<GpsPointEntity>
 
     /**
+     * Назначить batchId группе точек перед отправкой.
+     * batchId выставляется только один раз и не перезаписывается при ретраях,
+     * чтобы сохранить идемпотентность синхронизации.
+     */
+    @Query("UPDATE gps_points SET batchId = :batchId WHERE id IN (:pointIds) AND batchId IS NULL")
+    suspend fun assignBatchId(pointIds: List<Long>, batchId: String)
+
+    /**
      * Пометить все точки блока как отправленные.
-     * Используется в Этапе 5 после успешной синхронизации с бэкендом.
+     * Вызывается после успешной синхронизации батча с бэкендом.
      */
     @Query("UPDATE gps_points SET isSent = 1 WHERE batchId = :batchId")
     suspend fun markBatchAsSent(batchId: String)

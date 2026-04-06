@@ -36,6 +36,10 @@ class LocationRepositoryImpl @Inject constructor(
     override suspend fun getUnsentPoints(trainingId: String): List<LocationPoint> =
         dao.getUnsentPoints(trainingId).map { it.toDomain() }
 
+    override suspend fun assignBatchId(pointIds: List<Long>, batchId: String) {
+        dao.assignBatchId(pointIds, batchId)
+    }
+
     override suspend fun markBatchAsSent(batchId: String) {
         dao.markBatchAsSent(batchId)
     }
