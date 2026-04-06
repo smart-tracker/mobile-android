@@ -147,6 +147,9 @@ class WorkoutStartViewModel @Inject constructor(
     fun onStartWorkoutClick() {
         val selectedType = _state.value.selectedType ?: return
 
+        // Защита от двойного тапа: пока идёт сетевой запрос, игнорируем повторные нажатия
+        if (_state.value.isStarting) return
+
         // Возобновление после паузы — ID уже получен, сервер не вызываем
         if (currentTrainingId != null) {
             resumeTracking()
