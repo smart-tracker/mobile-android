@@ -2,6 +2,7 @@ package com.example.smarttracker.domain.model
 
 import java.time.LocalDate
 
+/** Доменная модель аутентифицированного пользователя. */
 data class User(
 
     val id: Int,                        // user_id в БД

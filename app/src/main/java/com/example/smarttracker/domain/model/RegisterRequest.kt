@@ -2,6 +2,7 @@ package com.example.smarttracker.domain.model
 
 import java.time.LocalDate
 
+/** Доменная модель запроса регистрации нового пользователя. */
 data class RegisterRequest(
 
     // Шаг 1/4 - Личные данные

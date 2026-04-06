@@ -22,6 +22,7 @@ import com.example.smarttracker.presentation.auth.register.RegisterViewModel
 import com.example.smarttracker.presentation.auth.register.TermsOfServiceScreen
 import com.example.smarttracker.presentation.workout.WorkoutHomeScreen
 
+/** Compose NavHost: декларация всех маршрутов и переходов между экранами. */
 @Composable
 fun AppNavGraph(
     navController: NavHostController = rememberNavController(),

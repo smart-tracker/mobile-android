@@ -91,6 +91,13 @@ class LocationTrackingService : Service() {
     private var trainingId: String = ""
     private var accuracyThreshold: Float = LocationConfig.MAX_ACCURACY_RUNNING
 
+    /**
+     * Флаг записи точек в Room. true = штатная запись, false = пауза.
+     * @Volatile гарантирует видимость между Main-thread (ViewModel) и IO-thread (callback).
+     * GPS-трекер продолжает работать при любом значении флага.
+     */
+    @Volatile private var isRecording: Boolean = true
+
     // ── Crash-recovery ───────────────────────────────────────────────────────────
     private lateinit var recoveryPrefs: SharedPreferences
 
@@ -122,6 +129,20 @@ class LocationTrackingService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         recoveryPrefs = getSharedPreferences(LocationConfig.PREFS_RECOVERY, MODE_PRIVATE)
+
+        // Команда переключения записи: применяем только если сервис уже инициализирован.
+        // Если trainingId пустой (сервис убит ОС и перезапущен START_STICKY),
+        // команда EXTRA_RECORDING пришла «в пустой» сервис — останавливаемся,
+        // чтобы не оставить его в неконсистентном состоянии без трекера/уведомления.
+        if (intent?.hasExtra(EXTRA_RECORDING) == true) {
+            if (trainingId.isNotBlank() && activeTracker != null) {
+                isRecording = intent.getBooleanExtra(EXTRA_RECORDING, true)
+                return START_STICKY
+            } else {
+                stopSelf()
+                return START_NOT_STICKY
+            }
+        }
 
         // При перезапуске системой (START_STICKY) после OOM intent == null.
         // Пробуем восстановить trainingId из SharedPreferences.
@@ -340,6 +361,12 @@ class LocationTrackingService : Service() {
 
         lastAcceptedLocation = smoothed
 
+        // ── Запись в буфер только во время активного трекинга ───────────────────
+        // При isRecording = false GPS-трекер продолжает работать: фильтры, сглаживание
+        // и lastAcceptedLocation обновляются выше — это нужно чтобы не было «прыжков»
+        // после снятия паузы. Точки в Room не попадают.
+        if (!isRecording) return
+
         // ── Bearing guard: при медленном движении пеленг ненадёжен ──────────────
         val bearing: Float? = if (
             smoothed.hasSpeed() &&
@@ -483,5 +510,17 @@ class LocationTrackingService : Service() {
 
         /** Размер окна скользящего среднего для сглаживания GPS-шума */
         private const val SMOOTH_WINDOW_SIZE = 3
+
+        const val EXTRA_RECORDING = "extra_recording"
+
+        /**
+         * Отправляет Intent с флагом записи в уже запущенный сервис.
+         * Сервис обрабатывает его в [onStartCommand] без повторной инициализации.
+         */
+        fun setRecording(context: android.content.Context, recording: Boolean) {
+            val intent = Intent(context, LocationTrackingService::class.java)
+                .putExtra(EXTRA_RECORDING, recording)
+            context.startService(intent)
+        }
     }
 }

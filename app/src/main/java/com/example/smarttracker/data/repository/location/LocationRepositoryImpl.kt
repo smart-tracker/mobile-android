@@ -46,4 +46,7 @@ class LocationRepositoryImpl @Inject constructor(
 
     override fun observePointsForTraining(trainingId: String): Flow<List<LocationPoint>> =
         dao.observePointsForTraining(trainingId).map { list -> list.map { it.toDomain() } }
+
+    override suspend fun getLastKnownPoint(): LocationPoint? =
+        dao.getLastPoint(excludedTrainingId = null)?.toDomain()
 }

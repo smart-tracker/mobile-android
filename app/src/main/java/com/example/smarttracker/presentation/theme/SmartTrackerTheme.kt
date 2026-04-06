@@ -77,6 +77,7 @@ val SmartTrackerTypography = Typography(
     ),
 )
 
+/** Настройка темы Material3 для всего приложения. */
 private val LightColorScheme = lightColorScheme()
 
 @Composable
