@@ -149,12 +149,15 @@ class WorkoutStartViewModel @Inject constructor(
         loadWorkoutTypes()
         val favIds = loadFavoriteIds()
         if (favIds.isNotEmpty()) _state.update { it.copy(favoriteIds = favIds) }
-        // GPS стартует сразу при открытии экрана — иконка видна без нажатия «Начать»
-        startDiscoveryGps()
-        // Загружаем последнюю точку для начального центрирования карты до получения GPS
+        // Сначала читаем последнюю сохранённую точку для начального центрирования карты.
+        // Это исключает гонку, при которой discovery GPS успевает записать временную точку
+        // в Room и getLastKnownPoint() возвращает не историю пользователя, а "призрачную" точку
+        // текущего открытия экрана.
         viewModelScope.launch {
             val last = locationRepository.getLastKnownPoint()
             if (last != null) _state.update { it.copy(lastKnownLocation = last) }
+            // GPS стартует сразу после первичного чтения — иконка по-прежнему видна без нажатия «Начать».
+            startDiscoveryGps()
         }
     }
 
