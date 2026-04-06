@@ -30,6 +30,9 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -161,6 +164,10 @@ class LocationTrackingService : Service() {
         val intervalMs = intent?.getLongExtra(EXTRA_INTERVAL_MS, LocationConfig.INTERVAL_MS_RUNNING)
             ?: LocationConfig.INTERVAL_MS_RUNNING
 
+        // Сбрасываем кеш replay finishSyncFlow: новая сессия — старый сигнал завершения
+        // предыдущей тренировки не должен быть принят ViewModel текущей тренировки.
+        _finishSyncFlow.resetReplayCache()
+
         // Сохраняем для crash-recovery до старта трекинга
         recoveryPrefs.edit().putString(LocationConfig.KEY_ACTIVE_TRAINING, trainingId).apply()
 
@@ -247,6 +254,10 @@ class LocationTrackingService : Service() {
     /**
      * Отправляет накопленные в Room неотправленные GPS-точки на сервер.
      * Вызывается периодически из syncLoop и однократно в onDestroy.
+     *
+     * Идемпотентность: точки с уже назначенным batchId ретраятся с тем же batchId,
+     * чтобы сервер мог отклонить дубль. Новые точки получают свежий batchId
+     * (DAO обновляет только WHERE batchId IS NULL — повторного присвоения не бывает).
      */
     private suspend fun syncUnsentPoints() {
         if (trainingId.isBlank()) return
@@ -256,7 +267,32 @@ class LocationTrackingService : Service() {
 
         Log.d(TAG, "syncUnsentPoints: ${unsent.size} unsent points for training=$trainingId")
 
-        unsent.chunked(LocationConfig.GPS_BATCH_MAX_SIZE).forEach { chunk ->
+        // Разделяем точки: с уже назначенным batchId (ретрай) и без него (новые).
+        val (withBatchId, withoutBatchId) = unsent.partition { it.batchId != null }
+
+        // Точки с уже назначенным batchId: ретрай со старым ID (не генерируем новый,
+        // иначе сервер воспримет как новый батч и создаст дубли).
+        val existingBatches = withBatchId.groupBy {
+            checkNotNull(it.batchId) { "withBatchId partition contains point with null batchId: id=${it.id}" }
+        }
+        existingBatches.forEach { (batchId, points) ->
+            try {
+                workoutRepository.uploadGpsPoints(trainingId, batchId, points)
+                    .onSuccess { saved ->
+                        Log.d(TAG, "GPS batch retry: $saved points, batchId=$batchId")
+                        locationRepository.markBatchAsSent(batchId)
+                    }
+                    .onFailure { e ->
+                        Log.w(TAG, "GPS batch retry failed, batchId=$batchId", e)
+                    }
+            } catch (e: Exception) {
+                Log.w(TAG, "GPS sync retry chunk error", e)
+            }
+        }
+
+        // Новые точки (batchId == null): назначаем свежий batchId и отправляем.
+        // DAO гарантирует WHERE batchId IS NULL — уже назначенные не перезаписываются.
+        withoutBatchId.chunked(LocationConfig.GPS_BATCH_MAX_SIZE).forEach { chunk ->
             try {
                 val batchId = UUID.randomUUID().toString()
                 val pointIds = chunk.map { it.id }
@@ -447,6 +483,8 @@ class LocationTrackingService : Service() {
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to flush and sync unsent points during service shutdown", e)
             } finally {
+                // Сигнализируем ViewModel: финальный sync завершён — можно закрывать тренировку
+                _finishSyncFlow.tryEmit(Unit)
                 scope.cancel()
             }
         }
@@ -512,6 +550,18 @@ class LocationTrackingService : Service() {
         private const val SMOOTH_WINDOW_SIZE = 3
 
         const val EXTRA_RECORDING = "extra_recording"
+
+        /**
+         * Сигнал завершения финального flush+sync при остановке сервиса.
+         * ViewModel ждёт этот сигнал перед вызовом saveTraining, чтобы
+         * гарантировать что все GPS-точки уже отправлены до закрытия тренировки.
+         * replay=1: если ViewModel подписалась после emit — сигнал не потеряется.
+         */
+        private val _finishSyncFlow = MutableSharedFlow<Unit>(
+            replay = 1,
+            extraBufferCapacity = 0,
+        )
+        val finishSyncFlow: SharedFlow<Unit> = _finishSyncFlow.asSharedFlow()
 
         /**
          * Отправляет Intent с флагом записи в уже запущенный сервис.
