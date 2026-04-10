@@ -27,6 +27,7 @@ import com.example.smarttracker.presentation.workout.WorkoutHomeScreen
 fun AppNavGraph(
     navController: NavHostController = rememberNavController(),
     startDestination: String = Screen.Login.route,
+    onLogout: () -> Unit = {},
 ) {
     NavHost(
         navController = navController,
@@ -153,6 +154,14 @@ fun AppNavGraph(
         composable(Screen.Home.route) {
             WorkoutHomeScreen(
                 onBack = { navController.popBackStack() },
+                onLogout = {
+                    onLogout()
+                    // Очищаем весь бэкстек до корня и переходим на Login,
+                    // чтобы кнопка «Назад» не возвращала на Home после выхода.
+                    navController.navigate(Screen.Login.route) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                },
             )
         }
     }

@@ -16,6 +16,7 @@ import com.example.smarttracker.domain.model.LocationPoint
 import com.example.smarttracker.presentation.theme.ColorSecondary
 import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
+import org.maplibre.android.maps.MapLibreMapOptions
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.style.layers.CircleLayer
 import org.maplibre.android.style.layers.LineLayer
@@ -119,7 +120,10 @@ fun MapViewComposable(
     AndroidView(
         modifier = modifier,
         factory = { context ->
-            MapView(context).also { mapView ->
+            // textureMode(true) переключает рендеринг с SurfaceView на TextureView —
+            // GL-контент встраивается в View-иерархию и становится доступен для Modifier.blur
+            val options = MapLibreMapOptions.createFromAttributes(context).textureMode(true)
+            MapView(context, options).also { mapView ->
                 // onCreate нужен в Compose — нет Activity.onCreate для MapView
                 mapView.onCreate(null)
 

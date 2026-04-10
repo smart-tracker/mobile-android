@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -44,6 +45,7 @@ import com.example.smarttracker.presentation.workout.start.WorkoutStartViewModel
 @Composable
 fun WorkoutHomeScreen(
     onBack: () -> Unit = {},
+    onLogout: () -> Unit = {},
 ) {
     var currentTab by remember { mutableStateOf(WorkoutTab.START) }
 
@@ -74,7 +76,7 @@ fun WorkoutHomeScreen(
                 )
             }
             WorkoutTab.WORKOUTS -> PlaceholderScreen(label = stringResource(R.string.tab_workouts), padding = padding)
-            WorkoutTab.MENU    -> PlaceholderScreen(label = stringResource(R.string.tab_menu), padding = padding)
+            WorkoutTab.MENU    -> MenuScreen(padding = padding, onLogout = onLogout)
         }
     }
 }
@@ -156,5 +158,27 @@ private fun PlaceholderScreen(
             color = ColorPrimary,
             textAlign = TextAlign.Center,
         )
+    }
+}
+
+// ── Вкладка «Меню» (временная заглушка) ──────────────────────────────────────
+
+@Composable
+private fun MenuScreen(
+    padding: androidx.compose.foundation.layout.PaddingValues,
+    onLogout: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(padding),
+        contentAlignment = Alignment.Center,
+    ) {
+        Button(onClick = onLogout) {
+            Text(
+                text = "Выйти из аккаунта",
+                fontFamily = geologicaFontFamily,
+            )
+        }
     }
 }

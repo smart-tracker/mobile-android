@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -20,12 +21,8 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.GpsFixed
-import androidx.compose.material.icons.filled.GpsOff
-import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.outlined.StarOutline
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -34,9 +31,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.layout.ContentScale
 import coil.compose.AsyncImage
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -237,15 +234,32 @@ fun WorkoutStartScreen(
             }
 
             // ── GPS-бейдж — всегда виден в правом верхнем углу карты ─────────
-            Icon(
-                imageVector = if (state.isGpsActive) Icons.Filled.GpsFixed else Icons.Filled.GpsOff,
-                contentDescription = if (state.isGpsActive) "GPS получен" else "GPS не получен",
-                tint = if (state.isGpsActive) Color(0xFF4CAF50) else Color(0xFFF44336),
+            Box(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .padding(8.dp)
-                    .size(32.dp),
-            )
+                    .border(
+                        width = 1.dp,
+                        color = Color(0xFF0A1928),
+                        shape = RoundedCornerShape(size = 32.dp),
+                    )
+                    .width(32.dp)
+                    .height(32.dp)
+                    .background(
+                        color = if (state.isGpsActive) Color(0xFF4CAF50) else Color(0xFFFC3F1D),
+                        shape = RoundedCornerShape(size = 32.dp),
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                Image(
+                    painter = painterResource(id = R.drawable.gps),
+                    contentDescription = if (state.isGpsActive) "GPS получен" else "GPS не получен",
+                    contentScale = ContentScale.FillBounds,
+                    modifier = Modifier
+                        .width(30.dp)
+                        .height(30.dp),
+                )
+            }
 
             // Кнопка(и) — поверх карты, прижата к низу
             if (!state.isTracking) {
@@ -338,26 +352,65 @@ fun WorkoutStartScreen(
             containerColor = Color.White,
             scrimColor = Color(0x4D0A1928), // rgba(10,25,40,0.30) — как в Figma
         ) {
+            Column(modifier = Modifier
+                .fillMaxHeight(0.67f)
+                .padding(start = 5.dp)
+            ) {
             // ── Поиск ───────────────────────────────────────────────────────
-            OutlinedTextField(
-                value = state.searchQuery,
-                onValueChange = onSearchQueryChange,
-                placeholder = {
-                    Text(
-                        text = "Поиск активности...",
-                        fontFamily = geologicaFontFamily,
-                        fontWeight = FontWeight.Normal,
-                        fontSize = 14.sp,
-                    )
-                },
-                singleLine = true,
+            // Кастомное поле: серый фон + скруглённый бордер + иконка лупы слева.
+            // BasicTextField вместо OutlinedTextField — чтобы не было встроенного
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-            )
+                    .padding(horizontal = 16.dp, vertical = 2.dp),
+                contentAlignment = Alignment.CenterStart,
+            ) {
+                Row(
+                    modifier = Modifier
+                        .border(width = 1.dp, color = Color(0xFFD9D9D9), shape = RoundedCornerShape(size = 5.dp))
+                        .height(36.dp)
+                        .background(color = Color(0xFFD9D9D9), shape = RoundedCornerShape(size = 5.dp))
+                        .padding(horizontal = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Image(
+                        painter = painterResource(id = R.drawable.search),
+                        contentDescription = "Поиск",
+                        contentScale = ContentScale.FillBounds,
+                        modifier = Modifier
+                            .width(24.dp)
+                            .height(24.dp),
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    BasicTextField(
+                        value = state.searchQuery,
+                        onValueChange = onSearchQueryChange,
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        decorationBox = { innerTextField ->
+                            // Box выравнивает placeholder и курсор в одном слое —
+                            // без этого они рендерятся последовательно и курсор смещается вниз
+                            Box(contentAlignment = Alignment.CenterStart) {
+                                if (state.searchQuery.isEmpty()) {
+                                    Text(
+                                        text = "Поиск...",
+                                        fontFamily = geologicaFontFamily,
+                                        fontWeight = FontWeight.Normal,
+                                        fontSize = 14.sp,
+                                        color = Color(0xFF888888),
+                                    )
+                                }
+                                innerTextField()
+                            }
+                        },
+                    )
+                }
+            }
 
             LazyColumn(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
                 contentPadding = PaddingValues(bottom = 24.dp),
             ) {
                 items(state.filteredAndSortedTypes) { type ->
@@ -369,7 +422,7 @@ fun WorkoutStartScreen(
                                 showTypeSelector = false
                                 onSearchQueryChange("")
                             }
-                            .padding(start = 16.dp, end = 4.dp, top = 5.dp, bottom = 5.dp),
+                            .padding(start = 16.dp, end = 4.dp, top = 2.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         AsyncImage(
@@ -392,15 +445,16 @@ fun WorkoutStartScreen(
                         // ── Кнопка избранного ──────────────────────────────
                         val isFav = type.iconKey in state.favoriteIds
                         IconButton(onClick = { onToggleFavorite(type.iconKey) }) {
-                            Icon(
-                                imageVector = if (isFav) Icons.Filled.Star else Icons.Outlined.StarOutline,
+                            Image(
+                                painter = painterResource(if (isFav) R.drawable.star else R.drawable.star_2),
                                 contentDescription = if (isFav) "Убрать из избранного" else "В избранное",
-                                tint = if (isFav) Color(0xFFFFC107) else Color(0xFF9E9E9E),
+                                modifier = Modifier.size(32.dp),
                             )
                         }
                     }
                 }
             }
+            } // end Column (фиксирует высоту шторки)
         }
     }
 }
