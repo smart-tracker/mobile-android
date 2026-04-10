@@ -176,7 +176,7 @@ private fun MenuScreen(
     ) {
         Button(onClick = onLogout) {
             Text(
-                text = "Выйти из аккаунта",
+                text = stringResource(R.string.logout),
                 fontFamily = geologicaFontFamily,
             )
         }

@@ -159,7 +159,8 @@ fun AppNavGraph(
                     // Очищаем весь бэкстек до корня и переходим на Login,
                     // чтобы кнопка «Назад» не возвращала на Home после выхода.
                     navController.navigate(Screen.Login.route) {
-                        popUpTo(0) { inclusive = true }
+                        popUpTo(navController.graph.id) { inclusive = true }
+                        launchSingleTop = true
                     }
                 },
             )

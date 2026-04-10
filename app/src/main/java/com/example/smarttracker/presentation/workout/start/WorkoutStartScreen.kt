@@ -253,7 +253,7 @@ fun WorkoutStartScreen(
             ) {
                 Image(
                     painter = painterResource(id = R.drawable.gps),
-                    contentDescription = if (state.isGpsActive) "GPS получен" else "GPS не получен",
+                    contentDescription = if (state.isGpsActive) stringResource(R.string.gps_active) else stringResource(R.string.gps_inactive),
                     contentScale = ContentScale.FillBounds,
                     modifier = Modifier
                         .width(30.dp)
@@ -375,7 +375,7 @@ fun WorkoutStartScreen(
                 ) {
                     Image(
                         painter = painterResource(id = R.drawable.search),
-                        contentDescription = "Поиск",
+                        contentDescription = stringResource(R.string.search_description),
                         contentScale = ContentScale.FillBounds,
                         modifier = Modifier
                             .width(24.dp)
@@ -393,7 +393,7 @@ fun WorkoutStartScreen(
                             Box(contentAlignment = Alignment.CenterStart) {
                                 if (state.searchQuery.isEmpty()) {
                                     Text(
-                                        text = "Поиск...",
+                                        text = stringResource(R.string.search_hint),
                                         fontFamily = geologicaFontFamily,
                                         fontWeight = FontWeight.Normal,
                                         fontSize = 14.sp,

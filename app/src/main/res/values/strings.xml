@@ -8,6 +8,11 @@
     <string name="show_password">Показать пароль</string>
 
     <!-- Экран тренировки -->
+    <string name="logout">Выйти из аккаунта</string>
+    <string name="gps_active">GPS получен</string>
+    <string name="gps_inactive">GPS не получен</string>
+    <string name="search_hint">Поиск...</string>
+    <string name="search_description">Поиск</string>
     <string name="workout_duration">Продолжительность</string>
     <string name="workout_distance">Дистанция</string>
     <string name="workout_avg_speed">Средняя скорость</string>
