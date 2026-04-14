@@ -5,13 +5,14 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Unit-тесты маппера ResetPasswordResponseDto → ResetPasswordResult.
+ * Unit-тесты для сценария сброса пароля после исправления BUG-2.
  *
- * Покрывает BUG-2: POST /password-reset/confirm возвращает access_token + refresh_token,
- * но маппер toDomain() их отбрасывает — пользователь не может быть авто-авторизован.
+ * POST /password-reset/confirm возвращает access_token + refresh_token,
+ * DTO передаёт эти значения в репозиторий для сохранения в TokenStorage,
+ * а результат доменного слоя поддерживает авто-вход без редиректа на экран логина.
  *
- * Тест документирует текущее (сломанное) поведение.
- * После исправления BUG-2 нужно обновить логику маппера и этот тест.
+ * Тесты ниже проверяют успешный маппинг, наличие токенов в DTO и
+ * ожидаемое значение redirectToLogin = false для сценария авто-авторизации.
  */
 class ResetPasswordResponseDtoTest {
 
