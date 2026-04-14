@@ -16,7 +16,7 @@ import com.google.gson.annotations.SerializedName
  *   * ATHLETE (1) → [1]
  *   * TRAINER (2) → [2]
  *   * CLUB_OWNER (3) → [3]
- *   * EXPLORING/OTHER → [] (пустой список, роль не назначается)
+ *   * EXPLORING/OTHER → [1] (дефолт: goal_id=1, т.к. API требует minItems:1)
  */
 data class RegisterRequestDto(
     @SerializedName("first_name")       val firstName: String,
@@ -37,6 +37,9 @@ fun RegisterRequest.toDto(): RegisterRequestDto = RegisterRequestDto(
     email           = email,
     password        = password,
     confirmPassword = confirmPassword,
-    goalIds         = if (roleIds.isNotEmpty()) roleIds else (purpose.toRoleId()?.let { listOf(it) } ?: emptyList())
-    // Приоритет: если roleIds не пусто — используем их, иначе конвертируем purpose в role_id
+    goalIds         = if (roleIds.isNotEmpty()) roleIds
+                      else (purpose.toRoleId()?.let { listOf(it) } ?: listOf(1))
+    // Приоритет: явный roleIds → purpose → дефолт goal_id=1.
+    // Дефолт для EXPLORING/OTHER: API требует minItems:1, пустой список давал HTTP 422.
+    // goal_id=1 (спортсмен) — наименее ограничивающая роль, можно сменить в профиле.
 )

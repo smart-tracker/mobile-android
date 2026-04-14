@@ -19,7 +19,7 @@ data class ResetPasswordResponseDto(
 )
 
 fun ResetPasswordResponseDto.toDomain(): ResetPasswordResult = ResetPasswordResult(
-    message = "Пароль успешно изменён",
-    success = true,
-    redirectToLogin = true
+    message         = "Пароль успешно изменён",
+    success         = true,
+    redirectToLogin = false // токены сохраняются репозиторием до вызова toDomain()
 )

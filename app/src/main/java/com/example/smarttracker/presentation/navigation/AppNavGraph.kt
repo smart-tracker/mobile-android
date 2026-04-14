@@ -131,6 +131,13 @@ fun AppNavGraph(
                                 popUpTo(Screen.PasswordRecovery.route) { inclusive = true }
                             }
                         }
+                        is ForgotPasswordEvent.NavigateToHomeAfterReset -> {
+                            // Авто-вход: токены уже сохранены — идём сразу на главный экран,
+                            // очищая весь auth-стек (Login + PasswordRecovery)
+                            navController.navigate(Screen.Home.route) {
+                                popUpTo(Screen.Login.route) { inclusive = true }
+                            }
+                        }
                         else -> {} // Other events handled within the screen
                     }
                 }

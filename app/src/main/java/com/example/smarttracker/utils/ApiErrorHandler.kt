@@ -191,20 +191,23 @@ object ApiErrorHandler {
         val lowerError = errorMessage.lowercase()
         
         return when {
-            // Email errors
-            lowerError.contains("email") && 
-            (lowerError.contains("exist") || 
+            // Email errors (английский и русский)
+            (lowerError.contains("email") || lowerError.contains("почт")) &&
+            (lowerError.contains("exist") ||
              lowerError.contains("already") ||
              lowerError.contains("занят") ||
-             lowerError.contains("зарегистрирована")) -> 
+             lowerError.contains("зарегистрирован") ||
+             lowerError.contains("существует")) ->
                 ErrorCategory.EMAIL_TAKEN
 
-            // Username errors
-            (lowerError.contains("username") || lowerError.contains("nickname")) &&
-            (lowerError.contains("exist") || 
+            // Username errors (английский и русский)
+            (lowerError.contains("username") ||
+             lowerError.contains("nickname") ||
+             lowerError.contains("имя пользователя")) &&
+            (lowerError.contains("exist") ||
              lowerError.contains("already") ||
              lowerError.contains("занят") ||
-             lowerError.contains("используется")) -> 
+             lowerError.contains("используется")) ->
                 ErrorCategory.USERNAME_TAKEN
 
             // Verification attempts

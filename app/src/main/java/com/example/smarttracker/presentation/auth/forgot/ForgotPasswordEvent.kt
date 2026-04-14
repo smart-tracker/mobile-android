@@ -25,4 +25,6 @@ sealed class ForgotPasswordEvent {
     object OnBackPressed : ForgotPasswordEvent()
     object NavigateToLoginAfterReset : ForgotPasswordEvent()
     object NavigateToLoginFromBack : ForgotPasswordEvent()
+    /** Авто-вход после сброса пароля — токены уже сохранены в TokenStorage */
+    object NavigateToHomeAfterReset : ForgotPasswordEvent()
 }
