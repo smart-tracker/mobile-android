@@ -94,7 +94,8 @@ class ForgotPasswordViewModel @Inject constructor(
             ForgotPasswordEvent.OnResetPassword -> submitResetPassword()
             ForgotPasswordEvent.OnBackPressed -> navigateBack()
             ForgotPasswordEvent.NavigateToLoginAfterReset,
-            ForgotPasswordEvent.NavigateToLoginFromBack -> Unit
+            ForgotPasswordEvent.NavigateToLoginFromBack,
+            ForgotPasswordEvent.NavigateToHomeAfterReset -> Unit
         }
     }
     
@@ -269,14 +270,20 @@ class ForgotPasswordViewModel @Inject constructor(
             )
             
             if (result.isSuccess) {
-                tokenStorage.clearAll()
-                // Успешный сброс - переход на экран логина
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     generalError = null,
                     verificationCodeError = null,
                 )
-                _events.emit(ForgotPasswordEvent.NavigateToLoginAfterReset)
+                val redirectToLogin = result.getOrNull()?.redirectToLogin ?: true
+                if (redirectToLogin) {
+                    // Авто-вход не удался — очищаем токены и отправляем на логин
+                    tokenStorage.clearAll()
+                    _events.emit(ForgotPasswordEvent.NavigateToLoginAfterReset)
+                } else {
+                    // Токены сохранены репозиторием — переходим сразу на главный экран
+                    _events.emit(ForgotPasswordEvent.NavigateToHomeAfterReset)
+                }
             } else {
                 val errorMessage = result.exceptionOrNull()
                     ?.let(ApiErrorHandler::getErrorMessage)

@@ -37,6 +37,12 @@ android {
         }
     }
 
+    testOptions {
+        // android.util.Log и другие Android-классы возвращают дефолтные значения
+        // в JVM unit-тестах, а не бросают исключения (RuntimeException: Stub!).
+        unitTests.isReturnDefaultValues = true
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -133,10 +139,14 @@ dependencies {
 
     // Tests
     testImplementation(libs.junit)
+    testImplementation(libs.mockito.kotlin)
+    testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.okhttp.mockwebserver)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.ui.test.junit4)
+    androidTestImplementation(libs.room.testing)
 }
 
 // Hilt требует kapt

@@ -1,23 +1,21 @@
 package com.example.smarttracker.utils
 
+import org.junit.Test
 import retrofit2.HttpException
 import retrofit2.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
-import okhttp3.Protocol
-import okhttp3.Request
 import com.example.smarttracker.utils.ErrorCategory
 
 /**
  * Юнит-тесты для ApiErrorHandler.
  * Проверяют корректность парсинга, перевода ошибок и категоризации.
- * 
- * Примечание: для запуска требуется JUnit4 в testImplementation (build.gradle.kts)
  */
 class ApiErrorHandlerTest {
 
     /**
      * Тест 1: Перевод ошибки email на русский
      */
+    @Test
     fun testTranslation_EmailAlreadyExists() {
         val englishError = "User with this email already exists"
         val russian = ApiErrorHandler.getErrorMessage(
@@ -31,6 +29,7 @@ class ApiErrorHandlerTest {
     /**
      * Тест 2: Перевод ошибки username на русский
      */
+    @Test
     fun testTranslation_UsernameAlreadyExists() {
         val englishError = "User with this username already exists"
         val russian = ApiErrorHandler.getErrorMessage(
@@ -44,6 +43,7 @@ class ApiErrorHandlerTest {
     /**
      * Тест 3: Категоризация переведённой ошибки email
      */
+    @Test
     fun testCategorizeEmail_Translated() {
         val message = "Пользователь с такой почтой уже существует"
         val category = ApiErrorHandler.categorizeError(message)
@@ -55,6 +55,7 @@ class ApiErrorHandlerTest {
     /**
      * Тест 4: Категоризация переведённой ошибки username
      */
+    @Test
     fun testCategorizeUsername_Translated() {
         val message = "Это имя пользователя уже используется"
         val category = ApiErrorHandler.categorizeError(message)
@@ -66,6 +67,7 @@ class ApiErrorHandlerTest {
     /**
      * Тест 5: Перевод ошибки "Too many attempts"
      */
+    @Test
     fun testTranslation_TooManyAttempts() {
         val englishError = "Too many failed attempts. Account temporarily locked"
         val russian = ApiErrorHandler.getErrorMessage(
@@ -79,6 +81,7 @@ class ApiErrorHandlerTest {
     /**
      * Тест 6: Перевод ошибки с cooldown (извлечение числа)
      */
+    @Test
     fun testTranslation_CooldownWithSeconds() {
         val englishError = "Please wait 87 seconds before resending"
         val russian = ApiErrorHandler.getErrorMessage(
@@ -92,6 +95,7 @@ class ApiErrorHandlerTest {
     /**
      * Тест 7: Network error на русском
      */
+    @Test
     fun testGetErrorMessage_IOException() {
         val exception = java.io.IOException("Connection refused")
         val message = ApiErrorHandler.getErrorMessage(exception)
@@ -103,6 +107,7 @@ class ApiErrorHandlerTest {
     /**
      * Тест 8: Категоризация русской ошибки из любого источника
      */
+    @Test
     fun testCategorize_RussianEmail() {
         val message = "Пользователь с такой почтой уже существует"
         val category = ApiErrorHandler.categorizeError(message)
