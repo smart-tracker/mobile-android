@@ -156,7 +156,7 @@ class LocationTrackingService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         recoveryPrefs = getSharedPreferences(LocationConfig.PREFS_RECOVERY, MODE_PRIVATE)
 
-        // ── Запоздалое обновление профиля (Bug 1 fix) ────────────────────────────
+        // ── Запоздалое обновление профиля после старта сервиса ───────────────────
         // ViewModel отправляет этот Intent когда getUserInfo() завершился ПОСЛЕ старта сервиса.
         // Обновляем только поля расчёта калорий — трекинг, буфер и syncLoop не трогаем.
         if (intent?.hasExtra(EXTRA_PROFILE_UPDATE) == true) {
