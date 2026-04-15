@@ -511,6 +511,8 @@ class WorkoutStartViewModel @Inject constructor(
                         restartTimeout()
                     }
 
+                    val currentKilocalories = _state.value.kilocalories
+
                     // Инкрементальный расчёт на фоновом потоке, чтобы не блокировать UI.
                     // Внутри withContext нет точек приостановки, поэтому collectLatest
                     // не может прервать блок посередине — accumulatedDistanceM и processedCount
@@ -524,6 +526,15 @@ class WorkoutStartViewModel @Inject constructor(
                             points, effectiveCount
                         )
                         accumulatedDistanceM += delta
+
+                        // Калории уже инкрементальны на уровне точки, поэтому считаем
+                        // только вклад новых точек, начиная с effectiveCount.
+                        var deltaKcal = 0.0
+                        for (index in effectiveCount until points.size) {
+                            deltaKcal += points[index].calories ?: 0.0
+                        }
+                        val kcal = currentKilocalories + deltaKcal
+
                         processedCount = points.size
                         // Якорь одноразовый — сбрасываем после первого применения
                         if (resumeAnchorPointCount > 0) resumeAnchorPointCount = 0
@@ -536,9 +547,6 @@ class WorkoutStartViewModel @Inject constructor(
                         else 0L
 
                         val speed = if (durationSeconds > 0) accumulatedDistanceM / durationSeconds else 0.0
-                        // Суммируем калории из каждой GPS-точки (рассчитаны в LocationTrackingService методом MET)
-                        // Если профиль пользователя не заполнен — все calories = null, сумма = 0.0
-                        val kcal = points.sumOf { it.calories ?: 0.0 }
                         Triple(accumulatedDistanceM, speed, kcal)
                     }
 
