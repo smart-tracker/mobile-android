@@ -29,5 +29,11 @@ data class LocationPoint(
      */
     val externalId: String? = null,
     val batchId: String? = null,    // UUID блока для idempotency (заполняется в Этапе 5)
-    val isSent: Boolean = false
+    val isSent: Boolean = false,
+    /**
+     * Расход калорий за интервал от предыдущей точки до этой (ккал).
+     * Рассчитывается в LocationTrackingService методом MET.
+     * null если профиль пользователя (weight/height) не заполнен.
+     */
+    val calories: Double? = null,
 )

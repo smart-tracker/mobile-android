@@ -19,6 +19,7 @@ import com.example.smarttracker.data.remote.dto.ResetPasswordRequestDto
 import com.example.smarttracker.data.remote.dto.ResetPasswordResponseDto
 import com.example.smarttracker.data.remote.dto.RoleDto
 import com.example.smarttracker.data.remote.dto.RoleResponseDto
+import com.example.smarttracker.data.remote.dto.UserInfoResponseDto
 import com.example.smarttracker.data.remote.dto.VerifyResetCodeResponseDto
 import retrofit2.http.Body
 import retrofit2.http.GET
@@ -143,4 +144,16 @@ interface AuthApiService {
      */
     @GET("training/types_activity")
     suspend fun getActivityTypes(): List<ActivityTypeDto>
+
+    /**
+     * Получение профиля текущего пользователя по Bearer-токену.
+     *
+     * Возвращает weight/height для расчёта калорий методом MET.
+     * Поля nullable — пользователь мог не заполнить профиль.
+     *
+     * Путь подтверждён через openapi.json: GET /user/
+     * (предыдущий вариант user_info/user/ возвращал 404)
+     */
+    @GET("user/")
+    suspend fun getUserInfo(): UserInfoResponseDto
 }

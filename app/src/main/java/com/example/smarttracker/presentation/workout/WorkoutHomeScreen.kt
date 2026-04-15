@@ -14,6 +14,7 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -61,6 +62,15 @@ fun WorkoutHomeScreen(
             WorkoutTab.START -> {
                 val viewModel: WorkoutStartViewModel = hiltViewModel()
                 val state by viewModel.state.collectAsStateWithLifecycle()
+
+                // Принудительный выход при истечении сессии (оба токена невалидны).
+                // Срабатывает когда TokenRefreshAuthenticator получает 401 на /auth/refresh.
+                // onLogout() очищает back stack и переводит на экран Login.
+                val sessionExpired by viewModel.sessionExpired.collectAsStateWithLifecycle()
+                LaunchedEffect(sessionExpired) {
+                    if (sessionExpired) onLogout()
+                }
+
                 WorkoutStartScreen(
                     state = state,
                     padding = padding,

@@ -20,9 +20,12 @@ import com.example.smarttracker.data.location.model.TrackingPriority
 import com.example.smarttracker.data.location.model.toAndroidLocation
 import com.example.smarttracker.data.location.tracker.LocationTracker
 import android.util.Log
+import com.example.smarttracker.domain.model.Gender
 import com.example.smarttracker.domain.model.LocationPoint
+import com.example.smarttracker.domain.model.METActivity
 import com.example.smarttracker.domain.repository.LocationRepository
 import com.example.smarttracker.domain.repository.WorkoutRepository
+import com.example.smarttracker.domain.usecase.CalorieCalculator
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -128,10 +131,61 @@ class LocationTrackingService : Service() {
     /** Подсказка "Выйдите на открытое место" через [LocationConfig.GPS_HINT_TIMEOUT_MS] */
     private var hintJob: Job? = null
 
+    // ── Расчёт калорий (MET-метод) ───────────────────────────────────────────────
+    // @Volatile на всех полях: записываются из scope.launch (Dispatchers.IO),
+    // читаются из GPS-callback (отдельный поток). Без @Volatile JVM может
+    // кэшировать значения в регистрах → GPS-поток видит старый null после записи.
+    /** Коррекционный коэффициент CF; вычисляется один раз при старте. null если профиль не заполнен */
+    @Volatile private var sessionCF: Double? = null
+    @Volatile private var sessionWeightKg: Float? = null
+    @Volatile private var sessionAgeYears: Int = 0
+    /** MET-данные текущего типа активности (скоростные зоны или базовый MET). null если не загружены */
+    @Volatile private var metActivity: METActivity? = null
+    /** Предыдущая точка для расчёта интервала. null = первая точка сессии или сразу после паузы */
+    @Volatile private var prevCaloriePoint: LocationPoint? = null
+
+    /**
+     * true для discovery-сессии (GPS ищется при открытии экрана, до старта тренировки).
+     * В этом режиме фильтрация и сглаживание работают (нужны для gpsStatus),
+     * но точки НЕ пишутся в Room и НЕ синхронизируются с сервером.
+     */
+    private var isDiscovery: Boolean = false
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         recoveryPrefs = getSharedPreferences(LocationConfig.PREFS_RECOVERY, MODE_PRIVATE)
+
+        // ── Запоздалое обновление профиля (Bug 1 fix) ────────────────────────────
+        // ViewModel отправляет этот Intent когда getUserInfo() завершился ПОСЛЕ старта сервиса.
+        // Обновляем только поля расчёта калорий — трекинг, буфер и syncLoop не трогаем.
+        if (intent?.hasExtra(EXTRA_PROFILE_UPDATE) == true) {
+            if (trainingId.isNotBlank() && activeTracker != null) {
+                val typeActivId = intent.getIntExtra(EXTRA_TYPE_ACTIV_ID, -1)
+                val weightKg    = if (intent.hasExtra(EXTRA_WEIGHT_KG)) intent.getFloatExtra(EXTRA_WEIGHT_KG, 0f) else null
+                val heightCm    = if (intent.hasExtra(EXTRA_HEIGHT_CM)) intent.getFloatExtra(EXTRA_HEIGHT_CM, 0f) else null
+                val ageYears    = intent.getIntExtra(EXTRA_AGE_YEARS, 0)
+                val isMale      = intent.getBooleanExtra(EXTRA_IS_MALE, true)
+
+                sessionWeightKg = weightKg
+                sessionAgeYears = ageYears
+                // Сбрасываем prevCaloriePoint: первый интервал после загрузки профиля
+                // не имеет калорий (нет предыдущей точки с известным временем).
+                prevCaloriePoint = null
+
+                if (weightKg != null && heightCm != null && typeActivId >= 0) {
+                    scope.launch {
+                        sessionCF = CalorieCalculator.computeCF(
+                            weightKg, heightCm, ageYears,
+                            if (isMale) Gender.MALE else Gender.FEMALE
+                        )
+                        metActivity = workoutRepository.getMETActivity(typeActivId).getOrNull()
+                        Log.d(TAG, "CalorieCalc profile update: CF=$sessionCF, met=$metActivity")
+                    }
+                }
+            }
+            return START_STICKY
+        }
 
         // Команда переключения записи: применяем только если сервис уже инициализирован.
         // Если trainingId пустой (сервис убит ОС и перезапущен START_STICKY),
@@ -139,7 +193,13 @@ class LocationTrackingService : Service() {
         // чтобы не оставить его в неконсистентном состоянии без трекера/уведомления.
         if (intent?.hasExtra(EXTRA_RECORDING) == true) {
             if (trainingId.isNotBlank() && activeTracker != null) {
-                isRecording = intent.getBooleanExtra(EXTRA_RECORDING, true)
+                val newRecording = intent.getBooleanExtra(EXTRA_RECORDING, true)
+                // Возобновление после паузы: сбрасываем предыдущую точку, чтобы
+                // пауза не считалась активным интервалом при расчёте калорий.
+                if (newRecording && !isRecording) {
+                    prevCaloriePoint = null
+                }
+                isRecording = newRecording
                 return START_STICKY
             } else {
                 stopSelf()
@@ -157,7 +217,8 @@ class LocationTrackingService : Service() {
             return START_NOT_STICKY
         }
 
-        trainingId = id
+        trainingId  = id
+        isDiscovery = intent?.getBooleanExtra(EXTRA_IS_DISCOVERY, false) ?: false
         accuracyThreshold = intent?.getFloatExtra(
             EXTRA_ACCURACY_THRESHOLD, LocationConfig.MAX_ACCURACY_RUNNING
         ) ?: LocationConfig.MAX_ACCURACY_RUNNING
@@ -196,6 +257,30 @@ class LocationTrackingService : Service() {
         startFlushTimer()
         startSyncLoop()
         startHintTimer()
+
+        // ── Инициализация расчёта калорий (MET-метод) ────────────────────────────
+        // Значения профиля передаются из WorkoutStartViewModel через Intent-экстры.
+        // Если weight или height отсутствуют — calories будет null для всех точек.
+        val typeActivId = intent?.getIntExtra(EXTRA_TYPE_ACTIV_ID, -1) ?: -1
+        val weightKg    = if (intent?.hasExtra(EXTRA_WEIGHT_KG) == true) intent.getFloatExtra(EXTRA_WEIGHT_KG, 0f) else null
+        val heightCm    = if (intent?.hasExtra(EXTRA_HEIGHT_CM) == true) intent.getFloatExtra(EXTRA_HEIGHT_CM, 0f) else null
+        val ageYears    = intent?.getIntExtra(EXTRA_AGE_YEARS, 0) ?: 0
+        val isMale      = intent?.getBooleanExtra(EXTRA_IS_MALE, true) ?: true
+
+        sessionWeightKg  = weightKg
+        sessionAgeYears  = ageYears
+        prevCaloriePoint = null  // сброс при каждом старте сессии
+
+        if (weightKg != null && heightCm != null && typeActivId >= 0) {
+            scope.launch {
+                sessionCF = CalorieCalculator.computeCF(
+                    weightKg, heightCm, ageYears,
+                    if (isMale) Gender.MALE else Gender.FEMALE
+                )
+                metActivity = workoutRepository.getMETActivity(typeActivId).getOrNull()
+                Log.d(TAG, "CalorieCalc init: CF=$sessionCF, met=$metActivity")
+            }
+        }
 
         return START_STICKY
     }
@@ -403,6 +488,12 @@ class LocationTrackingService : Service() {
         // после снятия паузы. Точки в Room не попадают.
         if (!isRecording) return
 
+        // Discovery-режим: точки НЕ пишутся в Room и НЕ синхронизируются.
+        // Фильтрация и сглаживание выполнены выше — это нужно для gpsStatus (ACQUIRED).
+        // Запись в Room запрещена: discovery-UUID никогда не регистрируется на сервере,
+        // поэтому syncUnsentPoints() получил бы 404 на каждом батче.
+        if (isDiscovery) return
+
         // ── Bearing guard: при медленном движении пеленг ненадёжен ──────────────
         val bearing: Float? = if (
             smoothed.hasSpeed() &&
@@ -410,7 +501,7 @@ class LocationTrackingService : Service() {
             smoothed.hasBearing()
         ) smoothed.bearing else null
 
-        val point = LocationPoint(
+        val rawPoint = LocationPoint(
             trainingId   = trainingId,
             timestampUtc = smoothed.time,
             elapsedNanos = smoothed.elapsedRealtimeNanos,
@@ -421,6 +512,14 @@ class LocationTrackingService : Service() {
             accuracy     = if (smoothed.hasAccuracy()) smoothed.accuracy else null,
             bearing      = bearing,
         )
+
+        // Вычислить калории за интервал от предыдущей точки до этой.
+        // prevCaloriePoint == null → первая точка сессии или первая после паузы → calories = null.
+        val calories = computeCaloriesForPoint(rawPoint)
+        val point = rawPoint.copy(calories = calories)
+        Log.d(TAG, "point: calories=${point.calories}, speed=${point.speed}")
+        // Обновляем опорную точку ПОСЛЕ copy, чтобы использовать уже финальный объект.
+        prevCaloriePoint = point
 
         scope.launch {
             bufferMutex.withLock {
@@ -443,6 +542,39 @@ class LocationTrackingService : Service() {
             latitude  = avgLat
             longitude = avgLng
         }
+    }
+
+    /**
+     * Вычисляет расход калорий за интервал от [prevCaloriePoint] до [current] (MET-метод).
+     *
+     * Возвращает null если:
+     * - профиль пользователя не инициализирован (sessionCF == null)
+     * - это первая точка сессии или первая после паузы (prevCaloriePoint == null)
+     * - временной интервал <= 0 (нарушение монотонности часов)
+     *
+     * Для скоростных зон использует линейную интерполяцию из [CalorieCalculator.interpolateMet].
+     * Для пользователей 60+ применяет специальную формулу [CalorieCalculator.energyOver60].
+     */
+    private fun computeCaloriesForPoint(current: LocationPoint): Double? {
+        val cf     = sessionCF        ?: return null
+        val weight = sessionWeightKg  ?: return null
+        val prev   = prevCaloriePoint ?: return null
+        val met    = metActivity      ?: return null
+
+        val durationMin = (current.timestampUtc - prev.timestampUtc) / 60_000.0
+        if (durationMin <= 0) return null
+
+        // Android Location.speed — м/с; MET-зоны ожидают км/ч
+        val speedKmh = (current.speed ?: 0f) * 3.6
+        val metValue = if (met.usesSpeedZones)
+            CalorieCalculator.interpolateMet(speedKmh, met.zones)
+        else
+            met.baseMet
+
+        return if (sessionAgeYears >= 60)
+            CalorieCalculator.energyOver60(metValue, weight, durationMin)
+        else
+            CalorieCalculator.energyForInterval(metValue, cf, weight, durationMin)
     }
 
     /**
@@ -540,6 +672,18 @@ class LocationTrackingService : Service() {
         const val EXTRA_INTERVAL_MS        = "interval_ms"
         const val EXTRA_ACCURACY_THRESHOLD = "accuracy_threshold"
 
+        // ── Extras профиля пользователя для расчёта калорий (MET-метод) ──────────
+        /** ID типа активности (type_activ_id) для загрузки MET-данных */
+        const val EXTRA_TYPE_ACTIV_ID = "extra_type_activ_id"
+        /** Вес пользователя в кг. Отсутствие extra → calories = null */
+        const val EXTRA_WEIGHT_KG     = "extra_weight_kg"
+        /** Рост пользователя в см. Отсутствие extra → calories = null */
+        const val EXTRA_HEIGHT_CM     = "extra_height_cm"
+        /** Возраст пользователя в годах (рассчитывается в ViewModel) */
+        const val EXTRA_AGE_YEARS     = "extra_age_years"
+        /** true = мужской пол; используется для CF (формула Харриса-Бенедикта) */
+        const val EXTRA_IS_MALE       = "extra_is_male"
+
         // ── Intent actions ─────────────────────────────────────────────────────────
         /** Запустить трекинг (передаётся через startForegroundService) */
         const val ACTION_START = "com.example.smarttracker.action.LOCATION_START"
@@ -550,6 +694,20 @@ class LocationTrackingService : Service() {
         private const val SMOOTH_WINDOW_SIZE = 3
 
         const val EXTRA_RECORDING = "extra_recording"
+
+        /**
+         * Команда запоздалого обновления профиля в работающий сервис.
+         * Отправляется из WorkoutStartViewModel когда getUserInfo() завершается
+         * уже после старта тренировки (race condition fix).
+         * Сервис обновляет sessionCF и metActivity без перезапуска трекинга.
+         */
+        const val EXTRA_PROFILE_UPDATE = "extra_profile_update"
+
+        /**
+         * Флаг discovery-режима: GPS ищется при открытии экрана, до старта тренировки.
+         * При true: точки не пишутся в Room, не синхронизируются с сервером.
+         */
+        const val EXTRA_IS_DISCOVERY = "extra_is_discovery"
 
         /**
          * Сигнал завершения финального flush+sync при остановке сервиса.

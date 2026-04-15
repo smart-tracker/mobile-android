@@ -166,6 +166,13 @@ com.example.smarttracker/
     Python-путь для `COMMIT_MSG`: читать реальный git-dir через `git rev-parse --git-dir`,
     затем писать в `{git-dir}/COMMIT_MSG`.
 
+18. **Расчёт калорий (MET-метод)** — CF = 3.5 / VO2rest; VO2rest зависит от RMR (формула Харриса-Бенедикта).
+    Нужны: W (кг), H (см), A (лет), пол. CF не меняется в ходе тренировки.
+    Для видов с переменной скоростью: считать E на каждой GPS-точке, суммировать.
+    Интерполяция MET между зонами: MET(v) = MET₁ + (v−v₁)×(MET₂−MET₁)/(v₂−v₁)
+    `calories` в `GpsPointDto` = ккал за данный интервал (отправлять на сервер в реальном времени).
+    `User.weight`/`height` — `Float?`; `CalorieCalculator` принимает `Float`, возвращает `Double`.
+
 ---
 
 ## Текущие ограничения и временные решения
@@ -200,6 +207,10 @@ com.example.smarttracker/
 - `GET /training/types_activity` → `[{type_activ_id, name, image_path}]`
   - `image_path` — URL иконки (может быть `placeholder.png` для типов без иконки)
   - Публичный эндпоинт, Bearer-токен не нужен (но интерцептор добавит его автоматически)
+- `GET /training/met/{type_activ_id}` → `{base_met, uses_speed_zones, zones[]{speed_min, speed_max, met_value}}`
+  - Используется для расчёта калорий методом MET (Compendium 2024)
+  - `uses_speed_zones=true` → MET зависит от скорости, считать на каждой GPS-точке с интерполяцией
+  - `uses_speed_zones=false` → использовать `base_met` для всей тренировки
 
 ## API эндпоинты (восстановление пароля)
 - `POST /password-reset/request` → `{}` (тело пустое)

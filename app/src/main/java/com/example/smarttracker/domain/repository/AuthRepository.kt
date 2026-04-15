@@ -2,11 +2,13 @@ package com.example.smarttracker.domain.repository
 
 import com.example.smarttracker.domain.model.AuthResult
 import com.example.smarttracker.domain.model.GoalResponse
+import com.example.smarttracker.domain.model.NicknameCheckResponse
 import com.example.smarttracker.domain.model.RegisterRequest
 import com.example.smarttracker.domain.model.RegisterResult
 import com.example.smarttracker.domain.model.ResendResult
-import com.example.smarttracker.domain.model.NicknameCheckResponse
 import com.example.smarttracker.domain.model.RoleResponse
+import com.example.smarttracker.domain.model.User
+import kotlinx.coroutines.flow.StateFlow
 
 /**
  * МОБ-1.3 — Контракт репозитория авторизации.
@@ -76,12 +78,34 @@ interface AuthRepository {
     /**
      * МОБ-6.4 — Получение целей, опционально отфильтрованных по role_id.
      * GET /goals[?role_id=...] (кешируется на 1 час)
-     * 
+     *
      * Используется на экране регистрации Step 2 для отображения целей
      * в зависимости от выбранных ролей.
-     * 
+     *
      * @param roleId ID роли для фильтрации (null = все цели)
      * @return Список целей (id, name, description, roleId)
      */
     suspend fun getGoalsByRole(roleId: Int? = null): Result<List<GoalResponse>>
+
+    /**
+     * GET /user_info/user/
+     * Получение профиля текущего пользователя по Bearer-токену.
+     *
+     * Используется для расчёта калорий методом MET:
+     * нужны weight, height, birthDate, gender.
+     * weight/height могут быть null если профиль не заполнен.
+     */
+    suspend fun getUserInfo(): Result<User>
+
+    /**
+     * Flow-флаг принудительного выхода из сессии.
+     *
+     * Эмитирует `true` когда оба токена (access + refresh) истекли.
+     * Источник: [com.example.smarttracker.data.local.TokenStorage.sessionExpiredFlow].
+     *
+     * ViewModel наблюдает этот flow и при `true` навигирует на экран Login.
+     * Вынесен в AuthRepository (domain-слой) чтобы ViewModel не зависел
+     * от TokenStorage напрямую (деталь реализации data-слоя).
+     */
+    val sessionExpiredFlow: StateFlow<Boolean>
 }

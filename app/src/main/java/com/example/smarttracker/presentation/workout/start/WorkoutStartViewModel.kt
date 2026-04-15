@@ -8,8 +8,11 @@ import androidx.lifecycle.viewModelScope
 import com.example.smarttracker.data.location.LocationConfig
 import com.example.smarttracker.data.location.LocationTrackingService
 import com.example.smarttracker.data.location.OfflineMapManager
+import com.example.smarttracker.domain.model.Gender
 import com.example.smarttracker.domain.model.LocationPoint
+import com.example.smarttracker.domain.model.User
 import com.example.smarttracker.domain.model.WorkoutType
+import com.example.smarttracker.domain.repository.AuthRepository
 import com.example.smarttracker.domain.repository.LocationRepository
 import com.example.smarttracker.domain.repository.WorkoutRepository
 import com.example.smarttracker.domain.usecase.CalculateTrainingStatsUseCase
@@ -22,6 +25,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
@@ -30,6 +34,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.time.Instant
 import java.time.LocalDate
+import java.time.Period
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -53,6 +58,7 @@ class WorkoutStartViewModel @Inject constructor(
     private val locationRepository: LocationRepository,
     private val calculateTrainingStatsUseCase: CalculateTrainingStatsUseCase,
     private val offlineMapManager: OfflineMapManager,
+    private val authRepository: AuthRepository,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
 
@@ -138,6 +144,13 @@ class WorkoutStartViewModel @Inject constructor(
     private val _state = MutableStateFlow(UiState())
     val state: StateFlow<UiState> = _state.asStateFlow()
 
+    /**
+     * Сигнал принудительного выхода из сессии (оба токена истекли).
+     * WorkoutHomeScreen наблюдает этот flow и при true вызывает onLogout().
+     * Делегирует в authRepository.sessionExpiredFlow → tokenStorage.sessionExpiredFlow.
+     */
+    val sessionExpired: StateFlow<Boolean> = authRepository.sessionExpiredFlow
+
     // UUID тренировки: генерируется при первом старте, сохраняется при паузе/возобновлении,
     // сбрасывается в null при завершении (onFinishClick).
     private var currentTrainingId: String? = null
@@ -155,6 +168,9 @@ class WorkoutStartViewModel @Inject constructor(
     private var discoveryTrainingId: String? = null
     private var discoveryObserverJob: Job? = null
 
+    // Профиль пользователя (вес/рост/возраст/пол) для расчёта калорий в LocationTrackingService
+    private var userProfile: User? = null
+
     // Таймер — отдельный Job, считает wall-clock время с учётом паузы
     private var timerJob: Job? = null
     private var startTimeMs: Long = 0L
@@ -169,6 +185,7 @@ class WorkoutStartViewModel @Inject constructor(
         _state.update { it.copy(currentDate = currentDate) }
 
         loadWorkoutTypes()
+        loadUserProfile()
         val favIds = loadFavoriteIds()
         if (favIds.isNotEmpty()) _state.update { it.copy(favoriteIds = favIds) }
         // Сначала читаем последнюю сохранённую точку для начального центрирования карты.
@@ -180,6 +197,57 @@ class WorkoutStartViewModel @Inject constructor(
             if (last != null) _state.update { it.copy(lastKnownLocation = last) }
             // GPS стартует сразу после первичного чтения — иконка по-прежнему видна без нажатия «Начать».
             startDiscoveryGps()
+        }
+    }
+
+    /**
+     * Загружает профиль текущего пользователя из API для расчёта калорий.
+     * Если профиль недоступен (нет сети, не заполнен) — calories будет null в GPS-точках.
+     *
+     * Race condition fix: если getUserInfo() завершается уже после того как сервис запущен
+     * (пользователь нажал «Начать» до загрузки профиля), отправляем профиль в работающий
+     * сервис через EXTRA_PROFILE_UPDATE — CF будет вычислен без перезапуска трекинга.
+     */
+    private fun loadUserProfile() {
+        viewModelScope.launch {
+            authRepository.getUserInfo()
+                .onSuccess { profile ->
+                    userProfile = profile
+                    // Если тренировка уже запущена — досылаем профиль в работающий сервис
+                    currentTrainingId?.let {
+                        context.startService(buildProfileUpdateIntent())
+                    }
+                }
+                // тихо игнорируем: calories = null если профиль недоступен
+        }
+    }
+
+    /**
+     * Строит Intent для запоздалого обновления профиля в работающий LocationTrackingService.
+     * Содержит только профильные экстры — без TRAINING_ID, INTERVAL_MS, ACCURACY_THRESHOLD.
+     * Вызывается только когда userProfile уже присвоен.
+     */
+    private fun buildProfileUpdateIntent(): Intent {
+        val profile = userProfile
+        val selectedType = _state.value.selectedType
+        if (selectedType == null) {
+            // Без typeActivId сервис не сможет загрузить metActivity →
+            // calories будут null пока пользователь не выберет тип тренировки.
+            Log.w(TAG, "buildProfileUpdateIntent: selectedType == null, " +
+                "EXTRA_TYPE_ACTIV_ID не отправлен → metActivity не загрузится")
+        }
+        return Intent(context, LocationTrackingService::class.java).apply {
+            putExtra(LocationTrackingService.EXTRA_PROFILE_UPDATE, true)
+            if (selectedType != null) {
+                putExtra(LocationTrackingService.EXTRA_TYPE_ACTIV_ID, selectedType.id)
+            }
+            profile?.let { p ->
+                p.weight?.let { putExtra(LocationTrackingService.EXTRA_WEIGHT_KG, it) }
+                p.height?.let { putExtra(LocationTrackingService.EXTRA_HEIGHT_CM, it) }
+                val ageYears = Period.between(p.birthDate, LocalDate.now()).years
+                putExtra(LocationTrackingService.EXTRA_AGE_YEARS, ageYears)
+                putExtra(LocationTrackingService.EXTRA_IS_MALE, p.gender == Gender.MALE)
+            }
         }
     }
 
@@ -468,7 +536,9 @@ class WorkoutStartViewModel @Inject constructor(
                         else 0L
 
                         val speed = if (durationSeconds > 0) accumulatedDistanceM / durationSeconds else 0.0
-                        val kcal = accumulatedDistanceM / 1000.0 * 70.0
+                        // Суммируем калории из каждой GPS-точки (рассчитаны в LocationTrackingService методом MET)
+                        // Если профиль пользователя не заполнен — все calories = null, сумма = 0.0
+                        val kcal = points.sumOf { it.calories ?: 0.0 }
                         Triple(accumulatedDistanceM, speed, kcal)
                     }
 
@@ -492,7 +562,7 @@ class WorkoutStartViewModel @Inject constructor(
     private fun startDiscoveryGps() {
         val id = UUID.randomUUID().toString()
         discoveryTrainingId = id
-        startLocationService(id)
+        startDiscoveryLocationService(id)
         startGpsStatusObserver(id)
     }
 
@@ -537,19 +607,70 @@ class WorkoutStartViewModel @Inject constructor(
         return if (raw.isBlank()) emptySet() else raw.split(",").toSet()
     }
 
+    /**
+     * Запускает GPS-сервис для реальной тренировки с экстрами профиля пользователя.
+     * Профиль используется в LocationTrackingService для расчёта калорий методом MET.
+     *
+     * Если profile null — калории будут null для всех точек (graceful degradation).
+     */
     private fun startLocationService(trainingId: String) {
-        val intervalMs = when (_state.value.selectedType?.iconKey) {
+        val selectedType = _state.value.selectedType ?: return
+        val intervalMs = when (selectedType.iconKey) {
             "3"  -> LocationConfig.INTERVAL_MS_CYCLING
             else -> LocationConfig.INTERVAL_MS_RUNNING
         }
-        val accuracyThreshold = when (_state.value.selectedType?.iconKey) {
+        val accuracyThreshold = when (selectedType.iconKey) {
             "3"  -> LocationConfig.MAX_ACCURACY_CYCLING
             else -> LocationConfig.MAX_ACCURACY_RUNNING
         }
+
         val intent = Intent(context, LocationTrackingService::class.java).apply {
             putExtra(LocationTrackingService.EXTRA_TRAINING_ID, trainingId)
             putExtra(LocationTrackingService.EXTRA_INTERVAL_MS, intervalMs)
             putExtra(LocationTrackingService.EXTRA_ACCURACY_THRESHOLD, accuracyThreshold)
+
+            // ── Экстры профиля для расчёта калорий ──────────────────────────────
+            // Передаём type_activ_id для загрузки MET-данных из workoutRepository
+            putExtra(LocationTrackingService.EXTRA_TYPE_ACTIV_ID, selectedType.id)
+
+            // Передаём weight/height/age/gender если они доступны в профиле
+            userProfile?.let { profile ->
+                profile.weight?.let { putExtra(LocationTrackingService.EXTRA_WEIGHT_KG, it) }
+                profile.height?.let { putExtra(LocationTrackingService.EXTRA_HEIGHT_CM, it) }
+                // Рассчитываем возраст из birthDate
+                val ageYears = Period.between(profile.birthDate, LocalDate.now()).years
+                putExtra(LocationTrackingService.EXTRA_AGE_YEARS, ageYears)
+                putExtra(LocationTrackingService.EXTRA_IS_MALE, profile.gender == Gender.MALE)
+            }
+        }
+        context.startForegroundService(intent)
+    }
+
+    /**
+     * Запускает GPS-сервис для discovery-фазы (без профиля и MET-данных).
+     * Discovery работает при открытии экрана, до нажатия «Начать тренировку».
+     *
+     * Намеренно не использует `selectedType ?: return`: сервис должен стартовать сразу
+     * при открытии экрана, даже если типы ещё не загрузились (сетевой запрос).
+     * В этом случае применяются дефолтные настройки (RUNNING), как было до добавления профиля.
+     */
+    private fun startDiscoveryLocationService(trainingId: String) {
+        val iconKey = _state.value.selectedType?.iconKey
+        val intervalMs = when (iconKey) {
+            "3"  -> LocationConfig.INTERVAL_MS_CYCLING
+            else -> LocationConfig.INTERVAL_MS_RUNNING
+        }
+        val accuracyThreshold = when (iconKey) {
+            "3"  -> LocationConfig.MAX_ACCURACY_CYCLING
+            else -> LocationConfig.MAX_ACCURACY_RUNNING
+        }
+
+        val intent = Intent(context, LocationTrackingService::class.java).apply {
+            putExtra(LocationTrackingService.EXTRA_TRAINING_ID, trainingId)
+            putExtra(LocationTrackingService.EXTRA_INTERVAL_MS, intervalMs)
+            putExtra(LocationTrackingService.EXTRA_ACCURACY_THRESHOLD, accuracyThreshold)
+            // Discovery: точки не пишутся в Room, не синхронизируются с сервером
+            putExtra(LocationTrackingService.EXTRA_IS_DISCOVERY, true)
         }
         context.startForegroundService(intent)
     }

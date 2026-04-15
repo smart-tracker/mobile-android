@@ -4,6 +4,9 @@ import android.content.Context
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import javax.inject.Inject
 
 /**
@@ -28,12 +31,27 @@ class TokenStorageImpl @Inject constructor(
         )
     }
 
+    // ── Session-expired сигнал ───────────────────────────────────────────────────
+    private val _sessionExpiredFlow = MutableStateFlow(false)
+
+    /**
+     * UI наблюдает этот flow: при `true` автоматически переходит на Login
+     * и очищает back stack. Значение не сбрасывается в false, т.к. после
+     * принудительного выхода приложение всегда рестартует с нуля.
+     */
+    override val sessionExpiredFlow: StateFlow<Boolean> = _sessionExpiredFlow.asStateFlow()
+
     override fun saveTokens(accessToken: String, refreshToken: String, roleIds: List<Int>) {
         prefs.edit()
             .putString(KEY_ACCESS_TOKEN, accessToken)
             .putString(KEY_REFRESH_TOKEN, refreshToken)
             .putString(KEY_ROLE_IDS, roleIds.joinToString(","))
             .apply()
+        // Новые токены = активная сессия. Сбрасываем флаг на случай если ранее
+        // signalSessionExpired() поднял его в true (до повторного логина пользователя).
+        // MutableStateFlow не эмитирует при записи того же значения (false == false),
+        // поэтому в штатных сценариях (без предшествующего expiry) это no-op.
+        _sessionExpiredFlow.value = false
     }
 
     override fun getAccessToken(): String? =
@@ -61,6 +79,16 @@ class TokenStorageImpl @Inject constructor(
             .remove(KEY_REFRESH_TOKEN)
             .remove(KEY_ROLE_IDS)
             .apply()
+    }
+
+    /**
+     * Очищает токены и поднимает [sessionExpiredFlow] в true.
+     * Вызывается из [com.example.smarttracker.data.remote.TokenRefreshAuthenticator]
+     * при получении 401 на refresh-запросе.
+     */
+    override fun signalSessionExpired() {
+        clearAll()
+        _sessionExpiredFlow.value = true
     }
 
     override fun hasTokens(): Boolean =

@@ -11,6 +11,7 @@ import com.example.smarttracker.data.remote.dto.toGpsPointDto
 import com.example.smarttracker.data.remote.dto.toIconKey
 import com.example.smarttracker.domain.model.ActiveTrainingResult
 import com.example.smarttracker.domain.model.LocationPoint
+import com.example.smarttracker.domain.model.METActivity
 import com.example.smarttracker.domain.model.SaveTrainingResult
 import com.example.smarttracker.domain.model.WorkoutType
 import com.example.smarttracker.domain.repository.WorkoutRepository
@@ -98,4 +99,9 @@ class WorkoutRepositoryImpl @Inject constructor(
             GpsPointsBatchRequestDto(batchId, points.map { it.toGpsPointDto() }),
         ).saved
     }
+
+    override suspend fun getMETActivity(typeActivId: Int): Result<METActivity> =
+        runCatching {
+            trainingApi.getMETActivity(typeActivId).toDomain()
+        }
 }

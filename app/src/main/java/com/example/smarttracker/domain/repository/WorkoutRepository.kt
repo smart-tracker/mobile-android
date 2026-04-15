@@ -2,6 +2,7 @@ package com.example.smarttracker.domain.repository
 
 import com.example.smarttracker.domain.model.ActiveTrainingResult
 import com.example.smarttracker.domain.model.LocationPoint
+import com.example.smarttracker.domain.model.METActivity
 import com.example.smarttracker.domain.model.SaveTrainingResult
 import com.example.smarttracker.domain.model.WorkoutType
 
@@ -53,4 +54,14 @@ interface WorkoutRepository {
         batchId: String,
         points: List<LocationPoint>,
     ): Result<Int>
+
+    /**
+     * Получить MET-конфигурацию для расчёта калорий по виду активности.
+     *
+     * Результат используется [com.example.smarttracker.domain.usecase.CalorieCalculator]
+     * для определения MET-коэффициента на каждой GPS-точке.
+     *
+     * @param typeActivId идентификатор типа активности
+     */
+    suspend fun getMETActivity(typeActivId: Int): Result<METActivity>
 }

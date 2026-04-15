@@ -24,6 +24,7 @@ data class TrainingStartRequestDto(
  * @param typeActivId тип активности
  * @param timeStart время начала (ISO 8601)
  * @param message человекочитаемое сообщение ("Тренировка начата")
+ * @param kilocalories начальный расход калорий (обычно 0.0 на старте)
  */
 data class TrainingStartResponseDto(
     @SerializedName("active_training_id")
@@ -33,6 +34,7 @@ data class TrainingStartResponseDto(
     @SerializedName("time_start")
     val timeStart: String,
     val message: String,
+    val kilocalories: Double = 0.0,
 )
 
 /** Маппинг DTO → domain-модель */

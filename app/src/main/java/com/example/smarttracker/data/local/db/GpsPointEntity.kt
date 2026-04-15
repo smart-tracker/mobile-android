@@ -15,6 +15,9 @@ import java.util.UUID
  * **Schema v2:**
  * - Добавлено поле [bearing] (Float?) — курс движения; null при медленном движении
  * - Добавлено поле [externalId] (String?) — внешний UUID для идемпотентности батча
+ *
+ * **Schema v3:**
+ * - Добавлено поле [calories] (Double?) — расход ккал за интервал (MET-метод)
  */
 @Entity(tableName = "gps_points")
 data class GpsPointEntity(
@@ -36,7 +39,9 @@ data class GpsPointEntity(
      */
     @ColumnInfo(index = true) val externalId: String?,
     val batchId: String?,
-    val isSent: Boolean
+    val isSent: Boolean,
+    /** Расход ккал за интервал от предыдущей точки до этой (MET-метод). null если профиль не заполнен. */
+    val calories: Double? = null,
 )
 
 /** Преобразование domain-модели → Room-сущность перед сохранением. */
@@ -55,6 +60,7 @@ fun LocationPoint.toEntity(): GpsPointEntity = GpsPointEntity(
     externalId  = externalId ?: UUID.randomUUID().toString(),
     batchId     = batchId,
     isSent      = isSent,
+    calories    = calories,
 )
 
 /** Преобразование Room-сущности → domain-модель после чтения. */
@@ -72,4 +78,5 @@ fun GpsPointEntity.toDomain(): LocationPoint = LocationPoint(
     externalId  = externalId,
     batchId     = batchId,
     isSent      = isSent,
+    calories    = calories,
 )

@@ -7,6 +7,7 @@ import androidx.room.RoomDatabase
  * Единственная Room-база данных приложения.
  *
  * **version = 2:** добавлены поля [GpsPointEntity.bearing] (Float?) и [GpsPointEntity.externalId] (String?).
+ * **version = 3:** добавлено поле [GpsPointEntity.calories] (Double?) — расход ккал за интервал (MET-метод).
  * Используется [fallbackToDestructiveMigration] — данные тренировок хранятся только на устройстве,
  * а не являются критичными для пользователя (production-миграция будет добавлена в Этапе 5).
  *
@@ -15,7 +16,7 @@ import androidx.room.RoomDatabase
  */
 @Database(
     entities = [GpsPointEntity::class],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 abstract class SmartTrackerDatabase : RoomDatabase() {

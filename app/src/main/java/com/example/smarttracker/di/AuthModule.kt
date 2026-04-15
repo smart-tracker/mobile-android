@@ -11,6 +11,7 @@ import com.example.smarttracker.data.local.db.GpsPointDao
 import com.example.smarttracker.data.local.db.SmartTrackerDatabase
 import okhttp3.Interceptor
 import com.example.smarttracker.data.remote.AuthApiService
+import com.example.smarttracker.data.remote.TokenRefreshAuthenticator
 import com.example.smarttracker.data.remote.TrainingApiService
 import com.example.smarttracker.data.repository.AuthRepositoryImpl
 import com.example.smarttracker.data.repository.WorkoutRepositoryImpl
@@ -30,6 +31,7 @@ import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
+import javax.inject.Named
 import javax.inject.Singleton
 
 /** Hilt-модуль: привязки репозиториев, хранилищ, Retrofit, OkHttpClient и Room. */
@@ -71,9 +73,23 @@ abstract class AuthModule {
 
     companion object {
 
+        /**
+         * Провайдер BASE_URL для инъекции в TokenRefreshAuthenticator.
+         *
+         * Authenticator нужен URL для прямого вызова /auth/refresh через отдельный
+         * OkHttpClient (чтобы разорвать циклическую зависимость Hilt).
+         * @Named("baseUrl") позволяет отличить String-зависимость от других строк.
+         */
+        @Provides
+        @Named("baseUrl")
+        fun provideBaseUrl(): String = BuildConfig.BASE_URL
+
         @Provides
         @Singleton
-        fun provideOkHttpClient(tokenStorage: TokenStorage): OkHttpClient {
+        fun provideOkHttpClient(
+            tokenStorage: TokenStorage,
+            tokenAuthenticator: TokenRefreshAuthenticator,
+        ): OkHttpClient {
             // Интерцептор авторизации: добавляет Bearer-токен ко всем запросам.
             // Читает токен из TokenStorage — он уже должен быть сохранён к моменту вызова.
             // Порядок важен: authInterceptor добавляется ДО logging, чтобы Authorization-заголовок
@@ -95,6 +111,9 @@ abstract class AuthModule {
             }
             return OkHttpClient.Builder()
                 .addInterceptor(authInterceptor)
+                // Authenticator срабатывает при HTTP 401: обновляет токен и повторяет запрос.
+                // Если refresh тоже вернул 401 — очищает хранилище (принудительный выход).
+                .authenticator(tokenAuthenticator)
                 .addInterceptor(logging)
                 .build()
         }
