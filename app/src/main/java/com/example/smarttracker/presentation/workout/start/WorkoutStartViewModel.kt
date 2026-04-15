@@ -646,7 +646,15 @@ class WorkoutStartViewModel @Inject constructor(
                 profile.weight?.let { putExtra(LocationTrackingService.EXTRA_WEIGHT_KG, it) }
                 profile.height?.let { putExtra(LocationTrackingService.EXTRA_HEIGHT_CM, it) }
                 // Рассчитываем возраст из birthDate
-                val ageYears = Period.between(profile.birthDate, LocalDate.now()).years
+                val today = LocalDate.now()
+                val rawAgeYears = Period.between(profile.birthDate, today).years
+                if (profile.birthDate.isAfter(today)) {
+                    Log.w(
+                        "WorkoutStartViewModel",
+                        "Ignoring future birthDate when calculating age: ${profile.birthDate}"
+                    )
+                }
+                val ageYears = rawAgeYears.coerceAtLeast(0)
                 putExtra(LocationTrackingService.EXTRA_AGE_YEARS, ageYears)
                 putExtra(LocationTrackingService.EXTRA_IS_MALE, profile.gender == Gender.MALE)
             }
