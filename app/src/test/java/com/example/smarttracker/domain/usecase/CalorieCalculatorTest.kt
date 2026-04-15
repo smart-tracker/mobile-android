@@ -56,8 +56,8 @@ class CalorieCalculatorTest {
         val durationMin = 10.0
         // Для 60+ CalorieCalculator использует отдельную MET-формулу с фиксированным CF:
         // (3.5 / 2.7), где 2.7 — референсный VO2rest для 60+ по Compendium 2024.
-        val vo2RestReferenceMlKgMin = 3.5
-        // MET-конверсия: деление на 200 переводит значение ккал/мин.
+        val oneMetValue = 3.5
+        // Коэффициент 200 из формулы MET для перевода потребления кислорода в ккал.
         val metConversionFactor = 200.0
 
         val actual = CalorieCalculator.energyOver60(
@@ -68,7 +68,7 @@ class CalorieCalculatorTest {
 
         // Алгебраически эквивалентно формуле в прод-коде:
         // (MET * (3.5 / 2.7)) * 2.7 * W / 200 * t = MET * 3.5 * W / 200 * t.
-        val expected = met * vo2RestReferenceMlKgMin * weightKg.toDouble() / metConversionFactor * durationMin
+        val expected = met * oneMetValue * weightKg.toDouble() / metConversionFactor * durationMin
         assertEquals(expected, actual, 1e-9)
     }
 }
