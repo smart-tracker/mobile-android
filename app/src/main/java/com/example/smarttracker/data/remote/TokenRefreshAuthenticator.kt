@@ -112,8 +112,12 @@ class TokenRefreshAuthenticator @Inject constructor(
 
         val body: String = refreshResponse.use { resp ->
             if (!resp.isSuccessful) {
-                Log.w(TAG, "Refresh вернул ${resp.code} — принудительный выход")
-                tokenStorage.signalSessionExpired()
+                if (resp.code == 401 || resp.code == 403) {
+                    Log.w(TAG, "Refresh вернул ${resp.code} — refresh token невалиден, завершаем сессию")
+                    tokenStorage.signalSessionExpired()
+                } else {
+                    Log.w(TAG, "Refresh вернул ${resp.code} — токены сохраняем, logout не выполняем")
+                }
                 return null
             }
             resp.body?.string() ?: run {
