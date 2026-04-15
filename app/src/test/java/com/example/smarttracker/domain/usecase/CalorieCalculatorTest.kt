@@ -54,6 +54,10 @@ class CalorieCalculatorTest {
         val met = 6.0
         val weightKg = 70f
         val durationMin = 10.0
+        // Для 60+ CalorieCalculator использует отдельную MET-формулу:
+        // E = MET * 3.5 * W / 200 * t (без персонального CF из Harris-Benedict).
+        val standardVo2Rest = 3.5
+        val kilocalorieFactor = 200.0
 
         val actual = CalorieCalculator.energyOver60(
             met = met,
@@ -61,7 +65,9 @@ class CalorieCalculatorTest {
             durationMin = durationMin,
         )
 
-        val expected = (met * (3.5 / 2.7)) * 2.7 * weightKg.toDouble() / 200.0 * durationMin
+        // Алгебраически эквивалентно формуле в прод-коде:
+        // (MET * (3.5 / 2.7)) * 2.7 * W / 200 * t = MET * 3.5 * W / 200 * t.
+        val expected = met * standardVo2Rest * weightKg.toDouble() / kilocalorieFactor * durationMin
         assertEquals(expected, actual, 1e-9)
     }
 }
