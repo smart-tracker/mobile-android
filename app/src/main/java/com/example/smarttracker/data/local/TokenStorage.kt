@@ -1,5 +1,7 @@
 package com.example.smarttracker.data.local
 
+import kotlinx.coroutines.flow.StateFlow
+
 /**
  * Контракт хранилища JWT-токенов и ролей пользователя.
  *
@@ -53,4 +55,23 @@ interface TokenStorage {
      * Роли не влияют на эту проверку (могут быть пусты).
      */
     fun hasTokens(): Boolean
+
+    /**
+     * Flow-флаг принудительного выхода из сессии.
+     *
+     * Эмитирует `true` когда оба токена истекли и refresh тоже вернул 401.
+     * UI должен наблюдать этот flow и при `true` переходить на экран Login.
+     *
+     * Используется [TokenRefreshAuthenticator] вместо прямого [clearAll],
+     * чтобы сигнализировать об истечении сессии без прямой зависимости на ViewModel.
+     */
+    val sessionExpiredFlow: StateFlow<Boolean>
+
+    /**
+     * Очищает токены и поднимает [sessionExpiredFlow] в `true`.
+     *
+     * Вызывается из [TokenRefreshAuthenticator] когда refresh-запрос вернул 401.
+     * В отличие от [clearAll], уведомляет UI о необходимости перейти на Login.
+     */
+    fun signalSessionExpired()
 }

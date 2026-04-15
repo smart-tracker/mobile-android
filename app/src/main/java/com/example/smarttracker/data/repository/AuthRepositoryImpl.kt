@@ -12,6 +12,7 @@ import com.example.smarttracker.data.remote.dto.ResendEmailDto
 import com.example.smarttracker.data.remote.dto.toDomain
 import com.example.smarttracker.data.remote.dto.toDto
 import com.example.smarttracker.domain.model.AuthResult
+import com.example.smarttracker.domain.model.User
 import com.example.smarttracker.domain.model.GoalResponse
 import com.example.smarttracker.domain.model.RegisterRequest
 import com.example.smarttracker.domain.model.RegisterResult
@@ -19,6 +20,7 @@ import com.example.smarttracker.domain.model.ResendResult
 import com.example.smarttracker.domain.model.NicknameCheckResponse
 import com.example.smarttracker.domain.model.RoleResponse
 import com.example.smarttracker.domain.repository.AuthRepository
+import kotlinx.coroutines.flow.StateFlow
 import javax.inject.Inject
 
 /**
@@ -216,4 +218,18 @@ class AuthRepositoryImpl @Inject constructor(
             // Вернуть domain объекты
             goalsDto.map { it.toDomain() }
         }
+
+    /**
+     * Профиль текущего пользователя: вес, рост, дата рождения, пол.
+     * Используется WorkoutStartViewModel для расчёта калорий методом MET.
+     */
+    override suspend fun getUserInfo(): Result<User> =
+        runCatching { api.getUserInfo().toDomain() }
+
+    /**
+     * Делегирует в TokenStorage.sessionExpiredFlow.
+     * Вынесен сюда чтобы ViewModel не зависел от TokenStorage напрямую.
+     */
+    override val sessionExpiredFlow: StateFlow<Boolean>
+        get() = tokenStorage.sessionExpiredFlow
 }

@@ -2,6 +2,7 @@ package com.example.smarttracker.data.repository
 
 import com.example.smarttracker.domain.model.ActiveTrainingResult
 import com.example.smarttracker.domain.model.LocationPoint
+import com.example.smarttracker.domain.model.METActivity
 import com.example.smarttracker.domain.model.SaveTrainingResult
 import com.example.smarttracker.domain.model.WorkoutType
 import com.example.smarttracker.domain.repository.WorkoutRepository
@@ -43,4 +44,7 @@ class MockWorkoutRepository @Inject constructor() : WorkoutRepository {
         batchId: String,
         points: List<LocationPoint>,
     ): Result<Int> = Result.success(points.size)
+
+    override suspend fun getMETActivity(typeActivId: Int): Result<METActivity> =
+        Result.success(METActivity(baseMet = 8.0, usesSpeedZones = false, zones = emptyList()))
 }

@@ -3,6 +3,7 @@ package com.example.smarttracker.data.remote
 import com.example.smarttracker.data.remote.dto.ActiveTrainingResponseDto
 import com.example.smarttracker.data.remote.dto.GpsPointsBatchRequestDto
 import com.example.smarttracker.data.remote.dto.GpsPointsSaveResponseDto
+import com.example.smarttracker.data.remote.dto.METActivityResponseDto
 import com.example.smarttracker.data.remote.dto.TrainingSaveRequestDto
 import com.example.smarttracker.data.remote.dto.TrainingSaveResponseDto
 import com.example.smarttracker.data.remote.dto.TrainingStartRequestDto
@@ -57,6 +58,17 @@ interface TrainingApiService {
         @Path("training_id") trainingId: String,
         @Body request: TrainingSaveRequestDto,
     ): TrainingSaveResponseDto
+
+    /**
+     * Получить MET-конфигурацию для вида активности.
+     *
+     * Используется для расчёта расхода калорий методом MET
+     * (Compendium of Physical Activities 2024).
+     * Если [METActivityResponseDto.usesSpeedZones] == true — MET зависит от скорости
+     * и нужна интерполяция по [METActivityResponseDto.zones].
+     */
+    @GET("training/met/{type_activ_id}")
+    suspend fun getMETActivity(@Path("type_activ_id") typeActivId: Int): METActivityResponseDto
 
     /**
      * Удалить тренировку (тестовый эндпоинт).

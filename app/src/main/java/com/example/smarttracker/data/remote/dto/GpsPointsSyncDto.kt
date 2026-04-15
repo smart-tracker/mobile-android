@@ -18,6 +18,9 @@ import java.time.format.DateTimeFormatter
  * @param accuracy погрешность GPS (метры), nullable
  * @param altitude высота над уровнем моря (метры), nullable
  * @param speed скорость (м/с), nullable
+ * @param calories расход калорий за интервал до этой точки (ккал), nullable.
+ *   Рассчитывается на стороне Android методом MET; null если профиль пользователя
+ *   (вес/рост/возраст) ещё не заполнен.
  */
 data class GpsPointDto(
     @SerializedName("recorded_at")
@@ -27,6 +30,7 @@ data class GpsPointDto(
     val accuracy: Float? = null,
     val altitude: Double? = null,
     val speed: Float? = null,
+    val calories: Double? = null,
 )
 
 /**
@@ -71,4 +75,5 @@ fun LocationPoint.toGpsPointDto(): GpsPointDto = GpsPointDto(
     accuracy   = accuracy,
     altitude   = altitude,
     speed      = speed,
+    calories   = calories,
 )
