@@ -36,8 +36,8 @@ class TokenStorageImpl @Inject constructor(
 
     /**
      * UI наблюдает этот flow: при `true` автоматически переходит на Login
-     * и очищает back stack. Значение не сбрасывается в false, т.к. после
-     * принудительного выхода приложение всегда рестартует с нуля.
+     * и очищает back stack. После успешного сохранения новых токенов в
+     * [saveTokens] значение сбрасывается в `false`, что означает активную сессию.
      */
     override val sessionExpiredFlow: StateFlow<Boolean> = _sessionExpiredFlow.asStateFlow()
 
