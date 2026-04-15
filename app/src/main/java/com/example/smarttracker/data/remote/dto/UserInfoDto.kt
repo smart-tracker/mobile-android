@@ -7,7 +7,7 @@ import com.google.gson.annotations.SerializedName
 import java.time.LocalDate
 
 /**
- * DTO ответа GET /user_info/user/.
+ * DTO ответа GET /user/.
  *
  * Возвращает профиль текущего авторизованного пользователя на основе Bearer-токена.
  * Поля [weight] и [height] nullable — пользователь мог не заполнить профиль.
