@@ -50,4 +50,14 @@ interface LocationRepository {
      * Возвращает null если тренировок ещё не было.
      */
     suspend fun getLastKnownPoint(): LocationPoint?
+
+    /**
+     * Удаляет все точки тренировки из базы.
+     * Используется для очистки discovery-точек: они временные и нужны только
+     * пока discovery-сервис работает (для обновления gpsStatus в ViewModel).
+     * После остановки сервиса хранить их бессмысленно — syncLoop отключён
+     * для discovery, поэтому эти точки никогда не отправятся, но навсегда
+     * останутся в Room с isSent=false и могут вызвать случайный 404.
+     */
+    suspend fun deletePointsForTraining(trainingId: String)
 }

@@ -33,6 +33,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -65,6 +66,7 @@ import javax.inject.Inject
  * **Moving Average сглаживание:** скользящее среднее по последним 3 точкам (lat/lng)
  * уменьшает шум GPS без задержки, характерной для Калмана.
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 @AndroidEntryPoint
 class LocationTrackingService : Service() {
 
@@ -323,6 +325,9 @@ class LocationTrackingService : Service() {
      * Ошибки ловятся на уровне каждого батча — один сбой не прерывает остальные батчи.
      */
     private fun startSyncLoop() {
+        // Discovery-режим: sync с сервером отключён. Discovery-trainingId не зарегистрирован
+        // на сервере → uploadGpsPoints() вернул бы 404 на каждом батче.
+        if (isDiscovery) return
         syncJob?.cancel()
         syncJob = scope.launch {
             while (isActive) {
@@ -488,11 +493,11 @@ class LocationTrackingService : Service() {
         // после снятия паузы. Точки в Room не попадают.
         if (!isRecording) return
 
-        // Discovery-режим: точки НЕ пишутся в Room и НЕ синхронизируются.
-        // Фильтрация и сглаживание выполнены выше — это нужно для gpsStatus (ACQUIRED).
-        // Запись в Room запрещена: discovery-UUID никогда не регистрируется на сервере,
-        // поэтому syncUnsentPoints() получил бы 404 на каждом батче.
-        if (isDiscovery) return
+        // Discovery-режим: точки пишутся в Room (startGpsStatusObserver в ViewModel
+        // наблюдает за ними и обновляет gpsStatus → ACQUIRED / UNAVAILABLE корректно),
+        // но НЕ синхронизируются с сервером — syncLoop отключён для discovery
+        // (startSyncLoop завершается сразу при isDiscovery == true), а в onDestroy
+        // syncUnsentPoints() также пропускается.
 
         // ── Bearing guard: при медленном движении пеленг ненадёжен ──────────────
         val bearing: Float? = if (
@@ -607,11 +612,25 @@ class LocationTrackingService : Service() {
         flushTimerJob?.cancel()
         syncJob?.cancel()
 
-        // Финальный сброс буфера + попытка синхронизации оставшихся точек
+        // Финальный сброс буфера + sync или очистка discovery-точек.
+        // Захватываем значения полей до scope.launch: onStartCommand мог уже переключить
+        // isDiscovery на false (Android переиспользует сервис при stop+start), поэтому
+        // читаем флаги синхронно до старта корутины.
+        val wasDiscovery = isDiscovery
+        val serviceTrainingId = trainingId
         scope.launch {
             try {
                 bufferMutex.withLock { flushBufferLocked() }
-                syncUnsentPoints()
+                if (!wasDiscovery) {
+                    syncUnsentPoints()
+                } else {
+                    // Discovery-режим: syncLoop был отключён (discovery-UUID не зарегистрирован
+                    // на сервере), но точки накопились в Room для gpsStatus-наблюдателя.
+                    // Удаляем их: они временные, хранить смысла нет — в противном случае
+                    // они остаются с isSent=false навсегда и при следующем starте сервиса
+                    // (если isDiscovery случайно сбросится) могут уйти на сервер как 404.
+                    locationRepository.deletePointsForTraining(serviceTrainingId)
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to flush and sync unsent points during service shutdown", e)
             } finally {
@@ -705,7 +724,8 @@ class LocationTrackingService : Service() {
 
         /**
          * Флаг discovery-режима: GPS ищется при открытии экрана, до старта тренировки.
-         * При true: точки не пишутся в Room, не синхронизируются с сервером.
+         * При true: точки пишутся в Room (нужно для gpsStatus-наблюдателя в ViewModel),
+         * но НЕ синхронизируются с сервером (syncLoop и финальный syncUnsentPoints отключены).
          */
         const val EXTRA_IS_DISCOVERY = "extra_is_discovery"
 

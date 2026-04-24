@@ -45,7 +45,6 @@ import com.example.smarttracker.presentation.workout.start.WorkoutStartViewModel
  */
 @Composable
 fun WorkoutHomeScreen(
-    onBack: () -> Unit = {},
     onLogout: () -> Unit = {},
 ) {
     var currentTab by remember { mutableStateOf(WorkoutTab.START) }
@@ -74,7 +73,6 @@ fun WorkoutHomeScreen(
                 WorkoutStartScreen(
                     state = state,
                     padding = padding,
-                    onBack = onBack,
                     onStartClick = viewModel::onStartWorkoutClick,
                     onTypeSelected = viewModel::onQuickTypeSelected,
                     onSheetTypeSelected = viewModel::onSheetTypeSelected,

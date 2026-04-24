@@ -80,7 +80,6 @@ import com.example.smarttracker.presentation.workout.permission.LocationPermissi
 fun WorkoutStartScreen(
     state: WorkoutStartViewModel.UiState,
     padding: PaddingValues,
-    onBack: () -> Unit,
     onStartClick: () -> Unit,
     onTypeSelected: (WorkoutType) -> Unit,
     onSheetTypeSelected: (WorkoutType) -> Unit,
@@ -220,6 +219,7 @@ fun WorkoutStartScreen(
                 lastKnownLocation = state.lastKnownLocation,
                 trackPoints = state.trackPoints,
                 isTracking = state.isTracking,
+                isGpsActive = state.isGpsActive,
                 mapTilesFailed = state.mapTilesFailed,
                 onMapTilesFailed = onMapTilesFailed,
             )
@@ -554,8 +554,9 @@ private fun WorkoutTypeIcon(
  *  13 — Бег на беговой дорожке
  */
 private fun iconResForKey(key: String): Int = when (key) {
-    "1"  -> R.drawable.ic_activity_running  // Бег
-    "2"  -> R.drawable.ic_activity_walking  // Северная ходьба
-    "3"  -> R.drawable.ic_activity_cycling  // Велосипед
-    else -> R.drawable.placeholder          // нет своей иконки
+    "1"  -> R.drawable.ic_activity_running       // Бег
+    "2"  -> R.drawable.ic_activity_north_walking // Северная ходьба
+    "3"  -> R.drawable.ic_activity_cycling       // Велосипед
+    "5"  -> R.drawable.ic_activity_walking       // Ходьба
+    else -> R.drawable.placeholder
 }

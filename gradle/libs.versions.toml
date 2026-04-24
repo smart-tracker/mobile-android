@@ -21,6 +21,9 @@ room = "2.6.1"
 maplibre = "11.8.2"
 gmsLocation = "21.3.0"
 hmsLocation = "6.12.0.300"
+work        = "2.9.1"
+hiltWork    = "1.2.0"
+robolectric = "4.13"
 
 [libraries]
 # Google Material — тема для совместимости с enableEdgeToEdge() и Material3
@@ -82,6 +85,11 @@ maplibre-android = { group = "org.maplibre.gl", name = "android-sdk", version.re
 gms-location = { group = "com.google.android.gms", name = "play-services-location", version.ref = "gmsLocation" }
 hms-location = { group = "com.huawei.hms", name = "location", version.ref = "hmsLocation" }
 
+# WorkManager — фоновые задачи (офлайн-sync)
+androidx-work-runtime-ktx = { group = "androidx.work",    name = "work-runtime-ktx", version.ref = "work" }
+hilt-work                 = { group = "androidx.hilt",    name = "hilt-work",         version.ref = "hiltWork" }
+hilt-work-compiler        = { group = "androidx.hilt",    name = "hilt-compiler",     version.ref = "hiltWork" }
+
 # Test
 junit = { group = "junit", name = "junit", version = "4.13.2" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version = "1.2.1" }
@@ -89,7 +97,11 @@ androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-co
 mockito-kotlin = { group = "org.mockito.kotlin", name = "mockito-kotlin", version = "5.2.1" }
 kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutines" }
 okhttp-mockwebserver = { group = "com.squareup.okhttp3", name = "mockwebserver", version.ref = "okhttp" }
-room-testing = { group = "androidx.room", name = "room-testing", version.ref = "room" }
+room-testing          = { group = "androidx.room", name = "room-testing",  version.ref = "room" }
+robolectric           = { group = "org.robolectric",  name = "robolectric",  version.ref = "robolectric" }
+androidx-work-testing = { group = "androidx.work",    name = "work-testing", version.ref = "work" }
+# androidx.test.core нужен явно при использовании Robolectric в testImplementation
+androidx-test-core    = { group = "androidx.test",    name = "core",         version = "1.6.1" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

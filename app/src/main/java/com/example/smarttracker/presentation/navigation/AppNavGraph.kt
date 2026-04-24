@@ -160,7 +160,6 @@ fun AppNavGraph(
 
         composable(Screen.Home.route) {
             WorkoutHomeScreen(
-                onBack = { navController.popBackStack() },
                 onLogout = {
                     onLogout()
                     // Очищаем весь бэкстек до корня и переходим на Login,
