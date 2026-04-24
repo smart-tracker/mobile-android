@@ -1,22 +1,32 @@
 package com.example.smarttracker.data.repository
 
 import com.example.smarttracker.data.local.IconCacheManager
+import com.example.smarttracker.data.local.db.ActivityTypeDao
+import com.example.smarttracker.data.local.db.ActivityTypeEntity
+import com.example.smarttracker.data.local.db.PendingFinishDao
 import com.example.smarttracker.data.remote.AuthApiService
 import com.example.smarttracker.data.remote.TrainingApiService
-import com.example.smarttracker.data.remote.dto.ActivityTypeDto
 import com.example.smarttracker.data.remote.dto.GpsPointsSaveResponseDto
+import com.example.smarttracker.data.remote.dto.TrainingSaveResponseDto
 import com.example.smarttracker.data.remote.dto.TrainingStartResponseDto
 import com.example.smarttracker.domain.model.LocationPoint
+import com.example.smarttracker.domain.model.NetworkUnavailableException
+import com.example.smarttracker.domain.model.TrainingAlreadyClosedException
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
+import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.mockito.kotlin.any
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.whenever
+import retrofit2.HttpException
+import retrofit2.Response
 import java.io.File
+import java.io.IOException
 
 /**
  * Unit-тесты WorkoutRepositoryImpl.
@@ -32,115 +42,116 @@ class WorkoutRepositoryImplTest {
     private lateinit var authApi: AuthApiService
     private lateinit var trainingApi: TrainingApiService
     private lateinit var iconCache: IconCacheManager
+    private lateinit var activityTypeDao: ActivityTypeDao
+    private lateinit var pendingFinishDao: PendingFinishDao
     private lateinit var repository: WorkoutRepositoryImpl
 
     @Before
     fun setUp() {
-        authApi     = mock()
-        trainingApi = mock()
-        iconCache   = mock()
-        repository  = WorkoutRepositoryImpl(authApi, trainingApi, iconCache)
+        authApi          = mock()
+        trainingApi      = mock()
+        iconCache        = mock()
+        activityTypeDao  = mock()
+        pendingFinishDao = mock()
+        // refreshFromNetwork запускается в фоне через downloadScope.launch;
+        // runCatching перехватывает любые ошибки тихо, поэтому authApi можно не стабить.
+        repository = WorkoutRepositoryImpl(authApi, trainingApi, iconCache, activityTypeDao, pendingFinishDao)
     }
 
-    // ── getWorkoutTypes() ─────────────────────────────────────────────────────
+    // ── workoutTypesFlow() ────────────────────────────────────────────────────
 
     @Test
-    fun `getWorkoutTypes - iconKey равен id_toString, не name`() = runTest {
-        whenever(authApi.getActivityTypes()).thenReturn(
-            listOf(ActivityTypeDto(id = 1, name = "Бег", imagePath = null))
+    fun `workoutTypesFlow - iconKey равен id_toString, не name`() = runTest {
+        whenever(activityTypeDao.observeAll()).thenReturn(
+            flowOf(listOf(ActivityTypeEntity(id = 1, name = "Бег", imagePath = null)))
         )
         whenever(iconCache.getCached(1)).thenReturn(null)
 
-        val result = repository.getWorkoutTypes()
+        val types = repository.workoutTypesFlow().first()
+        val type = types.first()
 
-        assertTrue(result.isSuccess)
-        val type = result.getOrNull()?.first()
-        assertEquals("1", type?.iconKey)
+        assertEquals("1", type.iconKey)
     }
 
     @Test
-    fun `getWorkoutTypes - iconKey не использует name для маппинга`() = runTest {
-        whenever(authApi.getActivityTypes()).thenReturn(
-            listOf(ActivityTypeDto(id = 3, name = "Велосипед", imagePath = null))
+    fun `workoutTypesFlow - iconKey не использует name для маппинга`() = runTest {
+        whenever(activityTypeDao.observeAll()).thenReturn(
+            flowOf(listOf(ActivityTypeEntity(id = 3, name = "Велосипед", imagePath = null)))
         )
         whenever(iconCache.getCached(3)).thenReturn(null)
 
-        val result = repository.getWorkoutTypes()
-        val type = result.getOrNull()?.first()
+        val types = repository.workoutTypesFlow().first()
+        val type = types.first()
 
         // iconKey должен быть "3", а не "Велосипед"
-        assertEquals("3", type?.iconKey)
-        assertTrue("iconKey не должен быть именем", type?.iconKey != "Велосипед")
+        assertEquals("3", type.iconKey)
+        assertTrue("iconKey не должен быть именем", type.iconKey != "Велосипед")
     }
 
     @Test
-    fun `getWorkoutTypes - imageUrl null не вызывает исключений`() = runTest {
-        whenever(authApi.getActivityTypes()).thenReturn(
-            listOf(ActivityTypeDto(id = 2, name = "Северная ходьба", imagePath = null))
+    fun `workoutTypesFlow - imageUrl null не вызывает исключений`() = runTest {
+        whenever(activityTypeDao.observeAll()).thenReturn(
+            flowOf(listOf(ActivityTypeEntity(id = 2, name = "Северная ходьба", imagePath = null)))
         )
         whenever(iconCache.getCached(2)).thenReturn(null)
 
-        val result = repository.getWorkoutTypes()
+        val types = repository.workoutTypesFlow().first()
 
-        assertTrue(result.isSuccess)
-        assertNull(result.getOrNull()?.first()?.imageUrl)
+        assertNull(types.first().imageUrl)
     }
 
     @Test
-    fun `getWorkoutTypes - imageUrl сохраняется из imagePath DTO`() = runTest {
+    fun `workoutTypesFlow - imageUrl сохраняется из imagePath entity`() = runTest {
         val url = "https://runtastic.gottland.ru/icons/run.png"
-        whenever(authApi.getActivityTypes()).thenReturn(
-            listOf(ActivityTypeDto(id = 1, name = "Бег", imagePath = url))
+        whenever(activityTypeDao.observeAll()).thenReturn(
+            flowOf(listOf(ActivityTypeEntity(id = 1, name = "Бег", imagePath = url)))
         )
         whenever(iconCache.getCached(1)).thenReturn(null)
 
-        val result = repository.getWorkoutTypes()
-        val type = result.getOrNull()?.first()
+        val types = repository.workoutTypesFlow().first()
 
-        assertEquals(url, type?.imageUrl)
+        assertEquals(url, types.first().imageUrl)
     }
 
     @Test
-    fun `getWorkoutTypes - iconFile из кэша используется если файл есть`() = runTest {
+    fun `workoutTypesFlow - iconFile из кэша используется если файл есть`() = runTest {
         val cachedFile = File("/tmp/1.png")
-        whenever(authApi.getActivityTypes()).thenReturn(
-            listOf(ActivityTypeDto(id = 1, name = "Бег", imagePath = null))
+        whenever(activityTypeDao.observeAll()).thenReturn(
+            flowOf(listOf(ActivityTypeEntity(id = 1, name = "Бег", imagePath = null)))
         )
         whenever(iconCache.getCached(1)).thenReturn(cachedFile)
 
-        val result = repository.getWorkoutTypes()
-        val type = result.getOrNull()?.first()
+        val types = repository.workoutTypesFlow().first()
 
-        assertEquals(cachedFile, type?.iconFile)
+        assertEquals(cachedFile, types.first().iconFile)
     }
 
     @Test
-    fun `getWorkoutTypes - iconFile null когда кэш пуст`() = runTest {
-        whenever(authApi.getActivityTypes()).thenReturn(
-            listOf(ActivityTypeDto(id = 1, name = "Бег", imagePath = null))
+    fun `workoutTypesFlow - iconFile null когда кэш пуст`() = runTest {
+        whenever(activityTypeDao.observeAll()).thenReturn(
+            flowOf(listOf(ActivityTypeEntity(id = 1, name = "Бег", imagePath = null)))
         )
         whenever(iconCache.getCached(1)).thenReturn(null)
 
-        val result = repository.getWorkoutTypes()
-        val type = result.getOrNull()?.first()
+        val types = repository.workoutTypesFlow().first()
 
-        assertNull(type?.iconFile)
+        assertNull(types.first().iconFile)
     }
 
     @Test
-    fun `getWorkoutTypes - возвращает все типы из API`() = runTest {
-        whenever(authApi.getActivityTypes()).thenReturn(
-            listOf(
-                ActivityTypeDto(id = 1, name = "Бег",   imagePath = null),
-                ActivityTypeDto(id = 2, name = "Ходьба", imagePath = null),
-                ActivityTypeDto(id = 3, name = "Вело",   imagePath = null),
-            )
+    fun `workoutTypesFlow - возвращает все типы из DAO`() = runTest {
+        whenever(activityTypeDao.observeAll()).thenReturn(
+            flowOf(listOf(
+                ActivityTypeEntity(id = 1, name = "Бег",    imagePath = null),
+                ActivityTypeEntity(id = 2, name = "Ходьба", imagePath = null),
+                ActivityTypeEntity(id = 3, name = "Вело",   imagePath = null),
+            ))
         )
         whenever(iconCache.getCached(any())).thenReturn(null)
 
-        val result = repository.getWorkoutTypes()
+        val types = repository.workoutTypesFlow().first()
 
-        assertEquals(3, result.getOrNull()?.size)
+        assertEquals(3, types.size)
     }
 
     // ── uploadGpsPoints() ─────────────────────────────────────────────────────
@@ -211,7 +222,107 @@ class WorkoutRepositoryImplTest {
         assertEquals(3, result.getOrNull()?.typeActivId)
     }
 
+    // ── saveTraining() — маппинг исключений (Fix 1 + 4) ─────────────────────
+
+    /**
+     * Успешный ответ → Result.success с корректным trainingId.
+     */
+    @Test
+    fun `saveTraining success - возвращает SaveTrainingResult`() = runTest {
+        whenever(trainingApi.saveTraining(any(), any())).thenReturn(
+            TrainingSaveResponseDto("training-uuid", "Тренировка завершена")
+        )
+
+        val result = repository.saveTraining("training-uuid", "2026-04-24T10:00:00Z", null, null)
+
+        assertTrue(result.isSuccess)
+        assertEquals("training-uuid", result.getOrNull()?.trainingId)
+    }
+
+    /**
+     * IOException (нет сети) → NetworkUnavailableException.
+     * Это ключевой инвариант: только эта ошибка попадает в offline-очередь.
+     *
+     * Почему thenAnswer а не thenThrow:
+     * Mockito считает IOException «checked exception» и запрещает thenThrow,
+     * если метод не объявляет @Throws в Java-сигнатуре. suspend-функции Kotlin
+     * компилируются без throws-клауз. thenAnswer { throw ... } обходит эту проверку.
+     */
+    @Test
+    fun `saveTraining IOException - бросает NetworkUnavailableException`() = runTest {
+        whenever(trainingApi.saveTraining(any(), any()))
+            .thenAnswer { throw IOException("Connection refused") }
+
+        val result = repository.saveTraining("training-uuid", "2026-04-24T10:00:00Z", null, null)
+
+        assertTrue(result.isFailure)
+        assertTrue(result.exceptionOrNull() is NetworkUnavailableException)
+    }
+
+    /**
+     * HTTP 400 → TrainingAlreadyClosedException с httpCode=400.
+     * Типичная ситуация: бэкенд вернул 400, тренировка уже закрыта или не существует.
+     */
+    @Test
+    fun `saveTraining HttpException 400 - бросает TrainingAlreadyClosedException`() = runTest {
+        whenever(trainingApi.saveTraining(any(), any())).thenThrow(httpException(400))
+
+        val result = repository.saveTraining("training-uuid", "2026-04-24T10:00:00Z", null, null)
+
+        assertTrue(result.isFailure)
+        val exception = result.exceptionOrNull()
+        assertTrue(exception is TrainingAlreadyClosedException)
+        assertEquals(400, (exception as TrainingAlreadyClosedException).httpCode)
+    }
+
+    /**
+     * HTTP 404 → тоже TrainingAlreadyClosedException (тренировка не найдена).
+     * Весь диапазон 4xx трактуется одинаково: retry бессмысленен.
+     */
+    @Test
+    fun `saveTraining HttpException 404 - бросает TrainingAlreadyClosedException с кодом 404`() = runTest {
+        whenever(trainingApi.saveTraining(any(), any())).thenThrow(httpException(404))
+
+        val result = repository.saveTraining("training-uuid", "2026-04-24T10:00:00Z", null, null)
+
+        assertTrue(result.isFailure)
+        val exception = result.exceptionOrNull()
+        assertTrue(exception is TrainingAlreadyClosedException)
+        assertEquals(404, (exception as TrainingAlreadyClosedException).httpCode)
+    }
+
+    /**
+     * HTTP 500 → пробрасывается как HttpException, НЕ оборачивается в доменный тип.
+     * WorkManager воркер поймает его в ветке else → retry с backoff.
+     */
+    @Test
+    fun `saveTraining HttpException 500 - пробрасывается как HttpException без обёртки`() = runTest {
+        whenever(trainingApi.saveTraining(any(), any())).thenThrow(httpException(500))
+
+        val result = repository.saveTraining("training-uuid", "2026-04-24T10:00:00Z", null, null)
+
+        assertTrue(result.isFailure)
+        val exception = result.exceptionOrNull()
+        // 5xx НЕ становится NetworkUnavailableException — не ставим в offline-очередь
+        assertTrue(exception !is NetworkUnavailableException)
+        assertTrue(exception !is TrainingAlreadyClosedException)
+        assertTrue(exception is HttpException)
+    }
+
     // ── Хелперы ───────────────────────────────────────────────────────────────
+
+    /**
+     * Создаёт HttpException для любого HTTP-кода.
+     * Retrofit требует Response.error() с ResponseBody — пустое тело достаточно для теста.
+     */
+    private fun httpException(code: Int): HttpException =
+        HttpException(Response.error<Any>(code, "".toResponseBody(null)))
+
+    private fun assertTrue(message: String, condition: Boolean) =
+        org.junit.Assert.assertTrue(message, condition)
+
+    private fun assertTrue(condition: Boolean) =
+        org.junit.Assert.assertTrue(condition)
 
     private fun makeLocationPoints(count: Int): List<LocationPoint> =
         (1..count).map { i ->

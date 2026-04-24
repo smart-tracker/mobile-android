@@ -49,4 +49,8 @@ class LocationRepositoryImpl @Inject constructor(
 
     override suspend fun getLastKnownPoint(): LocationPoint? =
         dao.getLastPoint(excludedTrainingId = null)?.toDomain()
+
+    override suspend fun deletePointsForTraining(trainingId: String) {
+        dao.deletePointsForTraining(trainingId)
+    }
 }

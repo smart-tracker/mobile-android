@@ -46,10 +46,10 @@ class OfflineMapManager @Inject constructor(
         downloadStarted = true
 
         offlineManager.listOfflineRegions(object : OfflineManager.ListOfflineRegionsCallback {
-            override fun onList(regions: Array<OfflineRegion>?) {
+            override fun onList(offlineRegions: Array<OfflineRegion>?) {
                 // FIFO: если регионов уже MAX_REGIONS — удалить самый старый
-                if ((regions?.size ?: 0) >= MAX_REGIONS) {
-                    regions?.firstOrNull()?.delete(object : OfflineRegion.OfflineRegionDeleteCallback {
+                if ((offlineRegions?.size ?: 0) >= MAX_REGIONS) {
+                    offlineRegions?.firstOrNull()?.delete(object : OfflineRegion.OfflineRegionDeleteCallback {
                         override fun onDelete() {}
                         override fun onError(error: String) {}
                     })

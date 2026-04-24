@@ -55,6 +55,14 @@ interface GpsPointDao {
     suspend fun markBatchAsSent(batchId: String)
 
     /**
+     * Удаляет все точки тренировки из базы.
+     * Используется для очистки discovery-точек после завершения discovery-фазы —
+     * эти точки временные и не должны оставаться в Room после остановки сервиса.
+     */
+    @Query("DELETE FROM gps_points WHERE trainingId = :trainingId")
+    suspend fun deletePointsForTraining(trainingId: String)
+
+    /**
      * Реактивное наблюдение за точками тренировки.
      * Room переиздаёт список при каждой записи в таблицу — удобно для обновления UI и карты.
      */

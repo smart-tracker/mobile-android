@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Маркер текущей GPS-позиции для LocationComponent.
+    Повторяет стиль CircleLayer: синий круг (#3B82F6) с белой обводкой 2dp.
+    24×24dp — достаточно крупно для сенсорного экрана и читаемо на любой карте.
+    Используется как foreground и background в LocationComponentOptions,
+    чтобы убрать стандартную тень MapLibre.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+
+    <!-- Белый внешний круг — обводка (radius=12, даёт 2dp border) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M12,12 m-12,0 a12,12 0 1,0 24,0 a12,12 0 1,0 -24,0" />
+
+    <!-- Синий внутренний круг — заливка (radius=10) -->
+    <path
+        android:fillColor="#3B82F6"
+        android:pathData="M12,12 m-10,0 a10,10 0 1,0 20,0 a10,10 0 1,0 -20,0" />
+
+</vector>

@@ -8,6 +8,8 @@ import com.example.smarttracker.domain.model.WorkoutType
 import com.example.smarttracker.domain.repository.WorkoutRepository
 import java.util.UUID
 import javax.inject.Inject
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
 
 /**
  * Временная мок-реализация WorkoutRepository.
@@ -15,12 +17,11 @@ import javax.inject.Inject
  */
 class MockWorkoutRepository @Inject constructor() : WorkoutRepository {
 
-    override suspend fun getWorkoutTypes(): Result<List<WorkoutType>> = Result.success(
+    override fun workoutTypesFlow(): Flow<List<WorkoutType>> = flowOf(
         listOf(
-            WorkoutType(id = 1, name = "Бег",       iconKey = "running"),
-            WorkoutType(id = 2, name = "Ходьба",    iconKey = "walking"),
-            WorkoutType(id = 3, name = "Велосипед", iconKey = "cycling"),
-            WorkoutType(id = 4, name = "Другое",    iconKey = "other"),
+            WorkoutType(id = 1, name = "Бег",       iconKey = "1"),
+            WorkoutType(id = 3, name = "Велосипед", iconKey = "3"),
+            WorkoutType(id = 5, name = "Ходьба",    iconKey = "5"),
         )
     )
 
@@ -45,6 +46,16 @@ class MockWorkoutRepository @Inject constructor() : WorkoutRepository {
         points: List<LocationPoint>,
     ): Result<Int> = Result.success(points.size)
 
+    override suspend fun getActiveTraining(): Result<String> =
+        Result.success(UUID.randomUUID().toString())
+
     override suspend fun getMETActivity(typeActivId: Int): Result<METActivity> =
         Result.success(METActivity(baseMet = 8.0, usesSpeedZones = false, zones = emptyList()))
+
+    override suspend fun savePendingFinish(
+        trainingId: String,
+        timeEnd: String,
+        totalDistanceMeters: Double?,
+        totalKilocalories: Double?,
+    ) = Unit  // Mock: очередь не нужна
 }

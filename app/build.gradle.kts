@@ -38,9 +38,14 @@ android {
     }
 
     testOptions {
-        // android.util.Log и другие Android-классы возвращают дефолтные значения
-        // в JVM unit-тестах, а не бросают исключения (RuntimeException: Stub!).
-        unitTests.isReturnDefaultValues = true
+        unitTests {
+            // android.util.Log и другие Android-классы возвращают дефолтные значения
+            // в JVM unit-тестах, а не бросают исключения (RuntimeException: Stub!).
+            isReturnDefaultValues = true
+            // Robolectric требует доступ к скомпилированным ресурсам (R-классы, assets).
+            // Без этого ApplicationProvider.getApplicationContext() возвращает null.
+            isIncludeAndroidResources = true
+        }
     }
 
     compileOptions {
@@ -133,6 +138,11 @@ dependencies {
     implementation(libs.gms.location)
     implementation(libs.hms.location)
 
+    // WorkManager + Hilt-интеграция — фоновая доставка офлайн-операций
+    implementation(libs.androidx.work.runtime.ktx)
+    implementation(libs.hilt.work)
+    kapt(libs.hilt.work.compiler)
+
     // Debug
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
@@ -142,6 +152,13 @@ dependencies {
     testImplementation(libs.mockito.kotlin)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.okhttp.mockwebserver)
+    // Robolectric — Android-окружение для JVM-тестов (нужен для WorkManager-воркеров)
+    testImplementation(libs.robolectric)
+    // work-testing — TestListenableWorkerBuilder для синхронного запуска воркеров в тестах
+    testImplementation(libs.androidx.work.testing)
+    // androidx.test.core нужен явно при работе Robolectric в testImplementation
+    // (ApplicationProvider.getApplicationContext() транзитивно не попадает в test classpath)
+    testImplementation(libs.androidx.test.core)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))

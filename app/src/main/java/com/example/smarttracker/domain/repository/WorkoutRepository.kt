@@ -5,6 +5,7 @@ import com.example.smarttracker.domain.model.LocationPoint
 import com.example.smarttracker.domain.model.METActivity
 import com.example.smarttracker.domain.model.SaveTrainingResult
 import com.example.smarttracker.domain.model.WorkoutType
+import kotlinx.coroutines.flow.Flow
 
 /**
  * Контракт репозитория тренировок.
@@ -13,8 +14,15 @@ import com.example.smarttracker.domain.model.WorkoutType
  * жизненного цикла тренировки: старт → GPS-синхронизация → завершение.
  */
 interface WorkoutRepository {
-    /** Возвращает список доступных типов тренировок */
-    suspend fun getWorkoutTypes(): Result<List<WorkoutType>>
+
+    /**
+     * Реактивный поток видов активности из локального кэша (Room).
+     *
+     * Эмитит кэшированный список немедленно при подписке, затем повторно после каждого
+     * фонового обновления из сети. Сетевой запрос выполняется конкурентно — первый emit
+     * не блокируется ожиданием ответа сервера.
+     */
+    fun workoutTypesFlow(): Flow<List<WorkoutType>>
 
     /**
      * Начать тренировку на сервере.
@@ -56,6 +64,15 @@ interface WorkoutRepository {
     ): Result<Int>
 
     /**
+     * Получить текущую активную тренировку пользователя с сервера.
+     * Возвращает серверный UUID тренировки.
+     *
+     * Используется для автоматического завершения orphaned-тренировки при получении
+     * [com.example.smarttracker.domain.model.ActiveTrainingConflictException] от [startTraining].
+     */
+    suspend fun getActiveTraining(): Result<String>
+
+    /**
      * Получить MET-конфигурацию для расчёта калорий по виду активности.
      *
      * Результат используется [com.example.smarttracker.domain.usecase.CalorieCalculator]
@@ -64,4 +81,20 @@ interface WorkoutRepository {
      * @param typeActivId идентификатор типа активности
      */
     suspend fun getMETActivity(typeActivId: Int): Result<METActivity>
+
+    /**
+     * Сохранить параметры завершения тренировки в локальную очередь.
+     *
+     * Вызывается когда [saveTraining] не смог достучаться до сервера (нет сети).
+     * [com.example.smarttracker.data.work.SaveTrainingWorker] прочитает очередь
+     * при появлении сети и доставит запрос — даже если приложение закрыто.
+     *
+     * Идемпотентно: повторный вызов для одного [trainingId] игнорируется (IGNORE).
+     */
+    suspend fun savePendingFinish(
+        trainingId: String,
+        timeEnd: String,
+        totalDistanceMeters: Double?,
+        totalKilocalories: Double?,
+    )
 }
