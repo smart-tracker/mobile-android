@@ -341,11 +341,17 @@ class WorkoutStartViewModel @Inject constructor(
                             finishOrphanedAndRetryStart(selectedType.id)
                         }
                         else -> {
-                            // Fallback: локальный UUID, тренировка записывается офлайн
+                            // Fallback: локальный UUID, тренировка записывается офлайн.
+                            // Сообщение зависит от причины: нет сети или другая ошибка (5xx, парсинг).
                             currentTrainingId = UUID.randomUUID().toString()
+                            val message = if (error is NetworkUnavailableException) {
+                                "Нет связи с сервером. Тренировка сохраняется локально."
+                            } else {
+                                "Не удалось начать тренировку. Тренировка сохраняется локально."
+                            }
                             _state.update { it.copy(
                                 isStarting = false,
-                                errorMessage = "Нет связи с сервером. Тренировка сохраняется локально.",
+                                errorMessage = message,
                             ) }
                             resumeTracking()
                         }
@@ -389,7 +395,18 @@ class WorkoutStartViewModel @Inject constructor(
                 .format(DateTimeFormatter.ISO_OFFSET_DATE_TIME),
             totalDistanceMeters = null,
             totalKilocalories   = null,
-        )
+        ).onFailure { e ->
+            // saveTraining упал (нет сети или 5xx) — не пытаемся стартовать через сервер,
+            // уходим на локальный UUID. Тренировка будет записана офлайн.
+            Log.w(TAG, "finishOrphanedAndRetryStart: saveTraining failed, falling back to local UUID", e)
+            currentTrainingId = UUID.randomUUID().toString()
+            _state.update { it.copy(
+                isStarting = false,
+                errorMessage = "Не удалось сохранить предыдущую тренировку на сервер. Новая тренировка сохраняется локально.",
+            ) }
+            resumeTracking()
+            return
+        }
 
         // Повторяем старт новой тренировки
         workoutRepository.startTraining(typeActivId)
