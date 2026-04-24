@@ -768,6 +768,7 @@ class WorkoutStartViewModel @Inject constructor(
             .build()
 
         val saveWork = OneTimeWorkRequestBuilder<SaveTrainingWorker>()
+            .setInputData(workDataOf(SaveTrainingWorker.KEY_TRAINING_ID to trainingId))
             .setConstraints(constraints)
             .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
             .build()

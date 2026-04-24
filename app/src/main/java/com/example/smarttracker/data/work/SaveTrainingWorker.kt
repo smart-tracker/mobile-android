@@ -12,17 +12,20 @@ import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 
 /**
- * WorkManager-воркер для доставки офлайн-завершений тренировок на сервер.
+ * WorkManager-воркер для доставки офлайн-завершения одной тренировки на сервер.
  *
  * Запускается автоматически при появлении сети (constraint CONNECTED).
- * Читает все записи из [PendingFinishDao], отправляет каждую через
- * [WorkoutRepository.saveTraining], при успехе удаляет запись из очереди.
+ * Ожидает [KEY_TRAINING_ID] в inputData — обрабатывает только соответствующую
+ * запись из [PendingFinishDao], исключая гонку при параллельном запуске нескольких
+ * воркеров (по одному на каждую офлайн-тренировку в цепочке offline_finish_{id}).
+ *
+ * Если [KEY_TRAINING_ID] не передан — fallback: читает все записи через getAll().
  *
  * Обработка ошибок:
  * - [TrainingAlreadyClosedException] (HTTP 4xx) — тренировка уже закрыта
  *   (auto-recovery успел раньше) — запись удаляется, retry не нужен.
  * - NetworkUnavailableException / 5xx — транзиентная ошибка → [Result.retry] с backoff.
- * - Достигнут [MAX_ATTEMPTS] — очередь очищается, [Result.failure] (не блокируем вечно).
+ * - Достигнут [MAX_ATTEMPTS] — запись удаляется, [Result.failure] (не блокируем вечно).
  */
 @HiltWorker
 class SaveTrainingWorker @AssistedInject constructor(
@@ -33,15 +36,29 @@ class SaveTrainingWorker @AssistedInject constructor(
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
+        val trainingId = inputData.getString(KEY_TRAINING_ID)
+
         // Лимит попыток: при permanent-ошибке не крутимся вечно.
-        // Очищаем очередь — лучше потерять данные, чем блокировать WorkManager навсегда.
+        // Удаляем запись — лучше потерять данные, чем блокировать WorkManager навсегда.
         if (runAttemptCount >= MAX_ATTEMPTS) {
-            Log.e(TAG, "Max retry attempts ($MAX_ATTEMPTS) reached, clearing pending queue")
-            pendingFinishDao.getAll().forEach { pendingFinishDao.delete(it.trainingId) }
+            Log.e(TAG, "Max retry attempts ($MAX_ATTEMPTS) reached${trainingId?.let { " for trainingId=$it" } ?: " for all pending records"}")
+            if (trainingId != null) {
+                pendingFinishDao.delete(trainingId)
+            } else {
+                pendingFinishDao.getAll().forEach { pendingFinishDao.delete(it.trainingId) }
+            }
             return Result.failure()
         }
 
-        val pending = pendingFinishDao.getAll()
+        // Если передан конкретный trainingId — обрабатываем только его.
+        // Это исключает дублирование запросов при параллельном запуске
+        // нескольких воркеров (по одному на каждую офлайн-тренировку).
+        val pending = if (trainingId != null) {
+            listOfNotNull(pendingFinishDao.getById(trainingId))
+        } else {
+            pendingFinishDao.getAll()
+        }
+
         if (pending.isEmpty()) return Result.success()
 
         Log.d(TAG, "doWork: ${pending.size} pending finish(es) to sync (attempt ${runAttemptCount + 1}/$MAX_ATTEMPTS)")
@@ -79,10 +96,13 @@ class SaveTrainingWorker @AssistedInject constructor(
     companion object {
         private const val TAG = "SaveTrainingWorker"
 
+        /** Ключ для передачи trainingId через inputData. Каждый воркер обрабатывает только свою запись. */
+        const val KEY_TRAINING_ID = "key_training_id"
+
         /** Уникальное имя work-задачи (используется в цепочке offline_finish_{trainingId}). */
         const val WORK_NAME = "pending_saves_sync"
 
-        /** Максимальное число попыток до принудительной очистки очереди. */
+        /** Максимальное число попыток до принудительного удаления записи. */
         private const val MAX_ATTEMPTS = 5
     }
 }

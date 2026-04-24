@@ -26,6 +26,10 @@ interface PendingFinishDao {
     @Query("SELECT * FROM pending_finishes")
     suspend fun getAll(): List<PendingFinishEntity>
 
+    /** Получить запрос для конкретной тренировки (или null, если его нет). */
+    @Query("SELECT * FROM pending_finishes WHERE trainingId = :trainingId LIMIT 1")
+    suspend fun getById(trainingId: String): PendingFinishEntity?
+
     /** Удалить успешно отправленный запрос. */
     @Query("DELETE FROM pending_finishes WHERE trainingId = :trainingId")
     suspend fun delete(trainingId: String)
