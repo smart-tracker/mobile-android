@@ -7,6 +7,10 @@
     <string name="hide_password">Скрыть пароль</string>
     <string name="show_password">Показать пароль</string>
 
+    <!-- Экран меню -->
+    <string name="menu_your_profile">Ваш профиль</string>
+    <string name="menu_open_profile">Открыть профиль →</string>
+
     <!-- Экран тренировки -->
     <string name="logout">Выйти из аккаунта</string>
     <string name="gps_active">GPS получен</string>

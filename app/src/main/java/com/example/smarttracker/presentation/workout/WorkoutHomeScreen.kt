@@ -6,8 +6,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
@@ -34,6 +34,7 @@ import com.example.smarttracker.R
 import com.example.smarttracker.presentation.theme.ColorPrimary
 import com.example.smarttracker.presentation.theme.ColorSecondary
 import com.example.smarttracker.presentation.theme.geologicaFontFamily
+import com.example.smarttracker.presentation.workout.menu.MenuScreen
 import com.example.smarttracker.presentation.workout.start.WorkoutStartScreen
 import com.example.smarttracker.presentation.workout.start.WorkoutStartViewModel
 
@@ -48,6 +49,7 @@ import com.example.smarttracker.presentation.workout.start.WorkoutStartViewModel
 @Composable
 fun WorkoutHomeScreen(
     onLogout: () -> Unit = {},
+    onNavigateToProfile: () -> Unit = {},
 ) {
     var currentTab by remember { mutableStateOf(WorkoutTab.START) }
 
@@ -95,7 +97,11 @@ fun WorkoutHomeScreen(
                 )
             }
             WorkoutTab.WORKOUTS -> PlaceholderScreen(label = stringResource(R.string.tab_workouts), padding = padding)
-            WorkoutTab.MENU    -> MenuScreen(padding = padding, onLogout = onLogout)
+            WorkoutTab.MENU    -> MenuScreen(
+                padding = padding,
+                onNavigateToProfile = onNavigateToProfile,
+                onLogout = onLogout,
+            )
         }
     }
 }
@@ -109,49 +115,52 @@ private fun WorkoutBottomBar(
     currentTab: WorkoutTab,
     onTabSelected: (WorkoutTab) -> Unit,
 ) {
-    NavigationBar(containerColor = Color.White) {
+    androidx.compose.foundation.layout.Column {
+        HorizontalDivider(color = ColorPrimary, thickness = 1.dp)
+        NavigationBar(containerColor = Color.White) {
 
-        // Все три вкладки имеют одинаковое поведение:
-        // при выборе — иконка обёрнута в бирюзовый круг, цвет иконки остаётся тёмным
-        listOf(
-            Triple(WorkoutTab.START,    R.drawable.ic_nav_start,    stringResource(R.string.tab_start)),
-            Triple(WorkoutTab.WORKOUTS, R.drawable.ic_nav_workouts, stringResource(R.string.tab_workouts)),
-            Triple(WorkoutTab.MENU,     R.drawable.ic_nav_menu,     stringResource(R.string.tab_menu)),
-        ).forEach { (tab, iconRes, label) ->
-        NavigationBarItem(
-            selected = currentTab == tab,
-            onClick = { onTabSelected(tab) },
-            icon = {
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .background(
-                            color = if (currentTab == tab) ColorSecondary else Color.Transparent,
-                            shape = CircleShape,
-                        ),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        painter = painterResource(iconRes),
-                        contentDescription = label,
-                        tint = ColorPrimary,
-                        modifier = Modifier.size(38.dp),
+            // Все три вкладки имеют одинаковое поведение:
+            // при выборе — иконка обёрнута в бирюзовый круг, цвет иконки остаётся тёмным
+            listOf(
+                Triple(WorkoutTab.START,    R.drawable.ic_nav_start,    stringResource(R.string.tab_start)),
+                Triple(WorkoutTab.WORKOUTS, R.drawable.ic_nav_workouts, stringResource(R.string.tab_workouts)),
+                Triple(WorkoutTab.MENU,     R.drawable.ic_nav_menu,     stringResource(R.string.tab_menu)),
+            ).forEach { (tab, iconRes, label) ->
+            NavigationBarItem(
+                selected = currentTab == tab,
+                onClick = { onTabSelected(tab) },
+                icon = {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .background(
+                                color = if (currentTab == tab) ColorSecondary else Color.Transparent,
+                                shape = CircleShape,
+                            ),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            painter = painterResource(iconRes),
+                            contentDescription = label,
+                            tint = ColorPrimary,
+                            modifier = Modifier.size(38.dp),
+                        )
+                    }
+                },
+                label = {
+                    Text(
+                        text = label,
+                        fontFamily = geologicaFontFamily,
+                        fontWeight = FontWeight.Light,
+                        fontSize = 14.sp,
+                        color = ColorPrimary,
                     )
-                }
-            },
-            label = {
-                Text(
-                    text = label,
-                    fontFamily = geologicaFontFamily,
-                    fontWeight = FontWeight.Light,
-                    fontSize = 14.sp,
-                    color = ColorPrimary,
-                )
-            },
-            colors = NavigationBarItemDefaults.colors(
-                indicatorColor = Color.Transparent,
-            ),
-        )
+                },
+                colors = NavigationBarItemDefaults.colors(
+                    indicatorColor = Color.Transparent,
+                ),
+            )
+            }
         }
     }
 }
@@ -180,24 +189,3 @@ private fun PlaceholderScreen(
     }
 }
 
-// ── Вкладка «Меню» (временная заглушка) ──────────────────────────────────────
-
-@Composable
-private fun MenuScreen(
-    padding: androidx.compose.foundation.layout.PaddingValues,
-    onLogout: () -> Unit,
-) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(padding),
-        contentAlignment = Alignment.Center,
-    ) {
-        Button(onClick = onLogout) {
-            Text(
-                text = stringResource(R.string.logout),
-                fontFamily = geologicaFontFamily,
-            )
-        }
-    }
-}

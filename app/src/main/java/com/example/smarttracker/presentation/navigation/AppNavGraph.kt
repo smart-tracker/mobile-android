@@ -20,6 +20,7 @@ import com.example.smarttracker.presentation.auth.register.RegisterEvent
 import com.example.smarttracker.presentation.auth.register.RegisterScreen
 import com.example.smarttracker.presentation.auth.register.RegisterViewModel
 import com.example.smarttracker.presentation.auth.register.TermsOfServiceScreen
+import com.example.smarttracker.presentation.profile.ProfileScreen
 import com.example.smarttracker.presentation.workout.WorkoutHomeScreen
 
 /** Compose NavHost: декларация всех маршрутов и переходов между экранами. */
@@ -172,7 +173,14 @@ fun AppNavGraph(
                         launchSingleTop = true
                     }
                 },
+                onNavigateToProfile = {
+                    navController.navigate(Screen.Profile.route)
+                },
             )
+        }
+
+        composable(Screen.Profile.route) {
+            ProfileScreen(onBack = { navController.popBackStack() })
         }
     }
 }
