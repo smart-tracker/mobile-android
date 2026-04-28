@@ -1,0 +1,326 @@
+package com.example.smarttracker.presentation.workout.summary
+
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
+import com.example.smarttracker.R
+import com.example.smarttracker.presentation.theme.ColorPrimary
+import com.example.smarttracker.presentation.theme.ColorSecondary
+import com.example.smarttracker.presentation.theme.WorkoutTextStyles
+import com.example.smarttracker.presentation.workout.activityIconRes
+
+/**
+ * Composable-ы оверлея итогов завершённой тренировки.
+ *
+ * Используются из [com.example.smarttracker.presentation.workout.start.WorkoutStartScreen]
+ * — оверлей рендерится поверх активного экрана без навигации, чтобы сохранить
+ * ту же инстанцию `MapView` (избегаем крашей анимаций MapLibre LocationComponent).
+ *
+ * Публичные точки входа:
+ *  - [SummaryHeader]   — шапка со статической датой по центру (без кнопки «назад»);
+ *  - [SummaryBody]     — иконка активности + название + темп + три карточки статистики;
+ *  - [StatsOverlayCard] — компактная карточка из 4 строк статистики поверх карты в
+ *    полноэкранном режиме (Figma 723:460).
+ */
+
+// ── Шапка ─────────────────────────────────────────────────────────────────────
+
+@Composable
+fun SummaryHeader(dateDisplay: String) {
+    // Стрелка назад убрана — закрытие оверлея делается системной кнопкой Back
+    // или переключением вкладки в нижнем баре WorkoutHomeScreen.
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(30.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = dateDisplay,
+            style = WorkoutTextStyles.screenHeaderDate,
+        )
+    }
+}
+
+// ── Основной блок: активность + ряд карточек ────────────────────────────────
+
+@Composable
+fun SummaryBody(state: WorkoutSummaryUiState) {
+    Column {
+        Spacer(modifier = Modifier.height(18.dp))
+        ActivityHeader(state = state)
+        Spacer(modifier = Modifier.height(20.dp))
+        StatsRow(state = state)
+        Spacer(modifier = Modifier.height(14.dp))
+    }
+}
+
+@Composable
+private fun ActivityHeader(state: WorkoutSummaryUiState) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(74.dp)
+                .border(width = 1.dp, color = ColorPrimary, shape = RoundedCornerShape(10.dp)),
+            contentAlignment = Alignment.Center,
+        ) {
+            AsyncImage(
+                model = state.activityIconFile
+                    ?: state.activityIconUrl
+                    ?: activityIconRes(state.activityIconKey),
+                contentDescription = state.activityName,
+                colorFilter = ColorFilter.tint(ColorPrimary),
+                placeholder = painterResource(R.drawable.placeholder),
+                error = painterResource(R.drawable.placeholder),
+                modifier = Modifier.size(70.dp),
+            )
+        }
+        Spacer(modifier = Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = state.activityName.ifBlank { "—" },
+                style = WorkoutTextStyles.activityName,
+            )
+            HorizontalDivider(
+                color = ColorPrimary,
+                thickness = 1.dp,
+                modifier = Modifier.padding(vertical = 2.dp),
+            )
+            Text(
+                text = state.paceDisplay,
+                style = WorkoutTextStyles.activityPace,
+                color = Color.Black,
+            )
+        }
+    }
+}
+
+@Composable
+private fun StatsRow(state: WorkoutSummaryUiState) {
+    // Внешний Box — чтобы наложить стрелку поверх правой границы третьей карточки.
+    // Все горизонтальные отступы (внешние и между карточками) одинаковы — 14dp.
+    Box(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            StatCard(
+                iconRes = R.drawable.ic_distance,
+                value = state.distanceDisplay,
+                label = "Дистанция",
+                modifier = Modifier.weight(1f),
+            )
+            StatCard(
+                iconRes = R.drawable.ic_time,
+                value = state.durationDisplay,
+                label = "Продолжительность",
+                modifier = Modifier.weight(1f),
+            )
+            StatCard(
+                iconRes = R.drawable.ic_elevation,
+                value = state.elevationDisplay,
+                label = "Набор высоты",
+                modifier = Modifier.weight(1f),
+            )
+        }
+        // Стрелка-чеврон 24dp на правой границе третьей карточки.
+        // align(CenterEnd) ставит правый край Box на parent_width;
+        // offset(x = -3) сдвигает на (14 - 24/2 - 1) = ~3dp влево, чтобы центр круга
+        // лёг на линию границы карточки (parent_width - 14).
+        Box(
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .offset(x = (-3).dp)
+                .size(24.dp)
+                .background(Color.White, CircleShape)
+                .border(width = 1.dp, color = ColorPrimary, shape = CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            Image(
+                painter = painterResource(R.drawable.ic_arrow),
+                contentDescription = null,
+                modifier = Modifier.size(20.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun StatCard(
+    iconRes: Int,
+    value: String,
+    label: String,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier
+            .height(120.dp)
+            .border(width = 1.dp, color = ColorPrimary, shape = RoundedCornerShape(10.dp))
+            .padding(horizontal = 10.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.SpaceBetween,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Image(
+            painter = painterResource(iconRes),
+            contentDescription = label,
+            colorFilter = ColorFilter.tint(ColorPrimary),
+            modifier = Modifier.size(36.dp),
+        )
+        Text(
+            text = value,
+            style = WorkoutTextStyles.statCardValue,
+            textAlign = TextAlign.Center,
+        )
+        Text(
+            text = label,
+            style = WorkoutTextStyles.statCardLabel,
+            textAlign = TextAlign.Center,
+        )
+    }
+}
+
+// ── Карточка мини-статистики поверх карты в полноэкранном режиме оверлея ────
+
+@Composable
+fun StatsOverlayCard(
+    state: WorkoutSummaryUiState,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier
+            .width(133.dp)
+            .height(100.dp)
+            .background(Color.White, shape = RoundedCornerShape(10.dp))
+            .border(width = 1.dp, color = ColorPrimary, shape = RoundedCornerShape(10.dp))
+            .padding(horizontal = 8.dp, vertical = 6.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        StatsOverlayRow(iconRes = R.drawable.ic_time, value = state.durationDisplay)
+        StatsOverlayRow(iconRes = R.drawable.ic_speed,      value = state.paceDisplay)
+        StatsOverlayRow(iconRes = R.drawable.ic_passed_distance,      value = state.distanceDisplay)
+        StatsOverlayRow(iconRes = R.drawable.ic_elevation,     value = state.elevationDisplay)
+    }
+}
+
+@Composable
+private fun StatsOverlayRow(iconRes: Int, value: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Image(
+            painter = painterResource(iconRes),
+            contentDescription = null,
+            colorFilter = ColorFilter.tint(ColorPrimary),
+            modifier = Modifier.size(20.dp),
+        )
+        Spacer(modifier = Modifier.width(4.dp))
+        Text(
+            text = value,
+            style = WorkoutTextStyles.statsOverlayValue,
+        )
+    }
+}
+
+// ── Прогресс-бар «проигрывания» маршрута (Figma 723:496) ────────────────────
+
+/**
+ * Полоса прогресса под полноэкранной картой.
+ *
+ * Дизайн (Figma 723:496):
+ *  - Pill-форма (CircleShape) с тонкой обводкой [ColorPrimary] по всей длине;
+ *  - левая часть до бегунка заполнена мятным [ColorSecondary];
+ *  - правая часть — тёмным [ColorPrimary];
+ *  - круглый белый бегунок с обводкой [ColorPrimary] на границе двух сегментов.
+ *
+ * Сейчас компонент **визуальный**: тренировка завершена, прогресс=1f. В будущем
+ * сюда можно подключить state для интерактивного «проигрывания» трека по точкам —
+ * параметр [progress] уже выдан наружу.
+ *
+ * @param progress 0f..1f — позиция бегунка и граница мятной заливки.
+ */
+@Composable
+fun TrainingProgressBar(
+    progress: Float,
+    modifier: Modifier = Modifier,
+) {
+    // Размеры заметно увеличены — прогресс-бар крупнее, читается в полноэкранном режиме.
+    val trackHeight = 10.dp
+    val thumbSize = 28.dp
+    val clamped = progress.coerceIn(0f, 1f)
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(thumbSize),
+    ) {
+        // Дорожка: pill, тёмный фон + чёрная обводка. Активная заливка
+        // вкладывается внутрь и обрезается общим CircleShape — стык получается
+        // прямой на правом крае мятного сегмента и скруглённый на левом крае
+        // (за счёт parent-clip).
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(trackHeight)
+                .align(Alignment.Center)
+                .clip(CircleShape)
+                .background(ColorPrimary)
+                .border(width = 1.dp, color = ColorPrimary, shape = CircleShape),
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(clamped)
+                    .fillMaxHeight()
+                    .background(ColorSecondary),
+            )
+        }
+        // Бегунок: круг white + 1dp ColorPrimary border, центр на границе сегментов.
+        // Используем BoxWithConstraints чтобы знать ширину дорожки в Dp.
+        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+            val barWidth = maxWidth
+            val thumbX = (barWidth - thumbSize) * clamped
+            Box(
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .offset(x = thumbX)
+                    .size(thumbSize)
+                    .clip(CircleShape)
+                    .background(Color.White)
+                    .border(width = 1.dp, color = ColorPrimary, shape = CircleShape),
+            )
+        }
+    }
+}
