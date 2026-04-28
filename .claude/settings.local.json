@@ -7,8 +7,7 @@
       "WebSearch",
       "mcp__33a645dc-6c62-4ba5-acea-ccdce7f44b31__get_design_context",
       "Bash(./gradlew assembleDebug --quiet)",
-      "Bash(JAVA_HOME=\"C:/Program Files/Android/Android Studio/jbr\" ./gradlew assembleDebug --quiet)",
-      "PowerShell($env:JAVA_HOME = \"C:\\\\Program Files\\\\Android\\\\Android Studio\\\\jbr\"; Set-Location \"C:\\\\Users\\\\novsm\\\\Documents\\\\GitHub\\\\mobile-android\"; .\\\\gradlew assembleDebug --quiet 2>&1 | Select-Object -Last 40)"
+      "Bash(JAVA_HOME=\"C:/Program Files/Android/Android Studio/jbr\" ./gradlew assembleDebug --quiet)"
     ]
   }
 }
