@@ -446,7 +446,10 @@ class WorkoutStartViewModel @Inject constructor(
             return
         }
 
-        workoutRepository.startTraining(typeActivId)
+        // Передаём реальное время старта: между resumeTracking() и конфликтом (3 сетевых
+        // вызова) прошло 1–5 сек — GPS-точки уже есть с timestampUtc < time_start сервера.
+        // timeStart фиксирует момент нажатия «Начать», как и в offline-финише через WorkManager.
+        workoutRepository.startTraining(typeActivId, Instant.ofEpochMilli(trainingStartTimestamp).toString())
             .onSuccess { result ->
                 val serverUUID = result.activeTrainingId
                 // Intent сначала — сервис переключается на serverUUID до re-key в Room
@@ -844,6 +847,11 @@ class WorkoutStartViewModel @Inject constructor(
         observerJob = viewModelScope.launch {
             // Инкрементальный счётчик живёт в скоупе coroutine — синхронизация не нужна
             var accumulatedDistanceM = 0.0
+            // Локальный аккумулятор калорий — симметричен accumulatedDistanceM.
+            // НЕ читаем _state.value.kilocalories: при перезапуске observer'а после re-key
+            // (localUUID → serverUUID) state уже содержит накопленное значение, и
+            // currentKilocalories + deltaKcal дало бы K + K = 2K.
+            var accumulatedKilocalories = 0.0
             var processedCount = 0
 
             // Дочерний Job таймаута: перезапускается после каждой новой точки,
@@ -871,12 +879,9 @@ class WorkoutStartViewModel @Inject constructor(
                         restartTimeout()
                     }
 
-                    val currentKilocalories = _state.value.kilocalories
-
                     // Инкрементальный расчёт на фоновом потоке, чтобы не блокировать UI.
                     // Внутри withContext нет точек приостановки, поэтому collectLatest
-                    // не может прервать блок посередине — accumulatedDistanceM и processedCount
-                    // всегда обновляются атомарно (вместе или не обновляются вовсе).
+                    // не может прервать блок посередине — все аккумуляторы обновляются атомарно.
                     val (newDistanceM, avgSpeedMps, kilocalories) = withContext(Dispatchers.Default) {
                         // effectiveCount: при первом вызове после возобновления с паузы
                         // пропускаем точки от якоря до сейчас, чтобы не засчитать движение
@@ -889,11 +894,10 @@ class WorkoutStartViewModel @Inject constructor(
 
                         // Калории уже инкрементальны на уровне точки, поэтому считаем
                         // только вклад новых точек, начиная с effectiveCount.
-                        var deltaKcal = 0.0
                         for (index in effectiveCount until points.size) {
-                            deltaKcal += points[index].calories ?: 0.0
+                            accumulatedKilocalories += points[index].calories ?: 0.0
                         }
-                        val kcal = currentKilocalories + deltaKcal
+                        val kcal = accumulatedKilocalories
 
                         processedCount = points.size
                         // Якорь одноразовый — сбрасываем после первого применения

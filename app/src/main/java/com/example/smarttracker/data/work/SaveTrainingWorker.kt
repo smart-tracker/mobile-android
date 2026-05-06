@@ -57,8 +57,23 @@ class SaveTrainingWorker @AssistedInject constructor(
         // Если передан конкретный resolvedId — обрабатываем только его.
         // Это исключает дублирование запросов при параллельном запуске
         // нескольких воркеров (по одному на каждую офлайн-тренировку).
+        //
+        // Fallback на getAll(): SyncGpsPointsWorker мог вернуть стale localUUID как
+        // resolvedId если его retry-попытка сработала после успешного re-key (localUUID → serverUUID).
+        // В этом случае getById(localUUID) == null, но serverUUID-запись существует.
+        // getAll() подхватит её и закроет тренировку. Безопасно: другие SaveTrainingWorker-ы
+        // для дополнительных записей тоже вернут success() с пустым pending — дублей нет.
         val pending = if (resolvedId != null) {
-            listOfNotNull(pendingFinishDao.getById(resolvedId))
+            val byId = pendingFinishDao.getById(resolvedId)
+            if (byId != null) {
+                listOf(byId)
+            } else {
+                val all = pendingFinishDao.getAll()
+                if (all.isNotEmpty()) {
+                    Log.w(TAG, "No pending entry for resolvedId=$resolvedId (possible stale localUUID after re-key), fallback to ${all.size} entries")
+                }
+                all
+            }
         } else {
             pendingFinishDao.getAll()
         }

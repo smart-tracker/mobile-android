@@ -34,6 +34,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -194,8 +195,17 @@ class LocationTrackingService : Service() {
         if (intent?.hasExtra(EXTRA_TRAINING_ID_UPDATE) == true) {
             val newId = intent.getStringExtra(EXTRA_TRAINING_ID_UPDATE)
             if (!newId.isNullOrBlank() && activeTracker != null) {
-                trainingId = newId
-                recoveryPrefs.edit().putString(LocationConfig.KEY_ACTIVE_TRAINING, newId).apply()
+                // Сначала сбрасываем буфер под старым id, затем переключаем под мьютексом.
+                // Без этого точки в памяти запишутся в Room уже под serverUUID, хотя в ViewModel
+                // rekeyTrainingId ещё не запускался → точки становятся сиротами (никогда не
+                // попадают в serverUUID после rekey, т.к. rekey видит только строки в Room).
+                scope.launch {
+                    bufferMutex.withLock {
+                        flushBufferLocked()
+                        trainingId = newId  // переключаем id внутри мьютекса — новые точки пойдут под serverUUID
+                    }
+                    recoveryPrefs.edit().putString(LocationConfig.KEY_ACTIVE_TRAINING, newId).apply()
+                }
             }
             return START_STICKY
         }
@@ -221,24 +231,32 @@ class LocationTrackingService : Service() {
             val intervalMs   = intent.getLongExtra(EXTRA_INTERVAL_MS, LocationConfig.INTERVAL_MS_RUNNING)
             val newAccuracy  = intent.getFloatExtra(EXTRA_ACCURACY_THRESHOLD, LocationConfig.MAX_ACCURACY_RUNNING)
 
-            // 3. Обновляем режим и параметры
+            // 3. Очищаем буфер discovery-точек перед сменой id.
+            // Discovery-точки намеренно удаляются ViewModel через deletePointsForTraining(discId),
+            // поэтому делаем clear(), а не flush() — иначе они запишутся в Room под newId.
+            // runBlocking безопасен здесь: stopTracking() выше уже остановил GPS-коллбэки,
+            // мьютекс свободен, clear() — субмиллисекундная операция.
+            @Suppress("BlockingMethodInNonBlockingContext")
+            runBlocking { bufferMutex.withLock { pointBuffer.clear() } }
+
+            // 4. Обновляем режим и параметры
             trainingId        = newId
             isDiscovery       = false
             accuracyThreshold = newAccuracy
             isRecording       = true
 
-            // 4. Сбрасываем GPS-фильтры (разрыв между discovery-точками и первой точкой
+            // 5. Сбрасываем GPS-фильтры (разрыв между discovery-точками и первой точкой
             //    тренировки не должен считаться дистанцией). firstFixDone НЕ сбрасываем:
             //    GPS уже найден в discovery — hint-таймер не нужен, пользователь не ждёт.
             lastAcceptedLocation = null
             smoothingWindow.clear()
             prevCaloriePoint  = null
 
-            // 5. Crash-recovery и finishSyncFlow
+            // 6. Crash-recovery и finishSyncFlow
             recoveryPrefs.edit().putString(LocationConfig.KEY_ACTIVE_TRAINING, newId).apply()
             _finishSyncFlow.resetReplayCache()
 
-            // 6. Показываем уведомление немедленно — это главная цель перехода
+            // 7. Показываем уведомление немедленно — это главная цель перехода
             createNotificationChannel()
             val notification = buildNotification()
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -251,7 +269,7 @@ class LocationTrackingService : Service() {
                 startForeground(LocationConfig.NOTIFICATION_ID, notification)
             }
 
-            // 7. WakeLock (переиспользуем или создаём новый)
+            // 8. WakeLock (переиспользуем или создаём новый)
             wakeLock?.let { if (it.isHeld) it.release() }
             val pm = getSystemService(POWER_SERVICE) as PowerManager
             wakeLock = pm.newWakeLock(
@@ -259,13 +277,13 @@ class LocationTrackingService : Service() {
                 "SmartTracker:LocationTracking",
             ).also { it.acquire(LocationConfig.WAKELOCK_TIMEOUT_MS) }
 
-            // 8. Запускаем новый трекер, таймеры и sync-цикл
+            // 9. Запускаем новый трекер, таймеры и sync-цикл
             startLocationUpdates(intervalMs)
             startFlushTimer()
             startSyncLoop()
             startHintTimer()
 
-            // 9. Инициализируем расчёт калорий
+            // 10. Инициализируем расчёт калорий
             val typeActivId = intent.getIntExtra(EXTRA_TYPE_ACTIV_ID, -1)
             val weightKg    = if (intent.hasExtra(EXTRA_WEIGHT_KG)) intent.getFloatExtra(EXTRA_WEIGHT_KG, 0f) else null
             val heightCm    = if (intent.hasExtra(EXTRA_HEIGHT_CM)) intent.getFloatExtra(EXTRA_HEIGHT_CM, 0f) else null

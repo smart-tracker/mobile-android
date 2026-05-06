@@ -54,7 +54,17 @@ class SyncGpsPointsWorker @AssistedInject constructor(
             }
 
         // После MAX_ATTEMPTS разблокируем цепочку: save_training важнее GPS-точек.
+        // НО: если тренировка ещё не зарегистрирована на сервере (typeActivId != null),
+        // передавать localUUID в SaveTrainingWorker нельзя — сервер вернёт 404 и
+        // SaveTrainingWorker удалит pending-запись → данные тренировки потеряны навсегда.
+        // В этом случае возвращаем failure(): данные остаются в Room, цепочка завершается
+        // без удаления записи (лучше потерять GPS-точки, чем всю тренировку целиком).
         if (runAttemptCount >= MAX_ATTEMPTS) {
+            val pending = pendingFinishDao.getById(trainingId)
+            if (pending?.typeActivId != null) {
+                Log.e(TAG, "Max GPS sync attempts ($MAX_ATTEMPTS) for unregistered offline training $trainingId — failing chain to preserve pending data")
+                return Result.failure()
+            }
             Log.w(TAG, "Max GPS sync attempts ($MAX_ATTEMPTS) for $trainingId, unblocking chain")
             return Result.success(workDataOf(KEY_RESOLVED_TRAINING_ID to trainingId))
         }
