@@ -35,7 +35,8 @@ import javax.inject.Singleton
  *   3. Взять refresh token из TokenStorage
  *   4. POST /auth/refresh?refresh_token=... (синхронно через refreshClient)
  *   5. Успех → сохранить новую пару токенов, вернуть исходный запрос с новым Bearer
- *   6. Ошибка → signalSessionExpired() (принудительный выход + UI-сигнал), вернуть null
+ *   6. 4xx → signalSessionExpired() (принудительный выход + UI-сигнал), вернуть null
+ *   7. 5xx / сетевая ошибка → вернуть null (временная проблема, logout не нужен)
  */
 @Singleton
 class TokenRefreshAuthenticator @Inject constructor(
@@ -112,11 +113,15 @@ class TokenRefreshAuthenticator @Inject constructor(
 
         val body: String = refreshResponse.use { resp ->
             if (!resp.isSuccessful) {
-                if (resp.code == 401 || resp.code == 403) {
+                if (resp.code in 400..499) {
+                    // Любой 4xx: refresh token невалиден, истёк или имеет неверный формат.
+                    // 401/403 — явный отказ; 422 — FastAPI Unprocessable Entity (токен не прошёл
+                    // валидацию). Все эти случаи — постоянная ошибка, повтор бессмысленен → выход.
                     Log.w(TAG, "Refresh вернул ${resp.code} — refresh token невалиден, завершаем сессию")
                     tokenStorage.signalSessionExpired()
                 } else {
-                    Log.w(TAG, "Refresh вернул ${resp.code} — токены сохраняем, logout не выполняем")
+                    // 5xx: временная ошибка сервера — не выходим, пользователь сможет повторить позже.
+                    Log.w(TAG, "Refresh вернул ${resp.code} — ошибка сервера, logout не выполняем")
                 }
                 return null
             }
