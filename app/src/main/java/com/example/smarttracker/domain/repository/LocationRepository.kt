@@ -60,4 +60,10 @@ interface LocationRepository {
      * останутся в Room с isSent=false и могут вызвать случайный 404.
      */
     suspend fun deletePointsForTraining(trainingId: String)
+
+    /**
+     * Переназначает trainingId всех GPS-точек с [oldId] на [newId].
+     * Используется при офлайн-старте: localUUID → serverUUID после регистрации на сервере.
+     */
+    suspend fun rekeyTrainingId(oldId: String, newId: String)
 }

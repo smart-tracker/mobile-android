@@ -53,4 +53,8 @@ class LocationRepositoryImpl @Inject constructor(
     override suspend fun deletePointsForTraining(trainingId: String) {
         dao.deletePointsForTraining(trainingId)
     }
+
+    override suspend fun rekeyTrainingId(oldId: String, newId: String) {
+        dao.rekeyTrainingId(oldId, newId)
+    }
 }

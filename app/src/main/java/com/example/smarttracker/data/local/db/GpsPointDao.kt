@@ -85,4 +85,11 @@ interface GpsPointDao {
         ORDER BY timestampUtc DESC LIMIT 1
     """)
     suspend fun getLastPoint(excludedTrainingId: String?): GpsPointEntity?
+
+    /**
+     * Переназначает trainingId всех точек с [oldId] на [newId].
+     * Используется при офлайн-старте: localUUID → serverUUID после регистрации на сервере.
+     */
+    @Query("UPDATE gps_points SET trainingId = :newId WHERE trainingId = :oldId")
+    suspend fun rekeyTrainingId(oldId: String, newId: String)
 }

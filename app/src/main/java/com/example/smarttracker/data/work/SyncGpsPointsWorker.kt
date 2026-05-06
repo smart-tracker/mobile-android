@@ -5,7 +5,10 @@ import android.util.Log
 import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
+import androidx.work.workDataOf
+import com.example.smarttracker.data.local.db.PendingFinishDao
 import com.example.smarttracker.data.location.LocationConfig
+import com.example.smarttracker.domain.model.ActiveTrainingConflictException
 import com.example.smarttracker.domain.repository.LocationRepository
 import com.example.smarttracker.domain.repository.WorkoutRepository
 import dagger.assisted.Assisted
@@ -19,8 +22,16 @@ import java.util.UUID
  * [SaveTrainingWorker]: важно загрузить GPS-точки до закрытия тренировки,
  * чтобы сервер принял их.
  *
- * Логика полностью повторяет [LocationTrackingService.syncUnsentPoints], но
- * работает через инжектируемые репозитории, а не как private-метод сервиса.
+ * **Офлайн-старт:** если тренировка была начата без сети (localUUID), в
+ * [PendingFinishDao] хранится [typeActivId]. В этом случае воркер сначала
+ * регистрирует тренировку на сервере, переключает GPS-точки на serverUUID
+ * (re-key в Room), затем загружает точки. Resolved serverUUID передаётся
+ * в [SaveTrainingWorker] через output data ([KEY_RESOLVED_TRAINING_ID]).
+ *
+ * **Несколько офлайн-тренировок подряд:** если сервер возвращает 400 (конфликт)
+ * при попытке регистрации — воркер возвращает [Result.retry]. После того как
+ * предыдущая тренировка будет закрыта своим [SaveTrainingWorker], следующий
+ * retry успешно зарегистрирует эту тренировку.
  *
  * После [MAX_ATTEMPTS] неудачных попыток возвращает [Result.success], чтобы
  * не блокировать следующий шаг цепочки ([SaveTrainingWorker]) — закрыть
@@ -32,6 +43,7 @@ class SyncGpsPointsWorker @AssistedInject constructor(
     @Assisted params: WorkerParameters,
     private val locationRepository: LocationRepository,
     private val workoutRepository: WorkoutRepository,
+    private val pendingFinishDao: PendingFinishDao,
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
@@ -44,16 +56,19 @@ class SyncGpsPointsWorker @AssistedInject constructor(
         // После MAX_ATTEMPTS разблокируем цепочку: save_training важнее GPS-точек.
         if (runAttemptCount >= MAX_ATTEMPTS) {
             Log.w(TAG, "Max GPS sync attempts ($MAX_ATTEMPTS) for $trainingId, unblocking chain")
-            return Result.success()
+            return Result.success(workDataOf(KEY_RESOLVED_TRAINING_ID to trainingId))
         }
 
-        val unsent = locationRepository.getUnsentPoints(trainingId)
+        // Если тренировка начата офлайн (typeActivId != null) — сначала зарегистрировать на сервере.
+        val resolvedTrainingId = resolveTrainingId(trainingId) ?: return Result.retry()
+
+        val unsent = locationRepository.getUnsentPoints(resolvedTrainingId)
         if (unsent.isEmpty()) {
-            Log.d(TAG, "No unsent GPS points for $trainingId")
-            return Result.success()
+            Log.d(TAG, "No unsent GPS points for $resolvedTrainingId")
+            return Result.success(workDataOf(KEY_RESOLVED_TRAINING_ID to resolvedTrainingId))
         }
 
-        Log.d(TAG, "Syncing ${unsent.size} unsent GPS points for $trainingId (attempt ${runAttemptCount + 1}/$MAX_ATTEMPTS)")
+        Log.d(TAG, "Syncing ${unsent.size} unsent GPS points for $resolvedTrainingId (attempt ${runAttemptCount + 1}/$MAX_ATTEMPTS)")
 
         var hasFailures = false
 
@@ -61,7 +76,7 @@ class SyncGpsPointsWorker @AssistedInject constructor(
         unsent.filter { it.batchId != null }
             .groupBy { requireNotNull(it.batchId) }
             .forEach { (batchId, points) ->
-                workoutRepository.uploadGpsPoints(trainingId, batchId, points)
+                workoutRepository.uploadGpsPoints(resolvedTrainingId, batchId, points)
                     .onSuccess {
                         Log.d(TAG, "GPS batch retry success: ${points.size} points, batchId=$batchId")
                         locationRepository.markBatchAsSent(batchId)
@@ -78,7 +93,7 @@ class SyncGpsPointsWorker @AssistedInject constructor(
             .forEach { chunk ->
                 val batchId = UUID.randomUUID().toString()
                 locationRepository.assignBatchId(chunk.map { it.id }, batchId)
-                workoutRepository.uploadGpsPoints(trainingId, batchId, chunk)
+                workoutRepository.uploadGpsPoints(resolvedTrainingId, batchId, chunk)
                     .onSuccess {
                         Log.d(TAG, "GPS batch uploaded: ${chunk.size} points, batchId=$batchId")
                         locationRepository.markBatchAsSent(batchId)
@@ -89,12 +104,57 @@ class SyncGpsPointsWorker @AssistedInject constructor(
                     }
             }
 
-        return if (hasFailures) Result.retry() else Result.success()
+        return if (hasFailures) {
+            Result.retry()
+        } else {
+            Result.success(workDataOf(KEY_RESOLVED_TRAINING_ID to resolvedTrainingId))
+        }
+    }
+
+    /**
+     * Если тренировка начата офлайн (typeActivId != null в PendingFinishEntity) —
+     * регистрирует её на сервере, переключает GPS-точки на serverUUID и обновляет
+     * PendingFinishEntity. Возвращает resolvedTrainingId (serverUUID или исходный id).
+     *
+     * Возвращает null если регистрация нужна, но не удалась — сигнал для retry.
+     */
+    private suspend fun resolveTrainingId(trainingId: String): String? {
+        val pending = pendingFinishDao.getById(trainingId) ?: return trainingId
+        val typeActivId = pending.typeActivId ?: return trainingId
+
+        Log.d(TAG, "Offline-started training $trainingId, registering on server (typeActivId=$typeActivId, timeStart=${pending.timeStart})")
+
+        val result = workoutRepository.startTraining(typeActivId, pending.timeStart)
+        val serverUUID = result.getOrElse { e ->
+            if (e is ActiveTrainingConflictException) {
+                // Предыдущая тренировка ещё активна — ждём пока её закроет свой воркер
+                Log.w(TAG, "Conflict while registering offline training $trainingId, will retry")
+            } else {
+                Log.w(TAG, "Failed to register offline training $trainingId", e)
+            }
+            return null
+        }.activeTrainingId
+
+        // Переключаем GPS-точки: localUUID → serverUUID
+        locationRepository.rekeyTrainingId(trainingId, serverUUID)
+
+        // Обновляем PendingFinish: удаляем старую запись, вставляем с serverUUID
+        pendingFinishDao.delete(trainingId)
+        pendingFinishDao.insert(pending.copy(trainingId = serverUUID, typeActivId = null))
+
+        Log.d(TAG, "Offline training registered: $trainingId → $serverUUID")
+        return serverUUID
     }
 
     companion object {
         /** Ключ для передачи trainingId через WorkManager input data. */
         const val KEY_TRAINING_ID = "training_id"
+
+        /**
+         * Ключ resolved trainingId в output data — serverUUID после регистрации офлайн-тренировки.
+         * [SaveTrainingWorker] читает его из inputData для вызова saveTraining с правильным ID.
+         */
+        const val KEY_RESOLVED_TRAINING_ID = "resolved_training_id"
 
         private const val TAG = "SyncGpsPointsWorker"
 
