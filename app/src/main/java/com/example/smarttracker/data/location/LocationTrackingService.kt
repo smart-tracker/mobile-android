@@ -189,6 +189,105 @@ class LocationTrackingService : Service() {
             return START_STICKY
         }
 
+        // Обновление trainingId на серверный UUID после офлайн-старта.
+        // Отправляется из ViewModel когда startTraining() вернул serverUUID позже старта сервиса.
+        if (intent?.hasExtra(EXTRA_TRAINING_ID_UPDATE) == true) {
+            val newId = intent.getStringExtra(EXTRA_TRAINING_ID_UPDATE)
+            if (!newId.isNullOrBlank() && activeTracker != null) {
+                trainingId = newId
+                recoveryPrefs.edit().putString(LocationConfig.KEY_ACTIVE_TRAINING, newId).apply()
+            }
+            return START_STICKY
+        }
+
+        // Переход из discovery-режима в тренировку без перезапуска сервиса.
+        // ViewModel отправляет этот Intent вместо stop()+startForegroundService():
+        // onStartCommand() вызывается на живом экземпляре → startForeground() мгновенно,
+        // нет цикла destroy/create и задержки уведомления при первой тренировке.
+        if (intent?.hasExtra(EXTRA_TRANSITION_TO_WORKOUT) == true) {
+            // 1. Останавливаем discovery-трекер и задачи
+            activeTracker?.stopTracking()
+            activeTracker = null
+            hintJob?.cancel()
+            flushTimerJob?.cancel()
+            syncJob?.cancel()
+
+            // 2. Читаем параметры новой тренировки
+            val newId = intent.getStringExtra(EXTRA_TRAINING_ID) ?: run {
+                Log.e(TAG, "EXTRA_TRANSITION_TO_WORKOUT без trainingId — останавливаемся")
+                stopSelf()
+                return START_NOT_STICKY
+            }
+            val intervalMs   = intent.getLongExtra(EXTRA_INTERVAL_MS, LocationConfig.INTERVAL_MS_RUNNING)
+            val newAccuracy  = intent.getFloatExtra(EXTRA_ACCURACY_THRESHOLD, LocationConfig.MAX_ACCURACY_RUNNING)
+
+            // 3. Обновляем режим и параметры
+            trainingId        = newId
+            isDiscovery       = false
+            accuracyThreshold = newAccuracy
+            isRecording       = true
+
+            // 4. Сбрасываем GPS-фильтры (разрыв между discovery-точками и первой точкой
+            //    тренировки не должен считаться дистанцией). firstFixDone НЕ сбрасываем:
+            //    GPS уже найден в discovery — hint-таймер не нужен, пользователь не ждёт.
+            lastAcceptedLocation = null
+            smoothingWindow.clear()
+            prevCaloriePoint  = null
+
+            // 5. Crash-recovery и finishSyncFlow
+            recoveryPrefs.edit().putString(LocationConfig.KEY_ACTIVE_TRAINING, newId).apply()
+            _finishSyncFlow.resetReplayCache()
+
+            // 6. Показываем уведомление немедленно — это главная цель перехода
+            createNotificationChannel()
+            val notification = buildNotification()
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(
+                    LocationConfig.NOTIFICATION_ID,
+                    notification,
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION,
+                )
+            } else {
+                startForeground(LocationConfig.NOTIFICATION_ID, notification)
+            }
+
+            // 7. WakeLock (переиспользуем или создаём новый)
+            wakeLock?.let { if (it.isHeld) it.release() }
+            val pm = getSystemService(POWER_SERVICE) as PowerManager
+            wakeLock = pm.newWakeLock(
+                PowerManager.PARTIAL_WAKE_LOCK,
+                "SmartTracker:LocationTracking",
+            ).also { it.acquire(LocationConfig.WAKELOCK_TIMEOUT_MS) }
+
+            // 8. Запускаем новый трекер, таймеры и sync-цикл
+            startLocationUpdates(intervalMs)
+            startFlushTimer()
+            startSyncLoop()
+            startHintTimer()
+
+            // 9. Инициализируем расчёт калорий
+            val typeActivId = intent.getIntExtra(EXTRA_TYPE_ACTIV_ID, -1)
+            val weightKg    = if (intent.hasExtra(EXTRA_WEIGHT_KG)) intent.getFloatExtra(EXTRA_WEIGHT_KG, 0f) else null
+            val heightCm    = if (intent.hasExtra(EXTRA_HEIGHT_CM)) intent.getFloatExtra(EXTRA_HEIGHT_CM, 0f) else null
+            val ageYears    = intent.getIntExtra(EXTRA_AGE_YEARS, 0)
+            val isMale      = intent.getBooleanExtra(EXTRA_IS_MALE, true)
+            sessionWeightKg = weightKg
+            sessionAgeYears = ageYears
+            if (weightKg != null && heightCm != null && typeActivId >= 0) {
+                scope.launch {
+                    sessionCF   = CalorieCalculator.computeCF(
+                        weightKg, heightCm, ageYears,
+                        if (isMale) Gender.MALE else Gender.FEMALE,
+                    )
+                    metActivity = workoutRepository.getMETActivity(typeActivId).getOrNull()
+                    Log.d(TAG, "CalorieCalc transition: CF=$sessionCF, met=$metActivity")
+                }
+            }
+
+            Log.d(TAG, "Transition discovery→workout: trainingId=$newId, interval=${intervalMs}ms")
+            return START_STICKY
+        }
+
         // Команда переключения записи: применяем только если сервис уже инициализирован.
         // Если trainingId пустой (сервис убит ОС и перезапущен START_STICKY),
         // команда EXTRA_RECORDING пришла «в пустой» сервис — останавливаемся,
@@ -231,34 +330,37 @@ class LocationTrackingService : Service() {
         // предыдущей тренировки не должен быть принят ViewModel текущей тренировки.
         _finishSyncFlow.resetReplayCache()
 
-        // Сохраняем для crash-recovery до старта трекинга
-        recoveryPrefs.edit().putString(LocationConfig.KEY_ACTIVE_TRAINING, trainingId).apply()
-
-        createNotificationChannel()
-        val notification = buildNotification()
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(
-                LocationConfig.NOTIFICATION_ID,
-                notification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION,
-            )
-        } else {
-            startForeground(LocationConfig.NOTIFICATION_ID, notification)
+        if (!isDiscovery) {
+            recoveryPrefs.edit().putString(LocationConfig.KEY_ACTIVE_TRAINING, trainingId).apply()
         }
 
-        val pm = getSystemService(POWER_SERVICE) as PowerManager
-        wakeLock = pm.newWakeLock(
-            PowerManager.PARTIAL_WAKE_LOCK,
-            "SmartTracker:LocationTracking",
-        ).also { it.acquire(LocationConfig.WAKELOCK_TIMEOUT_MS) }
+        if (!isDiscovery) {
+            createNotificationChannel()
+            val notification = buildNotification()
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(
+                    LocationConfig.NOTIFICATION_ID,
+                    notification,
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION,
+                )
+            } else {
+                startForeground(LocationConfig.NOTIFICATION_ID, notification)
+            }
+
+            val pm = getSystemService(POWER_SERVICE) as PowerManager
+            wakeLock = pm.newWakeLock(
+                PowerManager.PARTIAL_WAKE_LOCK,
+                "SmartTracker:LocationTracking",
+            ).also { it.acquire(LocationConfig.WAKELOCK_TIMEOUT_MS) }
+        }
 
         Log.d(TAG, "onStartCommand: trainingId=$trainingId, interval=${intervalMs}ms")
 
         startLocationUpdates(intervalMs)
         startFlushTimer()
         startSyncLoop()
-        startHintTimer()
+        if (!isDiscovery) startHintTimer()
 
         // ── Инициализация расчёта калорий (MET-метод) ────────────────────────────
         // Значения профиля передаются из WorkoutStartViewModel через Intent-экстры.
@@ -476,9 +578,11 @@ class LocationTrackingService : Service() {
         if (!firstFixDone) {
             firstFixDone = true
             hintJob?.cancel()
-            // Восстанавливаем стандартное уведомление
-            val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-            manager.notify(LocationConfig.NOTIFICATION_ID, buildNotification())
+            if (!isDiscovery) {
+                // Восстанавливаем стандартное уведомление
+                val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+                manager.notify(LocationConfig.NOTIFICATION_ID, buildNotification())
+            }
             offlineMapManager.downloadRegionIfNeeded(
                 LatLng(smoothed.latitude, smoothed.longitude),
                 isWifiConnected(),
@@ -740,6 +844,21 @@ class LocationTrackingService : Service() {
             extraBufferCapacity = 0,
         )
         val finishSyncFlow: SharedFlow<Unit> = _finishSyncFlow.asSharedFlow()
+
+        /**
+         * Команда обновления trainingId в работающем сервисе.
+         * Отправляется из ViewModel после получения serverUUID при офлайн-старте.
+         * Сервис переключает внутренний trainingId и обновляет crash-recovery prefs.
+         */
+        const val EXTRA_TRAINING_ID_UPDATE = "extra_training_id_update"
+
+        /**
+         * Переход из discovery-режима в тренировку без перезапуска сервиса.
+         * ViewModel отправляет этот Intent вместо stop()+startForegroundService().
+         * onStartCommand() вызывается на живом экземпляре → startForeground() мгновенно,
+         * нет задержки уведомления при первой тренировке.
+         */
+        const val EXTRA_TRANSITION_TO_WORKOUT = "extra_transition_to_workout"
 
         /**
          * Отправляет Intent с флагом записи в уже запущенный сервис.

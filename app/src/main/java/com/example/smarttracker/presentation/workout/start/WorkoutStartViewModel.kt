@@ -198,6 +198,11 @@ class WorkoutStartViewModel @Inject constructor(
     // сбрасывается в null при завершении (onFinishClick).
     private var currentTrainingId: String? = null
 
+    // true если сервер подтвердил регистрацию тренировки (startTraining вернул serverUUID).
+    // false = тренировка начата офлайн с localUUID, при финише нужно сохранить typeActivId
+    // в PendingFinish чтобы SyncGpsPointsWorker смог зарегистрировать её позже.
+    private var isTrainingRegisteredOnServer: Boolean = false
+
     /**
      * Количество точек в Room на момент паузы.
      * При возобновлении observeTrackingData использует max(processedCount, якорь),
@@ -327,16 +332,17 @@ class WorkoutStartViewModel @Inject constructor(
     }
 
     /**
-     * Нажатие «Начать тренировку» — регистрирует тренировку на сервере,
-     * затем запускает таймер и сервис GPS-трекинга.
+     * Нажатие «Начать тренировку» — немедленно стартует foreground-сервис (уведомление
+     * появляется мгновенно), затем в фоне регистрирует тренировку на сервере.
      *
      * При возобновлении после паузы trainingId уже существует — сервер не вызывается повторно.
-     * При ошибке сети — fallback на локальный UUID с предупреждением пользователю.
+     * При ошибке сети — остаётся на localUUID; SyncGpsPointsWorker зарегистрирует тренировку
+     * на сервере при появлении сети через [typeActivId] в PendingFinishEntity.
      */
     fun onStartWorkoutClick() {
         val selectedType = _state.value.selectedType ?: return
 
-        // Защита от двойного тапа: пока идёт сетевой запрос, игнорируем повторные нажатия
+        // Защита от двойного тапа
         if (_state.value.isStarting) return
 
         // Возобновление после паузы — ID уже получен, сервер не вызываем
@@ -345,37 +351,52 @@ class WorkoutStartViewModel @Inject constructor(
             return
         }
 
-        // Первый старт — регистрируем тренировку на сервере
-        viewModelScope.launch {
-            _state.update { it.copy(isStarting = true) }
+        // Генерируем localUUID и стартуем сервис немедленно — уведомление появляется сразу
+        val localUUID = UUID.randomUUID().toString()
+        currentTrainingId = localUUID
+        isTrainingRegisteredOnServer = false
+        _state.update { it.copy(isStarting = true) }
+        resumeTracking()
 
+        // Регистрируем тренировку на сервере в фоне параллельно с GPS-трекингом
+        viewModelScope.launch {
             workoutRepository.startTraining(selectedType.id)
                 .onSuccess { result ->
-                    currentTrainingId = result.activeTrainingId
+                    val serverUUID = result.activeTrainingId
+                    if (serverUUID != localUUID) {
+                        // Intent сначала: сервис прекращает писать под localUUID
+                        // до re-key в Room — уменьшает окно гонки до минимума
+                        context.startService(
+                            Intent(context, LocationTrackingService::class.java)
+                                .putExtra(LocationTrackingService.EXTRA_TRAINING_ID_UPDATE, serverUUID)
+                        )
+                        observerJob?.cancel()
+                        locationRepository.rekeyTrainingId(localUUID, serverUUID)
+                        currentTrainingId = serverUUID
+                        observeTrackingData(serverUUID)
+                    }
+                    isTrainingRegisteredOnServer = true
                     _state.update { it.copy(isStarting = false) }
-                    resumeTracking()
                 }
                 .onFailure { error ->
                     when (error) {
                         is ActiveTrainingConflictException -> {
-                            // На сервере незавершённая тренировка — автоматически завершаем её
-                            // и повторяем старт без участия пользователя.
-                            finishOrphanedAndRetryStart(selectedType.id)
+                            // На сервере незавершённая тренировка — завершаем её и повторяем старт.
+                            // Сервис уже запущен с localUUID — пауза на время resolve.
+                            finishOrphanedAndRetryStart(selectedType.id, localUUID)
                         }
                         else -> {
-                            // Fallback: локальный UUID, тренировка записывается офлайн.
-                            // Сообщение зависит от причины: нет сети или другая ошибка (5xx, парсинг).
-                            currentTrainingId = UUID.randomUUID().toString()
+                            // Нет сети или другая ошибка — остаёмся на localUUID.
+                            // SyncGpsPointsWorker зарегистрирует тренировку при появлении сети.
                             val message = if (error is NetworkUnavailableException) {
                                 "Нет связи с сервером. Тренировка сохраняется локально."
                             } else {
-                                "Не удалось начать тренировку. Тренировка сохраняется локально."
+                                "Не удалось зарегистрировать тренировку. Тренировка сохраняется локально."
                             }
                             _state.update { it.copy(
                                 isStarting = false,
                                 errorMessage = message,
                             ) }
-                            resumeTracking()
                         }
                     }
                 }
@@ -385,31 +406,28 @@ class WorkoutStartViewModel @Inject constructor(
     /**
      * Автоматически завершает «осиротевшую» тренировку на сервере и повторяет старт.
      *
-     * Вызывается когда сервер вернул 400 (ActiveTrainingConflictException) — значит у
-     * пользователя есть незавершённая тренировка (например, приложение крашнулось).
-     * Флоу: GET /training/active → POST /training/{id}/save_training → повторный POST /training/start.
+     * Вызывается когда сервер вернул 400 (ActiveTrainingConflictException). Сервис уже
+     * запущен с [localUUID] — запись приостанавливается на время resolve, затем
+     * возобновляется с правильным serverUUID (или остаётся на localUUID при ошибке сети).
      *
-     * Всё выполняется без участия пользователя — он просто видит, что тренировка стартует.
-     * Если getActiveTraining или saveTraining упадут — переходим на локальный UUID (fallback).
+     * Флоу: пауза → GET /training/active → POST save_training → POST start → re-key → resume.
      */
-    private suspend fun finishOrphanedAndRetryStart(typeActivId: Int) {
+    private suspend fun finishOrphanedAndRetryStart(typeActivId: Int, localUUID: String) {
+        // Приостанавливаем запись GPS-точек на время resolve
+        LocationTrackingService.setRecording(context, false)
+
         val activeId = workoutRepository.getActiveTraining().getOrNull()
         if (activeId == null) {
-            // Не смогли получить ID осиротевшей тренировки — используем локальный UUID.
-            // Ситуация маловероятна: сервер сначала сказал «есть конфликт», а потом
-            // не смог вернуть ID. Скорее всего временная сетевая ошибка.
-            Log.w(TAG, "finishOrphanedAndRetryStart: getActiveTraining() failed, falling back to local UUID")
-            currentTrainingId = UUID.randomUUID().toString()
+            Log.w(TAG, "finishOrphanedAndRetryStart: getActiveTraining() failed, keeping localUUID")
+            isTrainingRegisteredOnServer = false
             _state.update { it.copy(
                 isStarting = false,
                 errorMessage = "Не удалось завершить предыдущую тренировку. Тренировка сохраняется локально.",
             ) }
-            resumeTracking()
+            LocationTrackingService.setRecording(context, true)
             return
         }
 
-        // Завершаем осиротевшую тренировку с текущим временем.
-        // Итоговую статистику не знаем — передаём null (бэкенд сохранит как есть).
         workoutRepository.saveTraining(
             trainingId          = activeId,
             timeEnd             = Instant.now()
@@ -418,34 +436,40 @@ class WorkoutStartViewModel @Inject constructor(
             totalDistanceMeters = null,
             totalKilocalories   = null,
         ).onFailure { e ->
-            // saveTraining упал (нет сети или 5xx) — не пытаемся стартовать через сервер,
-            // уходим на локальный UUID. Тренировка будет записана офлайн.
-            Log.w(TAG, "finishOrphanedAndRetryStart: saveTraining failed, falling back to local UUID", e)
-            currentTrainingId = UUID.randomUUID().toString()
+            Log.w(TAG, "finishOrphanedAndRetryStart: saveTraining failed, keeping localUUID", e)
+            isTrainingRegisteredOnServer = false
             _state.update { it.copy(
                 isStarting = false,
                 errorMessage = "Не удалось сохранить предыдущую тренировку на сервер. Новая тренировка сохраняется локально.",
             ) }
-            resumeTracking()
+            LocationTrackingService.setRecording(context, true)
             return
         }
 
-        // Повторяем старт новой тренировки
         workoutRepository.startTraining(typeActivId)
             .onSuccess { result ->
-                currentTrainingId = result.activeTrainingId
+                val serverUUID = result.activeTrainingId
+                // Intent сначала — сервис переключается на serverUUID до re-key в Room
+                context.startService(
+                    Intent(context, LocationTrackingService::class.java)
+                        .putExtra(LocationTrackingService.EXTRA_TRAINING_ID_UPDATE, serverUUID)
+                )
+                observerJob?.cancel()
+                locationRepository.rekeyTrainingId(localUUID, serverUUID)
+                currentTrainingId = serverUUID
+                isTrainingRegisteredOnServer = true
+                observeTrackingData(serverUUID)
                 _state.update { it.copy(isStarting = false) }
-                resumeTracking()
+                LocationTrackingService.setRecording(context, true)
             }
             .onFailure {
-                // Повторный старт тоже упал — уходим в офлайн
                 Log.e(TAG, "finishOrphanedAndRetryStart: retry startTraining failed", it)
-                currentTrainingId = UUID.randomUUID().toString()
+                isTrainingRegisteredOnServer = false
                 _state.update { it.copy(
                     isStarting = false,
                     errorMessage = "Нет связи с сервером. Тренировка сохраняется локально.",
                 ) }
-                resumeTracking()
+                LocationTrackingService.setRecording(context, true)
             }
     }
 
@@ -463,19 +487,20 @@ class WorkoutStartViewModel @Inject constructor(
             trainingStartTimestamp = System.currentTimeMillis()
             discoveryObserverJob?.cancel()
             discoveryObserverJob = null
-            stopLocationService()
-            // Удаляем discovery-точки из Room: они временные и нужны были только для
-            // gpsStatus-наблюдателя. Выполняем до startLocationService, чтобы не было
-            // гонки: Android может переиспользовать тот же Service-инстанс (stop+start),
-            // тогда isDiscovery уже false к onDestroy и удаление из сервиса не сработает.
-            // Захватываем id до обнуления поля.
+            // Захватываем discId до обнуления — нужен для асинхронного удаления из Room.
             val discId = discoveryTrainingId
+            discoveryTrainingId = null
+            // Переводим сервис из discovery в тренировку без цикла stop/start:
+            // EXTRA_TRANSITION_TO_WORKOUT вызывает onStartCommand() на живом экземпляре
+            // → startForeground() срабатывает мгновенно без задержки destroy/create.
+            transitionToWorkout(trainingId)
+            // Discovery-точки удаляем асинхронно. Сервис уже переключил trainingId,
+            // поэтому новые точки пишутся под workout-id, а старые (discId) ждут удаления.
             if (discId != null) {
                 viewModelScope.launch {
                     locationRepository.deletePointsForTraining(discId)
                 }
             }
-            discoveryTrainingId = null
         }
 
         startTimeMs = System.currentTimeMillis() - pausedElapsedMs
@@ -503,7 +528,6 @@ class WorkoutStartViewModel @Inject constructor(
         ) }
 
         if (isFirstStart) {
-            startLocationService(trainingId)
             observeTrackingData(trainingId)
         } else {
             // Возобновление после паузы: разрешаем запись точек снова
@@ -587,44 +611,72 @@ class WorkoutStartViewModel @Inject constructor(
             val distanceMeters = state.distanceMeters.takeIf { it > 0 }
             val kilocalories   = state.kilocalories.takeIf { it > 0 }
 
-            viewModelScope.launch {
-                // Ждём сигнала от сервиса о завершении финального flush+sync.
-                // Таймаут 5 сек — если сервис упал или сигнал не пришёл, идём дальше
-                // (худший случай: saveTraining закроет тренировку без последних точек,
-                // но пользователь не блокируется).
-                val syncSignaled = withTimeoutOrNull(5_000L) {
-                    LocationTrackingService.finishSyncFlow.first()
+            if (!isTrainingRegisteredOnServer) {
+                // Тренировка не зарегистрирована на сервере (startTraining не успел или нет сети).
+                // Прямой вызов saveTraining(localUUID) вернёт 404 — сервер не знает этот ID.
+                // Сразу идём в WorkManager: сначала зарегистрирует тренировку, потом загрузит
+                // GPS-точки и закроет. Не ждём finishSyncFlow — сервис всё равно не смог
+                // синхронизировать точки в реальном времени (тренировки нет на сервере).
+                Log.w(TAG, "Training not registered on server, queuing full offline sync for $trainingId")
+                viewModelScope.launch {
+                    withContext(NonCancellable) {
+                        workoutRepository.savePendingFinish(
+                            trainingId          = trainingId,
+                            timeEnd             = timeEnd,
+                            totalDistanceMeters = distanceMeters,
+                            totalKilocalories   = kilocalories,
+                            typeActivId         = _state.value.selectedType?.id,
+                            // Реальное время старта тренировки: фиксируется при нажатии «Начать».
+                            // Передаётся в POST /training/start чтобы бэкенд записал правильный
+                            // time_start — иначе сервер ставит время синхронизации (после сети),
+                            // которое всегда позже time_end → невалидные данные в истории.
+                            timeStart           = Instant.ofEpochMilli(trainingStartTimestamp).toString(),
+                        )
+                    }
+                    enqueueOfflineFinishWork(trainingId)
                 }
-                if (syncSignaled == null) {
-                    Log.w(TAG, "Timeout waiting for service sync signal; calling saveTraining anyway")
-                }
+            } else {
+                viewModelScope.launch {
+                    // Ждём сигнала от сервиса о завершении финального flush+sync.
+                    // Таймаут 5 сек — если сервис упал или сигнал не пришёл, идём дальше
+                    // (худший случай: saveTraining закроет тренировку без последних точек,
+                    // но пользователь не блокируется).
+                    val syncSignaled = withTimeoutOrNull(5_000L) {
+                        LocationTrackingService.finishSyncFlow.first()
+                    }
+                    if (syncSignaled == null) {
+                        Log.w(TAG, "Timeout waiting for service sync signal; calling saveTraining anyway")
+                    }
 
-                workoutRepository.saveTraining(
-                    trainingId          = trainingId,
-                    timeEnd             = timeEnd,
-                    totalDistanceMeters = distanceMeters,
-                    totalKilocalories   = kilocalories,
-                ).onFailure { e ->
-                    when (e) {
-                        is NetworkUnavailableException -> {
-                            // Сеть недоступна — сохраняем в очередь и ставим цепочку WorkManager.
-                            // NonCancellable: запись в Room не прерывается если ViewModel
-                            // уничтожается прямо в этот момент (пользователь закрыл приложение).
-                            Log.w(TAG, "saveTraining failed (no network), queuing for later delivery")
-                            withContext(NonCancellable) {
-                                workoutRepository.savePendingFinish(
-                                    trainingId          = trainingId,
-                                    timeEnd             = timeEnd,
-                                    totalDistanceMeters = distanceMeters,
-                                    totalKilocalories   = kilocalories,
-                                )
+                    workoutRepository.saveTraining(
+                        trainingId          = trainingId,
+                        timeEnd             = timeEnd,
+                        totalDistanceMeters = distanceMeters,
+                        totalKilocalories   = kilocalories,
+                    ).onFailure { e ->
+                        when (e) {
+                            is NetworkUnavailableException -> {
+                                // Сеть пропала после регистрации — ставим в очередь без typeActivId:
+                                // тренировка уже есть на сервере, WorkManager только закроет её.
+                                // NonCancellable: запись в Room не прерывается если ViewModel
+                                // уничтожается прямо в этот момент (пользователь закрыл приложение).
+                                Log.w(TAG, "saveTraining failed (no network), queuing for later delivery")
+                                withContext(NonCancellable) {
+                                    workoutRepository.savePendingFinish(
+                                        trainingId          = trainingId,
+                                        timeEnd             = timeEnd,
+                                        totalDistanceMeters = distanceMeters,
+                                        totalKilocalories   = kilocalories,
+                                        typeActivId         = null,
+                                    )
+                                }
+                                enqueueOfflineFinishWork(trainingId)
                             }
-                            enqueueOfflineFinishWork(trainingId)
-                        }
-                        else -> {
-                            // HTTP 4xx/5xx или прочие ошибки — не ставим в очередь,
-                            // retry бессмысленен или ситуация не связана с сетью.
-                            Log.e(TAG, "saveTraining failed with non-retryable error", e)
+                            else -> {
+                                // HTTP 4xx/5xx или прочие ошибки — не ставим в очередь,
+                                // retry бессмысленен или ситуация не связана с сетью.
+                                Log.e(TAG, "saveTraining failed with non-retryable error", e)
+                            }
                         }
                     }
                 }
@@ -642,6 +694,7 @@ class WorkoutStartViewModel @Inject constructor(
             mapTilesFailed   = false,
         ) }
         currentTrainingId = null
+        isTrainingRegisteredOnServer = false
     }
 
     /**
@@ -1008,6 +1061,47 @@ class WorkoutStartViewModel @Inject constructor(
     }
 
     /**
+     * Переводит работающий discovery-сервис в режим тренировки без остановки.
+     * Отправляет [LocationTrackingService.EXTRA_TRANSITION_TO_WORKOUT] Intent через
+     * startForegroundService() — onStartCommand() вызывается на живом экземпляре,
+     * startForeground() срабатывает мгновенно без задержки destroy/create.
+     *
+     * Если сервис по каким-то причинам не запущен — startForegroundService() запустит
+     * новый экземпляр, который корректно обработает EXTRA_TRANSITION_TO_WORKOUT.
+     */
+    private fun transitionToWorkout(trainingId: String) {
+        val selectedType = _state.value.selectedType ?: return
+        val intervalMs = when (selectedType.iconKey) {
+            "3"  -> LocationConfig.INTERVAL_MS_CYCLING
+            else -> LocationConfig.INTERVAL_MS_RUNNING
+        }
+        val accuracyThreshold = when (selectedType.iconKey) {
+            "3"  -> LocationConfig.MAX_ACCURACY_CYCLING
+            else -> LocationConfig.MAX_ACCURACY_RUNNING
+        }
+        val intent = Intent(context, LocationTrackingService::class.java).apply {
+            putExtra(LocationTrackingService.EXTRA_TRANSITION_TO_WORKOUT, true)
+            putExtra(LocationTrackingService.EXTRA_TRAINING_ID, trainingId)
+            putExtra(LocationTrackingService.EXTRA_INTERVAL_MS, intervalMs)
+            putExtra(LocationTrackingService.EXTRA_ACCURACY_THRESHOLD, accuracyThreshold)
+            putExtra(LocationTrackingService.EXTRA_TYPE_ACTIV_ID, selectedType.id)
+            userProfile?.let { profile ->
+                profile.weight?.let { putExtra(LocationTrackingService.EXTRA_WEIGHT_KG, it) }
+                profile.height?.let { putExtra(LocationTrackingService.EXTRA_HEIGHT_CM, it) }
+                val today = LocalDate.now()
+                val rawAgeYears = Period.between(profile.birthDate, today).years
+                if (profile.birthDate.isAfter(today)) {
+                    Log.w(TAG, "Ignoring future birthDate when calculating age: ${profile.birthDate}")
+                }
+                val ageYears = rawAgeYears.coerceAtLeast(0)
+                putExtra(LocationTrackingService.EXTRA_AGE_YEARS, ageYears)
+                putExtra(LocationTrackingService.EXTRA_IS_MALE, profile.gender == Gender.MALE)
+            }
+        }
+        context.startForegroundService(intent)
+    }
+
+    /**
      * Запускает GPS-сервис для discovery-фазы (без профиля и MET-данных).
      * Discovery работает при открытии экрана, до нажатия «Начать тренировку».
      *
@@ -1033,7 +1127,7 @@ class WorkoutStartViewModel @Inject constructor(
             // Discovery: точки не пишутся в Room, не синхронизируются с сервером
             putExtra(LocationTrackingService.EXTRA_IS_DISCOVERY, true)
         }
-        context.startForegroundService(intent)
+        context.startService(intent)
     }
 
     private fun stopLocationService() {
