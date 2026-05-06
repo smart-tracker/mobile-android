@@ -93,6 +93,11 @@ class WorkoutRepositoryImpl @Inject constructor(
         runCatching {
             try {
                 trainingApi.startTraining(TrainingStartRequestDto(typeActivId, timeStart)).toDomain()
+            } catch (e: IOException) {
+                // Сеть недоступна. Оборачиваем как в saveTraining — ViewModel покажет
+                // "Нет связи" вместо общего "Не удалось зарегистрировать", а SyncGpsPointsWorker
+                // сможет отличить офлайн (retry) от постоянной 4xx (fail-fast).
+                throw NetworkUnavailableException(e)
             } catch (e: HttpException) {
                 // 400 означает что у пользователя уже есть активная тренировка на сервере.
                 // Бросаем доменное исключение — ViewModel получит его без зависимости от Retrofit.
