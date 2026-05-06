@@ -194,15 +194,19 @@ class LocationTrackingService : Service() {
         // Отправляется из ViewModel когда startTraining() вернул serverUUID позже старта сервиса.
         if (intent?.hasExtra(EXTRA_TRAINING_ID_UPDATE) == true) {
             val newId = intent.getStringExtra(EXTRA_TRAINING_ID_UPDATE)
-            if (!newId.isNullOrBlank() && activeTracker != null) {
-                // Сначала сбрасываем буфер под старым id, затем переключаем под мьютексом.
-                // Без этого точки в памяти запишутся в Room уже под serverUUID, хотя в ViewModel
-                // rekeyTrainingId ещё не запускался → точки становятся сиротами (никогда не
-                // попадают в serverUUID после rekey, т.к. rekey видит только строки в Room).
+            if (!newId.isNullOrBlank()) {
+                // Обновляем trainingId независимо от состояния activeTracker.
+                // Если трекер ещё не инициализирован (сервис свежий или zombie-state после
+                // пересоздания ОС), recoveryPrefs всё равно нужно обновить — сервис прочитает
+                // новый id при следующей инициализации. Удаление условия activeTracker != null
+                // устраняет тихую потерю обновления при задержке инициализации трекера.
                 scope.launch {
                     bufferMutex.withLock {
-                        flushBufferLocked()
-                        trainingId = newId  // переключаем id внутри мьютекса — новые точки пойдут под serverUUID
+                        // Сбрасываем буфер под старым id, затем переключаем под мьютексом.
+                        // Без этого точки в памяти запишутся в Room под serverUUID, хотя
+                        // rekeyTrainingId в ViewModel ещё не запускался → сироты в Room.
+                        if (activeTracker != null) flushBufferLocked()
+                        trainingId = newId  // переключаем id; новые точки пойдут под serverUUID
                     }
                     recoveryPrefs.edit().putString(LocationConfig.KEY_ACTIVE_TRAINING, newId).apply()
                 }

@@ -362,6 +362,16 @@ class WorkoutStartViewModel @Inject constructor(
         viewModelScope.launch {
             workoutRepository.startTraining(selectedType.id)
                 .onSuccess { result ->
+                    // Guard: onFinishClick мог сработать пока startTraining был in-flight.
+                    // currentTrainingId == null означает, что тренировка уже завершена.
+                    // Re-key нельзя делать: offline-цепочка для localUUID уже enqueued.
+                    // Открытая serverUUID-тренировка закроется через finishOrphanedAndRetryStart
+                    // при следующем старте.
+                    if (currentTrainingId == null) {
+                        Log.w(TAG, "startTraining returned after onFinishClick — discarding re-key to ${result.activeTrainingId}")
+                        _state.update { it.copy(isStarting = false) }
+                        return@onSuccess
+                    }
                     val serverUUID = result.activeTrainingId
                     if (serverUUID != localUUID) {
                         // Intent сначала: сервис прекращает писать под localUUID
@@ -449,7 +459,12 @@ class WorkoutStartViewModel @Inject constructor(
         // Передаём реальное время старта: между resumeTracking() и конфликтом (3 сетевых
         // вызова) прошло 1–5 сек — GPS-точки уже есть с timestampUtc < time_start сервера.
         // timeStart фиксирует момент нажатия «Начать», как и в offline-финише через WorkManager.
-        workoutRepository.startTraining(typeActivId, Instant.ofEpochMilli(trainingStartTimestamp).toString())
+        workoutRepository.startTraining(
+            typeActivId,
+            Instant.ofEpochMilli(trainingStartTimestamp)
+                .atZone(ZoneOffset.UTC)
+                .format(DateTimeFormatter.ISO_OFFSET_DATE_TIME),
+        )
             .onSuccess { result ->
                 val serverUUID = result.activeTrainingId
                 // Intent сначала — сервис переключается на serverUUID до re-key в Room
@@ -622,6 +637,11 @@ class WorkoutStartViewModel @Inject constructor(
                 // синхронизировать точки в реальном времени (тренировки нет на сервере).
                 Log.w(TAG, "Training not registered on server, queuing full offline sync for $trainingId")
                 viewModelScope.launch {
+                    // NonCancellable: оба вызова не прерываются при уничтожении ViewModel
+                    // (поворот экрана, смахивание приложения). Без этого enqueueOfflineFinishWork
+                    // могла быть скипнута если ViewModel умерла между savePendingFinish и enqueue:
+                    // pending-запись в Room без WorkManager-цепочки → тренировка никогда не
+                    // синхронизируется пока пользователь не откроет приложение заново.
                     withContext(NonCancellable) {
                         workoutRepository.savePendingFinish(
                             trainingId          = trainingId,
@@ -633,10 +653,15 @@ class WorkoutStartViewModel @Inject constructor(
                             // Передаётся в POST /training/start чтобы бэкенд записал правильный
                             // time_start — иначе сервер ставит время синхронизации (после сети),
                             // которое всегда позже time_end → невалидные данные в истории.
-                            timeStart           = Instant.ofEpochMilli(trainingStartTimestamp).toString(),
+                            // Формат ISO_OFFSET_DATE_TIME (+00:00) совпадает с timeEnd —
+                            // Instant.toString() даёт суффикс Z, что вызывает ошибки парсинга
+                            // на FastAPI если сервер ожидает единообразный формат со смещением.
+                            timeStart           = Instant.ofEpochMilli(trainingStartTimestamp)
+                                .atZone(ZoneOffset.UTC)
+                                .format(DateTimeFormatter.ISO_OFFSET_DATE_TIME),
                         )
+                        enqueueOfflineFinishWork(trainingId)
                     }
-                    enqueueOfflineFinishWork(trainingId)
                 }
             } else {
                 viewModelScope.launch {
