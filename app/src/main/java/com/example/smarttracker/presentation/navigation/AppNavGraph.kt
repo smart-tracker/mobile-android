@@ -4,7 +4,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -20,6 +23,9 @@ import com.example.smarttracker.presentation.auth.register.RegisterEvent
 import com.example.smarttracker.presentation.auth.register.RegisterScreen
 import com.example.smarttracker.presentation.auth.register.RegisterViewModel
 import com.example.smarttracker.presentation.auth.register.TermsOfServiceScreen
+import com.example.smarttracker.presentation.menu.profile.ProfileEditEvent
+import com.example.smarttracker.presentation.menu.profile.ProfileEditScreen
+import com.example.smarttracker.presentation.menu.profile.ProfileEditViewModel
 import com.example.smarttracker.presentation.menu.profile.ProfileScreen
 import com.example.smarttracker.presentation.menu.profile.ProfileViewModel
 import com.example.smarttracker.presentation.workout.WorkoutHomeScreen
@@ -184,6 +190,16 @@ fun AppNavGraph(
             val viewModel: ProfileViewModel = hiltViewModel()
             val state by viewModel.state.collectAsStateWithLifecycle()
 
+            // Обновляем профиль из кэша при каждом возврате на экран
+            // (в т.ч. при возврате с экрана редактирования).
+            // repeatOnLifecycle(RESUMED) срабатывает при каждом входе в RESUMED-состояние.
+            val lifecycleOwner = LocalLifecycleOwner.current
+            LaunchedEffect(lifecycleOwner) {
+                lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+                    viewModel.refreshFromCache()
+                }
+            }
+
             ProfileScreen(
                 state = state,
                 onBack = { navController.popBackStack() },
@@ -195,6 +211,44 @@ fun AppNavGraph(
                         launchSingleTop = true
                     }
                 },
+                onEditProfile = { navController.navigate(Screen.ProfileEdit.route) },
+            )
+        }
+
+        composable(Screen.ProfileEdit.route) {
+            val viewModel: ProfileEditViewModel = hiltViewModel()
+            val state by viewModel.state.collectAsStateWithLifecycle()
+
+            LaunchedEffect(Unit) {
+                viewModel.events.collect { event ->
+                    when (event) {
+                        ProfileEditEvent.NavigateBack -> navController.popBackStack()
+                        ProfileEditEvent.AccountDeleted -> {
+                            onLogout()
+                            navController.navigate(Screen.Login.route) {
+                                popUpTo(navController.graph.id) { inclusive = true }
+                                launchSingleTop = true
+                            }
+                        }
+                    }
+                }
+            }
+
+            ProfileEditScreen(
+                state = state,
+                onFirstNameChange = viewModel::onFirstNameChange,
+                onLastNameChange = viewModel::onLastNameChange,
+                onMiddleNameChange = viewModel::onMiddleNameChange,
+                onUsernameChange = viewModel::onUsernameChange,
+                onBirthDateChange = viewModel::onBirthDateChange,
+                onGenderToggle = viewModel::onGenderToggle,
+                onHeightChange = viewModel::onHeightChange,
+                onWeightChange = viewModel::onWeightChange,
+                onSave = viewModel::onSave,
+                onBack = { navController.popBackStack() },
+                onDeleteAccountClick = viewModel::onDeleteAccountClick,
+                onDismissDeleteDialog = viewModel::onDismissDeleteDialog,
+                onConfirmDelete = viewModel::onConfirmDelete,
             )
         }
     }

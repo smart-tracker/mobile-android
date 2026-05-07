@@ -12,6 +12,7 @@ import com.example.smarttracker.data.local.UserProfileCacheImpl
 import com.example.smarttracker.data.local.db.ActivityTypeDao
 import com.example.smarttracker.data.local.db.ActivityTypeEntity
 import com.example.smarttracker.data.local.db.GpsPointDao
+import com.example.smarttracker.data.local.db.METActivityDao
 import com.example.smarttracker.data.local.db.PendingFinishDao
 import com.example.smarttracker.data.local.db.SmartTrackerDatabase
 import androidx.room.RoomDatabase
@@ -156,7 +157,11 @@ abstract class AuthModule {
                 SmartTrackerDatabase::class.java,
                 "smart_tracker.db"
             )
-            .addMigrations(SmartTrackerDatabase.MIGRATION_5_6, SmartTrackerDatabase.MIGRATION_6_7)
+            .addMigrations(
+                SmartTrackerDatabase.MIGRATION_5_6,
+                SmartTrackerDatabase.MIGRATION_6_7,
+                SmartTrackerDatabase.MIGRATION_7_8,
+            )
             // Деструктивная миграция допустима пока данные тренировок не критичны
             // (production-миграция — в Этапе 5).
             .fallbackToDestructiveMigration()
@@ -189,5 +194,9 @@ abstract class AuthModule {
         @Provides
         @Singleton
         fun providePendingFinishDao(db: SmartTrackerDatabase): PendingFinishDao = db.pendingFinishDao()
+
+        @Provides
+        @Singleton
+        fun provideMETActivityDao(db: SmartTrackerDatabase): METActivityDao = db.metActivityDao()
     }
 }

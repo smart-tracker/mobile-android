@@ -2,6 +2,7 @@ package com.example.smarttracker.data.repository
 
 import com.example.smarttracker.data.local.IconCacheManager
 import com.example.smarttracker.data.local.db.ActivityTypeDao
+import com.example.smarttracker.data.local.db.METActivityDao
 import com.example.smarttracker.data.local.db.PendingFinishDao
 import com.example.smarttracker.data.local.db.PendingFinishEntity
 import com.example.smarttracker.data.local.db.toDomain
@@ -27,6 +28,7 @@ import retrofit2.HttpException
 import java.io.IOException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -37,16 +39,17 @@ import javax.inject.Singleton
 /**
  * Реализация WorkoutRepository: справочные данные + жизненный цикл тренировки.
  *
- * Справочные данные (типы активностей) хранятся в Room (ActivityTypeDao).
- * При каждом вызове [workoutTypesFlow] в фоне запускается сетевое обновление —
- * при успехе Room re-emit'ит обновлённый список через [ActivityTypeDao.observeAll].
+ * **Типы активностей** хранятся в Room (ActivityTypeDao).
+ * При вызове [workoutTypesFlow] запускается фоновое обновление (stale-while-revalidate).
+ * Дебаунс: если обновление уже выполняется, повторный вызов его не дублирует.
  *
- * Логика загрузки иконок:
- * 1. Проверить локальный кэш (filesDir/activity_icons/{id}.png).
- * 2. Если файл есть — передать его в WorkoutType.iconFile (отобразится мгновенно).
- * 3. Если файла нет и бэкенд прислал image_path — запустить загрузку в фоне.
- *    При следующем вызове workoutTypesFlow() файл уже будет закэширован.
- * 4. Пока файла нет — iconFile = null, UI покажет drawable-fallback по iconKey.
+ * **Иконки**: скачиваются по URL из бэкенда и кэшируются в filesDir.
+ * При смене imagePath на бэкенде файл перезагружается (сравнение через [IconCacheManager.getDownloadedUrl]).
+ *
+ * **MET-коэффициенты** кэшируются в Room (METActivityDao) с TTL 24 часа.
+ * Предзагрузка запускается в [refreshFromNetwork] для каждого типа активности
+ * без кэша или с устаревшим кэшем. [getMETActivity] возвращает кэш мгновенно;
+ * при отсутствии кэша делает синхронный сетевой запрос.
  */
 @Singleton
 class WorkoutRepositoryImpl @Inject constructor(
@@ -54,27 +57,34 @@ class WorkoutRepositoryImpl @Inject constructor(
     private val trainingApi: TrainingApiService,
     private val iconCache: IconCacheManager,
     private val activityTypeDao: ActivityTypeDao,
+    private val metActivityDao: METActivityDao,
     private val pendingFinishDao: PendingFinishDao,
 ) : WorkoutRepository {
 
     /**
-     * Отдельный scope для фоновых загрузок иконок и сетевых обновлений.
+     * Отдельный scope для фоновых загрузок иконок, обновления типов и предзагрузки MET.
      * SupervisorJob — ошибка одной корутины не отменяет остальные.
      * Scope живёт столько же, сколько синглтон (т.е. всё время работы приложения).
      */
     private val downloadScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
+    /** Дебаунс: не допускаем параллельных вызовов refreshFromNetwork при быстрой навигации. */
+    private var activeRefreshJob: Job? = null
+
     override fun workoutTypesFlow(): Flow<List<WorkoutType>> {
-        // Запускаем обновление конкурентно: не блокирует первый emit из Room.
+        // Запускаем обновление только если предыдущее уже завершилось.
         // downloadScope гарантирует, что запрос живёт дольше подписчика Flow.
-        downloadScope.launch { refreshFromNetwork() }
+        if (activeRefreshJob?.isActive != true) {
+            activeRefreshJob = downloadScope.launch { refreshFromNetwork() }
+        }
         return activityTypeDao.observeAll()
             .map { entities -> entities.map { it.toDomain(iconCache) } }
     }
 
     /**
-     * Загружает виды активности из сети и сохраняет в Room через upsert.
+     * Загружает виды активности из сети, сохраняет в Room через upsert.
      * После upsertAll Room автоматически re-emit'ит [ActivityTypeDao.observeAll].
+     * Для каждого типа запускает фоновую предзагрузку MET и обновление иконки при смене URL.
      * Ошибки сети перехватываются тихо — кэш уже показан в UI.
      */
     private suspend fun refreshFromNetwork() {
@@ -82,10 +92,35 @@ class WorkoutRepositoryImpl @Inject constructor(
             val dtos = api.getActivityTypes()
             activityTypeDao.upsertAll(dtos.map { it.toEntity() })
             dtos.forEach { dto ->
-                if (dto.imagePath != null && iconCache.getCached(dto.id) == null) {
+                // Предзагрузка MET: фон, только если кэша нет или он старше TTL.
+                val metCached = metActivityDao.getWithZones(dto.id)
+                val metIsStale = metCached == null ||
+                    (System.currentTimeMillis() - metCached.activity.cachedAt) > MET_CACHE_TTL_MS
+                if (metIsStale) {
+                    downloadScope.launch { fetchAndCacheMET(dto.id) }
+                }
+                // Иконка: перезагрузить если файла нет или URL изменился на бэкенде.
+                if (dto.imagePath != null &&
+                    (iconCache.getCached(dto.id) == null ||
+                        iconCache.getDownloadedUrl(dto.id) != dto.imagePath)
+                ) {
                     downloadScope.launch { iconCache.download(dto.id, dto.imagePath) }
                 }
             }
+        }
+    }
+
+    /**
+     * Загружает MET-данные из сети и сохраняет в Room.
+     * deleteZones перед upsertZones предотвращает накопление устаревших записей
+     * при сокращении количества зон на бэкенде.
+     */
+    private suspend fun fetchAndCacheMET(typeActivId: Int) {
+        runCatching {
+            val dto = trainingApi.getMETActivity(typeActivId)
+            metActivityDao.upsertActivity(dto.toEntity(typeActivId, System.currentTimeMillis()))
+            metActivityDao.deleteZones(typeActivId)
+            metActivityDao.upsertZones(dto.zones.map { it.toEntity(typeActivId) })
         }
     }
 
@@ -142,10 +177,30 @@ class WorkoutRepositoryImpl @Inject constructor(
         ).saved
     }
 
-    override suspend fun getMETActivity(typeActivId: Int): Result<METActivity> =
-        runCatching {
-            trainingApi.getMETActivity(typeActivId).toDomain()
+    /**
+     * Возвращает MET-конфигурацию из кэша Room (TTL 24 ч).
+     * При устаревшем или отсутствующем кэше — синхронный сетевой запрос.
+     * В штатном режиме кэш уже заполнен [refreshFromNetwork], запрос в сеть не нужен.
+     */
+    override suspend fun getMETActivity(typeActivId: Int): Result<METActivity> {
+        val cached = metActivityDao.getWithZones(typeActivId)
+        val isStale = cached == null ||
+            (System.currentTimeMillis() - cached.activity.cachedAt) > MET_CACHE_TTL_MS
+        if (!isStale) return Result.success(cached!!.toDomain())
+        return runCatching {
+            fetchAndCacheMET(typeActivId)
+            val refreshed = metActivityDao.getWithZones(typeActivId)
+                ?: throw IllegalStateException(
+                    "MET activity for typeActivId=$typeActivId was not cached after refresh"
+                )
+            refreshed.toDomain()
         }
+    }
+
+    companion object {
+        /** TTL кэша MET-коэффициентов: 24 часа. */
+        private const val MET_CACHE_TTL_MS = 24L * 60 * 60 * 1000
+    }
 
     override suspend fun getTrainingHistory(): Result<List<com.example.smarttracker.domain.model.TrainingHistoryItem>> =
         runCatching {

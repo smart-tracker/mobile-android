@@ -50,7 +50,6 @@ import com.example.smarttracker.presentation.theme.geologicaFontFamilyItalic
  * Данные загружаются из API через [ProfileViewModel] и передаются сюда
  * как [ProfileUiState]. Пока идёт загрузка — показывается [CircularProgressIndicator].
  *
- * Кнопка «Ред.» нефункциональна (MVP).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -58,6 +57,7 @@ fun ProfileScreen(
     state: ProfileUiState,
     onBack: () -> Unit,
     onLogout: () -> Unit,
+    onEditProfile: () -> Unit = {},
 ) {
     // Цвет заполненных полей: из Figma #2AC3B8 (чуть отличается от ColorSecondary)
     val colorFieldValue = ColorSecondary
@@ -79,14 +79,14 @@ fun ProfileScreen(
                     Text(
                         text = "Профиль",
                         fontFamily = geologicaFontFamily,
-                        fontWeight = FontWeight.Normal,
+                        fontWeight = FontWeight.Bold,
                         fontStyle = FontStyle.Normal,
-                        fontSize = 20.sp,
+                        fontSize = 22.sp,
                         color = ColorPrimary,
                     )
                 },
                 actions = {
-                    EditButton()
+                    EditButton(onClick = onEditProfile)
                 },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
                     containerColor = Color.White,
@@ -159,15 +159,14 @@ fun ProfileScreen(
 // ── Кнопка «Ред.» в шапке ─────────────────────────────────────────────────────
 
 @Composable
-private fun EditButton() {
+private fun EditButton(onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .padding(end = 16.dp)
             .height(40.dp)
             .width(85.dp)
             .border(1.dp, ColorPrimary, RoundedCornerShape(5.dp))
-            // Заглушка: редактирование не реализовано в MVP
-            .clickable { },
+            .clickable(onClick = onClick),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center,
     ) {
