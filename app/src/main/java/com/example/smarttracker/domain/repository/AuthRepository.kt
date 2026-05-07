@@ -98,6 +98,33 @@ interface AuthRepository {
     suspend fun getUserInfo(): Result<User>
 
     /**
+     * PATCH /user/edit — обновление профиля пользователя.
+     *
+     * Все параметры nullable — null означает «не менять».
+     * После успеха обновляет кэш профиля и возвращает обновлённого [User].
+     * [birthDate] передаётся в формате ISO 8601 "YYYY-MM-DD".
+     * [gender] — "male" или "female".
+     */
+    suspend fun updateProfile(
+        firstName: String?,
+        lastName: String?,
+        middleName: String?,
+        birthDate: String?,
+        weight: Float?,
+        height: Float?,
+        gender: String?,
+        nickname: String?,
+    ): Result<User>
+
+    /**
+     * DELETE /user/delete — удаление аккаунта.
+     *
+     * После успеха очищает токены и кэш профиля — пользователь должен
+     * быть перенаправлен на экран Login.
+     */
+    suspend fun deleteAccount(): Result<Unit>
+
+    /**
      * Flow-флаг принудительного выхода из сессии.
      *
      * Эмитирует `true` когда оба токена (access + refresh) истекли.

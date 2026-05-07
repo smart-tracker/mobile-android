@@ -51,30 +51,12 @@ class ProfileViewModel @Inject constructor(
 
             authRepository.getUserInfo()
                 .onSuccess { user ->
-                    _state.update {
-                        it.copy(
-                            isLoading  = false,
-                            firstName  = user.firstName,
-                            lastName   = user.lastName,
-                            middleName = user.middleName,
-                            // Добавляем «@» к никнейму — в БД он хранится без него
-                            username   = "@${user.username}",
-                            birthDate  = user.birthDate.format(dateFormatter),
-                            gender     = when (user.gender) {
-                                Gender.MALE   -> "Мужской"
-                                Gender.FEMALE -> "Женский"
-                            },
-                            // Float? → строка без десятичных, null остаётся null
-                            weight     = user.weight?.let { w -> "%.0f".format(w) },
-                            height     = user.height?.let { h -> "%.0f".format(h) },
-                            errorMessage = null,
-                        )
-                    }
+                    applyUser(user)
+                    _state.update { it.copy(isLoading = false) }
                     // После успешной загрузки профиля — пытаемся получить историю тренировок
                     // и вычислить дату последней тренировки (максимум по полю date).
                     // Ошибки при загрузке истории не прерывают отображение профиля.
-                    val historyResult = workoutRepository.getTrainingHistory()
-                    historyResult.onSuccess { list ->
+                    workoutRepository.getTrainingHistory().onSuccess { list ->
                         val lastDate = list.maxByOrNull { it.date }?.date
                         _state.update { cur -> cur.copy(lastTrainingDate = lastDate?.format(dateFormatter)) }
                     }
@@ -87,6 +69,37 @@ class ProfileViewModel @Inject constructor(
                         )
                     }
                 }
+        }
+    }
+
+    /**
+     * Тихое обновление полей профиля из кэша — без индикатора загрузки.
+     * Вызывается при возврате с экрана редактирования, чтобы показать актуальные данные.
+     * Кэш уже обновлён в [AuthRepositoryImpl.updateProfile] до навигации назад.
+     */
+    fun refreshFromCache() {
+        viewModelScope.launch {
+            authRepository.getUserInfo().onSuccess { user -> applyUser(user) }
+        }
+    }
+
+    /** Применяет данные [User] к состоянию без изменения [ProfileUiState.isLoading]. */
+    private fun applyUser(user: com.example.smarttracker.domain.model.User) {
+        _state.update {
+            it.copy(
+                firstName  = user.firstName,
+                lastName   = user.lastName,
+                middleName = user.middleName,
+                username   = "@${user.username}",
+                birthDate  = user.birthDate.format(dateFormatter),
+                gender     = when (user.gender) {
+                    Gender.MALE   -> "Мужской"
+                    Gender.FEMALE -> "Женский"
+                },
+                weight = user.weight?.let { w -> "%.0f".format(w) },
+                height = user.height?.let { h -> "%.0f".format(h) },
+                errorMessage = null,
+            )
         }
     }
 }

@@ -1,0 +1,485 @@
+package com.example.smarttracker.presentation.menu.profile
+
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.example.smarttracker.R
+import com.example.smarttracker.presentation.common.AppTab
+import com.example.smarttracker.presentation.common.DateVisualTransformation
+import com.example.smarttracker.presentation.common.SmartTrackerBottomBar
+import com.example.smarttracker.presentation.theme.ColorPrimary
+import com.example.smarttracker.presentation.theme.ColorSecondary
+import com.example.smarttracker.presentation.theme.geologicaFontFamily
+import com.example.smarttracker.presentation.theme.geologicaFontFamilyItalic
+
+private val ColorDelete = Color(0xFFFC3F1D)
+
+/**
+ * Экран редактирования профиля пользователя.
+ *
+ * Поля предзаполнены из [ProfileEditUiState] (данные берутся из кэша при создании ViewModel).
+ * Кнопка «Сохр.» вызывает [onSave]. После успешного сохранения ViewModel отправляет
+ * [ProfileEditEvent.NavigateBack], навигация обрабатывается в [AppNavGraph].
+ *
+ * Системная кнопка «Назад» = [navController.popBackStack()] (без сохранения).
+ * Нажатие на другую вкладку нижнего бара тоже уводит назад через [onBack].
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ProfileEditScreen(
+    state: ProfileEditUiState,
+    onFirstNameChange: (String) -> Unit,
+    onLastNameChange: (String) -> Unit,
+    onMiddleNameChange: (String) -> Unit,
+    onUsernameChange: (String) -> Unit,
+    onBirthDateChange: (String) -> Unit,
+    onGenderToggle: () -> Unit,
+    onHeightChange: (String) -> Unit,
+    onWeightChange: (String) -> Unit,
+    onSave: () -> Unit,
+    onBack: () -> Unit,
+    onDeleteAccountClick: () -> Unit,
+    onDismissDeleteDialog: () -> Unit,
+    onConfirmDelete: () -> Unit,
+) {
+    Scaffold(
+        topBar = {
+            CenterAlignedTopAppBar(
+                title = {
+                    Text(
+                        text = "Профиль",
+                        fontFamily = geologicaFontFamily,
+                        fontWeight = FontWeight.Bold,
+                        fontStyle = FontStyle.Normal,
+                        fontSize = 22.sp,
+                        color = ColorPrimary,
+                    )
+                },
+                actions = {
+                    SaveButton(
+                        isSaving = state.isSaving || state.isDeleting,
+                        onClick = onSave,
+                    )
+                },
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                    containerColor = Color.White,
+                ),
+            )
+        },
+        bottomBar = {
+            SmartTrackerBottomBar(
+                selectedIndex = AppTab.MENU,
+                onTabSelected = { index -> if (index != AppTab.MENU) onBack() },
+            )
+        },
+        containerColor = Color.White,
+    ) { innerPadding ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding),
+        ) {
+            if (state.isLoading) {
+                CircularProgressIndicator(
+                    modifier = Modifier.align(Alignment.Center),
+                    color = ColorSecondary,
+                )
+            } else {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    AvatarEditSection()
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                            .verticalScroll(rememberScrollState())
+                            .padding(horizontal = 16.dp),
+                    ) {
+                        EditField(
+                            label = "Имя",
+                            value = state.firstName,
+                            onValueChange = onFirstNameChange,
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        EditField(
+                            label = "Фамилия",
+                            value = state.lastName,
+                            onValueChange = onLastNameChange,
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        EditField(
+                            label = "Отчество",
+                            value = state.middleName,
+                            onValueChange = onMiddleNameChange,
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        EditField(
+                            label = "@Username",
+                            value = state.username,
+                            onValueChange = onUsernameChange,
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        EditDateField(
+                            label = "ДД.ММ.ГГГГ",
+                            value = state.birthDate,
+                            onValueChange = onBirthDateChange,
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        GenderField(
+                            gender = state.gender,
+                            onToggle = onGenderToggle,
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        EditField(
+                            label = "Рост (см)",
+                            value = state.height,
+                            onValueChange = onHeightChange,
+                            keyboardType = KeyboardType.Number,
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        EditField(
+                            label = "Вес (кг)",
+                            value = state.weight,
+                            onValueChange = onWeightChange,
+                            keyboardType = KeyboardType.Number,
+                        )
+
+                        if (state.errorMessage != null) {
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text(
+                                text = state.errorMessage,
+                                fontFamily = geologicaFontFamily,
+                                fontWeight = FontWeight.Light,
+                                fontSize = 13.sp,
+                                color = ColorDelete,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+                    DeleteAccountButton(
+                        enabled = !state.isDeleting && !state.isSaving,
+                        onClick = onDeleteAccountClick,
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                    )
+                }
+            }
+        }
+    }
+
+    if (state.showDeleteConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = onDismissDeleteDialog,
+            title = {
+                Text(
+                    text = "Удалить аккаунт?",
+                    fontFamily = geologicaFontFamily,
+                    fontWeight = FontWeight.Normal,
+                    color = ColorPrimary,
+                )
+            },
+            text = {
+                Text(
+                    text = "Это действие нельзя отменить. Все данные будут удалены.",
+                    fontFamily = geologicaFontFamily,
+                    fontWeight = FontWeight.Light,
+                    color = ColorPrimary,
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = onConfirmDelete,
+                    enabled = !state.isDeleting,
+                ) {
+                    Text(
+                        text = "Удалить",
+                        fontFamily = geologicaFontFamily,
+                        color = ColorDelete,
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = onDismissDeleteDialog) {
+                    Text(
+                        text = "Отмена",
+                        fontFamily = geologicaFontFamily,
+                        color = ColorPrimary,
+                    )
+                }
+            },
+        )
+    }
+}
+
+// ── Кнопка «Сохр.» ────────────────────────────────────────────────────────────
+
+@Composable
+private fun SaveButton(isSaving: Boolean, onClick: () -> Unit) {
+    val alpha = if (isSaving) 0.4f else 1f
+    Row(
+        modifier = Modifier
+            .padding(end = 16.dp)
+            .height(40.dp)
+            .width(85.dp)
+            .border(1.dp, ColorPrimary.copy(alpha = alpha), RoundedCornerShape(5.dp))
+            .clickable(enabled = !isSaving, onClick = onClick),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center,
+    ) {
+        Icon(
+            painter = painterResource(R.drawable.ic_save),
+            contentDescription = null,
+            tint = ColorPrimary.copy(alpha = alpha),
+            modifier = Modifier.size(20.dp),
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(
+            text = "Сохр.",
+            fontFamily = geologicaFontFamilyItalic,
+            fontStyle = FontStyle.Italic,
+            fontWeight = FontWeight.Normal,
+            fontSize = 14.sp,
+            color = ColorPrimary.copy(alpha = alpha),
+        )
+    }
+}
+
+// ── Аватар + «Загрузить фото» ─────────────────────────────────────────────────
+
+@Composable
+private fun AvatarEditSection() {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Icon(
+            painter = painterResource(R.drawable.ic_profile_2),
+            contentDescription = null,
+            modifier = Modifier.size(96.dp),
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = "Загрузить фото",
+            fontFamily = geologicaFontFamily,
+            fontStyle = FontStyle.Normal,
+            fontWeight = FontWeight.Normal,
+            fontSize = 22.sp,
+            color = ColorPrimary,
+        )
+    }
+}
+
+// ── Редактируемое поле ────────────────────────────────────────────────────────
+
+/**
+ * Поле ввода в стиле ProfileScreen: рамка + метка + текст.
+ * Метка отображается тёмным курсивом, значение — бирюзовым (или приглушённым если пусто).
+ */
+@Composable
+private fun EditField(
+    label: String,
+    value: String,
+    onValueChange: (String) -> Unit,
+    keyboardType: KeyboardType = KeyboardType.Text,
+) {
+    val valueColor = if (value.isNotEmpty()) ColorSecondary else ColorPrimary.copy(alpha = 0.3f)
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(40.dp)
+            .border(1.dp, ColorPrimary, RoundedCornerShape(5.dp)),
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        BasicTextField(
+            value = value,
+            onValueChange = onValueChange,
+            textStyle = TextStyle(
+                fontFamily = geologicaFontFamilyItalic,
+                fontStyle = FontStyle.Italic,
+                fontWeight = FontWeight.Normal,
+                fontSize = 14.sp,
+                color = valueColor,
+            ),
+            keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
+            cursorBrush = SolidColor(ColorSecondary),
+            singleLine = true,
+            decorationBox = { innerTextField ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "$label: ",
+                        fontFamily = geologicaFontFamilyItalic,
+                        fontStyle = FontStyle.Italic,
+                        fontWeight = FontWeight.Normal,
+                        fontSize = 14.sp,
+                        color = ColorPrimary,
+                    )
+                    innerTextField()
+                }
+            },
+        )
+    }
+}
+
+// ── Поле даты с маской ДД.ММ.ГГГГ ────────────────────────────────────────────
+
+@Composable
+private fun EditDateField(
+    label: String,
+    value: String,
+    onValueChange: (String) -> Unit,
+) {
+    val valueColor = if (value.isNotEmpty()) ColorSecondary else ColorPrimary.copy(alpha = 0.3f)
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(40.dp)
+            .border(1.dp, ColorPrimary, RoundedCornerShape(5.dp)),
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        BasicTextField(
+            value = value,
+            onValueChange = onValueChange,
+            textStyle = TextStyle(
+                fontFamily = geologicaFontFamilyItalic,
+                fontStyle = FontStyle.Italic,
+                fontWeight = FontWeight.Normal,
+                fontSize = 14.sp,
+                color = valueColor,
+            ),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            visualTransformation = DateVisualTransformation(),
+            cursorBrush = SolidColor(ColorSecondary),
+            singleLine = true,
+            decorationBox = { innerTextField ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "$label: ",
+                        fontFamily = geologicaFontFamilyItalic,
+                        fontStyle = FontStyle.Italic,
+                        fontWeight = FontWeight.Normal,
+                        fontSize = 14.sp,
+                        color = ColorPrimary,
+                    )
+                    innerTextField()
+                }
+            },
+        )
+    }
+}
+
+// ── Поле «Пол» — клик переключает Мужской/Женский ────────────────────────────
+
+@Composable
+private fun GenderField(gender: String, onToggle: () -> Unit) {
+    val genderText = if (gender == "male") "Мужской" else "Женский"
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(40.dp)
+            .border(1.dp, ColorPrimary, RoundedCornerShape(5.dp))
+            .clickable(onClick = onToggle),
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        Text(
+            modifier = Modifier.padding(start = 12.dp),
+            text = buildAnnotatedString {
+                withStyle(
+                    SpanStyle(
+                        fontFamily = geologicaFontFamilyItalic,
+                        fontStyle = FontStyle.Italic,
+                        fontWeight = FontWeight.Normal,
+                        fontSize = 14.sp,
+                        color = ColorPrimary,
+                    )
+                ) { append("Пол: ") }
+                withStyle(
+                    SpanStyle(
+                        fontFamily = geologicaFontFamilyItalic,
+                        fontStyle = FontStyle.Italic,
+                        fontWeight = FontWeight.Normal,
+                        fontSize = 14.sp,
+                        color = ColorSecondary,
+                    )
+                ) { append(genderText) }
+            },
+        )
+    }
+}
+
+// ── Кнопка «Удалить аккаунт» ──────────────────────────────────────────────────
+
+@Composable
+private fun DeleteAccountButton(enabled: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(50.dp)
+            .border(1.dp, ColorDelete.copy(alpha = if (enabled) 1f else 0.4f), RoundedCornerShape(10.dp))
+            .clickable(enabled = enabled, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = "Удалить аккаунт",
+            fontFamily = geologicaFontFamily,
+            fontWeight = FontWeight.Light,
+            fontSize = 18.sp,
+            color = ColorDelete.copy(alpha = if (enabled) 1f else 0.4f),
+        )
+    }
+}

@@ -10,6 +10,7 @@ import com.example.smarttracker.data.remote.dto.EmailVerificationDto
 import com.example.smarttracker.data.remote.dto.LoginRequestDto
 import com.example.smarttracker.data.remote.dto.NicknameCheckRequestDto
 import com.example.smarttracker.data.remote.dto.ResendEmailDto
+import com.example.smarttracker.data.remote.dto.UpdateProfileRequestDto
 import com.example.smarttracker.data.remote.dto.toDomain
 import com.example.smarttracker.data.remote.dto.toDto
 import com.example.smarttracker.domain.model.AuthResult
@@ -239,6 +240,37 @@ class AuthRepositoryImpl @Inject constructor(
         val user = api.getUserInfo().toDomain()
         userProfileCache.save(user)
         user
+    }
+
+    /**
+     * PATCH /user/edit — обновление профиля.
+     * Сразу сохраняет обновлённый профиль в кэш, чтобы ProfileScreen
+     * показал свежие данные без лишнего сетевого запроса.
+     */
+    override suspend fun updateProfile(
+        firstName: String?,
+        lastName: String?,
+        middleName: String?,
+        birthDate: String?,
+        weight: Float?,
+        height: Float?,
+        gender: String?,
+        nickname: String?,
+    ): Result<User> = runCatching {
+        val dto = UpdateProfileRequestDto(firstName, lastName, middleName, birthDate, weight, height, gender, nickname)
+        val user = api.updateProfile(dto).toDomain()
+        userProfileCache.save(user)
+        user
+    }
+
+    /**
+     * DELETE /user/delete — удаление аккаунта.
+     * Очищает токены и кэш профиля после успешного ответа сервера.
+     */
+    override suspend fun deleteAccount(): Result<Unit> = runCatching {
+        api.deleteAccount()
+        tokenStorage.clearAll()
+        userProfileCache.clear()
     }
 
     /**

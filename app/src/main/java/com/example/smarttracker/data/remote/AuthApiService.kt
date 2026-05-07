@@ -19,10 +19,13 @@ import com.example.smarttracker.data.remote.dto.ResetPasswordRequestDto
 import com.example.smarttracker.data.remote.dto.ResetPasswordResponseDto
 import com.example.smarttracker.data.remote.dto.RoleDto
 import com.example.smarttracker.data.remote.dto.RoleResponseDto
+import com.example.smarttracker.data.remote.dto.UpdateProfileRequestDto
 import com.example.smarttracker.data.remote.dto.UserInfoResponseDto
 import com.example.smarttracker.data.remote.dto.VerifyResetCodeResponseDto
 import retrofit2.http.Body
+import retrofit2.http.DELETE
 import retrofit2.http.GET
+import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.Query
 
@@ -156,4 +159,19 @@ interface AuthApiService {
      */
     @GET("user/")
     suspend fun getUserInfo(): UserInfoResponseDto
+
+    /**
+     * Редактирование профиля текущего пользователя.
+     * Все поля nullable — бэкенд обновляет только те, что не null.
+     * Возвращает обновлённый профиль.
+     */
+    @PATCH("user/edit")
+    suspend fun updateProfile(@Body request: UpdateProfileRequestDto): UserInfoResponseDto
+
+    /**
+     * Удаление аккаунта текущего пользователя.
+     * После успеха токены недействительны — нужно очистить хранилище.
+     */
+    @DELETE("user/delete")
+    suspend fun deleteAccount()
 }
