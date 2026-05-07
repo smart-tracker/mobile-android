@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.io.IOException
 import java.time.LocalDate
 import javax.inject.Inject
 
@@ -121,7 +122,7 @@ class ProfileEditViewModel @Inject constructor(
                 _events.emit(ProfileEditEvent.NavigateBack)
             }.onFailure { e ->
                 _state.update {
-                    it.copy(isSaving = false, errorMessage = e.message ?: "Ошибка сохранения")
+                    it.copy(isSaving = false, errorMessage = errorMessage(e, "Ошибка сохранения"))
                 }
             }
         }
@@ -137,10 +138,19 @@ class ProfileEditViewModel @Inject constructor(
                 .onSuccess { _events.emit(ProfileEditEvent.AccountDeleted) }
                 .onFailure { e ->
                     _state.update {
-                        it.copy(isDeleting = false, errorMessage = e.message ?: "Ошибка удаления аккаунта")
+                        it.copy(isDeleting = false, errorMessage = errorMessage(e, "Ошибка удаления аккаунта"))
                     }
                 }
         }
+    }
+
+    /**
+     * Переводит техническое исключение в читаемый текст для UI.
+     * [IOException] — нет сети; остальное — серверная или неизвестная ошибка.
+     */
+    private fun errorMessage(e: Throwable, fallback: String): String = when (e) {
+        is IOException -> "Нет соединения. Проверьте интернет и попробуйте снова."
+        else           -> e.message?.takeIf { it.isNotBlank() } ?: fallback
     }
 }
 
