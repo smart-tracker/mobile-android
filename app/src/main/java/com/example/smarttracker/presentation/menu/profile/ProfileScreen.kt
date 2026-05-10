@@ -144,14 +144,14 @@ fun ProfileScreen(
                             colorFieldEmpty = colorFieldEmpty,
                         )
                     }
+                    // ── Кнопка «Выйти» закреплена внизу всегда ───────────────────
+                    Spacer(modifier = Modifier.height(16.dp))
+                    LogoutButton(
+                        onClick = onLogout,
+                        modifier = Modifier.align(Alignment.BottomCenter),
+                    )
                 }
             }
-
-            // ── Кнопка «Выйти» закреплена внизу всегда ───────────────────
-            LogoutButton(
-                onClick = onLogout,
-                modifier = Modifier.align(Alignment.BottomCenter),
-            )
         }
     }
 }
