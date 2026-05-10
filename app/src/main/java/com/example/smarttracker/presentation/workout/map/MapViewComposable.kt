@@ -1,6 +1,12 @@
 package com.example.smarttracker.presentation.workout.map
 
 import android.annotation.SuppressLint
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffColorFilter
 import android.view.Gravity
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -14,6 +20,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.example.smarttracker.R
 import com.example.smarttracker.data.location.OfflineMapManager
 import com.example.smarttracker.domain.model.LocationPoint
+import com.example.smarttracker.presentation.theme.ColorPrimary
 import com.example.smarttracker.presentation.theme.ColorSecondary
 import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
@@ -26,8 +33,10 @@ import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapLibreMapOptions
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
+import org.maplibre.android.style.layers.CircleLayer
 import org.maplibre.android.style.layers.LineLayer
 import org.maplibre.android.style.layers.PropertyFactory
+import org.maplibre.android.style.layers.SymbolLayer
 import org.maplibre.android.style.sources.GeoJsonSource
 import org.maplibre.geojson.Feature
 import org.maplibre.geojson.FeatureCollection
@@ -85,6 +94,8 @@ import org.maplibre.geojson.Point
  *   `LatLngBounds` всех текущих `trackPoints` с padding. Применяется при открытии оверлея
  *   итогов, чтобы пользователь сразу видел весь маршрут целиком, а не последний кадр.
  *   Когда ключ становится null — fit не выполняется (нечего показывать или оверлей закрыт).
+ * @param scrubPoint GPS-точка, на которой должен стоять маркер scrubbing. null — маркер скрыт.
+ *   Маркер отрисовывается отдельным CircleLayer поверх трека; камера при scrub не двигается.
  */
 @Composable
 fun MapViewComposable(
@@ -98,6 +109,12 @@ fun MapViewComposable(
     onMapTilesFailed: () -> Unit,
     enableLocationDot: Boolean = true,
     fitToTrackBoundsKey: Any? = null,
+    scrubPoint: com.example.smarttracker.domain.model.LocationPoint? = null,
+    // Drawable-ресурс иконки активности для маркера старта; null — маркер не показывается.
+    // Тинтится цветом ColorPrimary (как в SummaryOverlay).
+    startIconRes: Int? = null,
+    // true → значок attribution переезжает в правый верхний угол (полноэкранный режим).
+    attributionTopEnd: Boolean = false,
 ) {
     // Когда тайлы недоступны — показываем текстовый fallback, карту не создаём
     if (mapTilesFailed) {
@@ -128,6 +145,9 @@ fun MapViewComposable(
             // Любое != сравнение с null корректно: при первом запуске оверлея новый key
             // (snapshot WorkoutSummaryUiState) != null → fit срабатывает один раз.
             var lastFittedKey: Any? = null
+            // Ресурс, который уже загружен в стиль как "start-icon". Если startIconRes
+            // изменится — изображение перезагружается.
+            var lastLoadedStartIconRes: Int? = null
         }
     }
 
@@ -138,6 +158,7 @@ fun MapViewComposable(
     val latestIsGpsActive    = rememberUpdatedState(isGpsActive)
     val latestWorkoutStarted = rememberUpdatedState(currentLocation != null)
     val latestLastKnown      = rememberUpdatedState(lastKnownLocation)
+    val latestStartIconRes   = rememberUpdatedState(startIconRes)
 
     val lifecycleOwner = LocalLifecycleOwner.current
 
@@ -239,18 +260,17 @@ fun MapViewComposable(
                         onMapTilesFailed()
                     }
 
-                    // ── Tweak 1: логотип и attribution — верхний левый угол ───────────
-                    // MapLibre требует attribution по лицензии OpenStreetMap; мы лишь
-                    // перемещаем элементы, чтобы они не перекрывали кнопки внизу.
+                    // ── UI-элементы карты ──────────────────────────────────────────────
+                    // Логотип MapLibre: BSD-лицензия не обязывает его показывать — скрываем.
+                    // Attribution (© OpenStreetMap contributors): ODbL требует сохранить —
+                    // перемещаем в верхний левый угол, чтобы не перекрывал кнопки внизу.
                     val density = context.resources.displayMetrics.density
-                    val margin8px  = (8  * density).toInt()
-                    val margin92px = (92 * density).toInt()
+                    val margin8px = (8 * density).toInt()
 
                     map.uiSettings.apply {
-                        logoGravity = Gravity.TOP or Gravity.START
-                        setLogoMargins(margin8px, margin8px, 0, 0)
+                        isLogoEnabled = false
                         attributionGravity = Gravity.TOP or Gravity.START
-                        setAttributionMargins(margin92px, margin8px, 0, 0)
+                        setAttributionMargins(margin8px, margin8px, 0, 0)
                     }
 
                     map.setStyle(OfflineMapManager.STYLE_URL) { style ->
@@ -271,6 +291,58 @@ fun MapViewComposable(
                                 PropertyFactory.lineWidth(4f),
                                 PropertyFactory.lineCap("round"),
                                 PropertyFactory.lineJoin("round"),
+                            )
+                        )
+
+                        // ── Маркер scrubbing: белый круг с тёмной обводкой ────────
+                        // Показывается только когда scrubPoint != null (fullscreen + scrub).
+                        // Визуально совпадает с бегунком TrainingProgressBar.
+                        style.addSource(
+                            GeoJsonSource("scrub-source",
+                                FeatureCollection.fromFeatures(emptyList()))
+                        )
+                        style.addLayer(
+                            CircleLayer("scrub-layer", "scrub-source").withProperties(
+                                PropertyFactory.circleRadius(10f),
+                                PropertyFactory.circleColor(android.graphics.Color.WHITE),
+                                PropertyFactory.circleStrokeWidth(2.5f),
+                                PropertyFactory.circleStrokeColor(
+                                    android.graphics.Color.rgb(
+                                        (ColorPrimary.red   * 255).toInt(),
+                                        (ColorPrimary.green * 255).toInt(),
+                                        (ColorPrimary.blue  * 255).toInt(),
+                                    )
+                                ),
+                            )
+                        )
+
+                        // ── Маркеры старта и финиша трека ────────────────────────
+                        // Источники пустые при старте — данные приходят из update-блока.
+                        // Изображения загружаются лениво в update (startIconRes может
+                        // прийти позже чем setStyle — summary ещё не готов при первом запуске).
+                        style.addSource(
+                            GeoJsonSource("start-source",
+                                FeatureCollection.fromFeatures(emptyList()))
+                        )
+                        style.addSource(
+                            GeoJsonSource("finish-source",
+                                FeatureCollection.fromFeatures(emptyList()))
+                        )
+                        style.addLayer(
+                            SymbolLayer("start-layer", "start-source").withProperties(
+                                PropertyFactory.iconImage("start-icon"),
+                                PropertyFactory.iconAllowOverlap(true),
+                                PropertyFactory.iconIgnorePlacement(true),
+                                PropertyFactory.iconAnchor("center"),
+                            )
+                        )
+                        style.addLayer(
+                            SymbolLayer("finish-layer", "finish-source").withProperties(
+                                PropertyFactory.iconImage("finish-icon"),
+                                PropertyFactory.iconAllowOverlap(true),
+                                PropertyFactory.iconIgnorePlacement(true),
+                                // "center": флаг оборачивается в круг — центр круга на точке
+                                PropertyFactory.iconAnchor("center"),
                             )
                         )
 
@@ -336,10 +408,34 @@ fun MapViewComposable(
                 state.mapView = mapView
             }
         },
-        update = { _ ->
+        update = { mapView ->
             // getMapAsync выполняет колбэк сразу если карта готова, иначе ставит в очередь.
             state.mapView?.getMapAsync { map ->
                 val style = map.style ?: return@getMapAsync
+
+                // ── Attribution: позиция зависит от режима экрана ─────────────────
+                // В fullscreen-режиме карта занимает весь экран — перемещаем в правый
+                // верхний угол, чтобы не перекрывать StatsOverlayCard слева.
+                val attrDensity = mapView.resources.displayMetrics.density
+                val attrMargin  = (8 * attrDensity).toInt()
+                if (attributionTopEnd) {
+                    map.uiSettings.attributionGravity = Gravity.TOP or Gravity.END
+                    map.uiSettings.setAttributionMargins(0, attrMargin, attrMargin, 0)
+                } else {
+                    map.uiSettings.attributionGravity = Gravity.TOP or Gravity.START
+                    map.uiSettings.setAttributionMargins(attrMargin, attrMargin, 0, 0)
+                }
+
+                // ── Синяя GPS-точка: скрываем в режиме просмотра итогов ───────────
+                // В summary-mode (fitToTrackBoundsKey != null) LocationComponent
+                // уже активирован (запускается один раз в setStyle), но отображение
+                // точки излишне — пользователь смотрит завершённый трек, а не
+                // текущую позицию.
+                if (enableLocationDot) {
+                    runCatching {
+                        map.locationComponent.isLocationComponentEnabled = (fitToTrackBoundsKey == null)
+                    }
+                }
 
                 // ── Обновляем трек-линию ───────────────────────────────────────────
                 // «Голова» трека всегда совпадает с визуальной позицией маркера:
@@ -356,7 +452,9 @@ fun MapViewComposable(
                 // На статичных экранах LocationComponent не активирован — голову трека
                 // не добавляем, иначе обращение к locationComponent.* падает с
                 // IllegalStateException ("not activated").
-                val liveHead: Point? = if (!enableLocationDot) {
+                // В режиме оверлея итогов (fitToTrackBoundsKey != null) голову не добавляем:
+                // трек заморожен, а liveHead не входит в bounds → линия выходит за край camera.
+                val liveHead: Point? = if (!enableLocationDot || fitToTrackBoundsKey != null) {
                     null
                 } else if (map.locationComponent.cameraMode == CameraMode.TRACKING) {
                     map.cameraPosition.target
@@ -374,6 +472,68 @@ fun MapViewComposable(
                     FeatureCollection.fromFeatures(emptyList())
                 }
                 style.getSourceAs<GeoJsonSource>("track-source")?.setGeoJson(trackFc)
+
+                // ── Scrub-маркер: точка на треке при перемотке ────────────────────
+                val scrubFc = if (scrubPoint != null) {
+                    FeatureCollection.fromFeatures(
+                        listOf(
+                            Feature.fromGeometry(
+                                Point.fromLngLat(scrubPoint.longitude, scrubPoint.latitude)
+                            )
+                        )
+                    )
+                } else {
+                    FeatureCollection.fromFeatures(emptyList())
+                }
+                style.getSourceAs<GeoJsonSource>("scrub-source")?.setGeoJson(scrubFc)
+
+                // ── Старт/финиш маркеры: только в режиме просмотра итогов ────────
+                // fitToTrackBoundsKey != null означает «оверлей summary открыт».
+                val primaryArgb = android.graphics.Color.rgb(
+                    (ColorPrimary.red   * 255).toInt(),
+                    (ColorPrimary.green * 255).toInt(),
+                    (ColorPrimary.blue  * 255).toInt(),
+                )
+                val density = mapView.resources.displayMetrics.density
+                if (fitToTrackBoundsKey != null && trackPoints.size >= 2) {
+                    // start-icon: иконка активности в белом круге, тинт ColorPrimary.
+                    // Перезагружаем только если ресурс изменился (смена типа активности).
+                    val iconRes = latestStartIconRes.value
+                    if (iconRes != null && iconRes != state.lastLoadedStartIconRes) {
+                        state.lastLoadedStartIconRes = iconRes
+                        BitmapFactory.decodeResource(mapView.resources, iconRes)?.let { raw ->
+                            style.addImage("start-icon",
+                                makeMarkerBitmap(raw, density, primaryArgb, tintIcon = true))
+                            raw.recycle()
+                        }
+                    }
+                    // finish-icon: флаг финиша в белом круге, без тинта (собственные цвета).
+                    if (style.getImage("finish-icon") == null) {
+                        BitmapFactory.decodeResource(mapView.resources, R.drawable.ic_finish_flag)
+                            ?.let { raw ->
+                                style.addImage("finish-icon",
+                                    makeMarkerBitmap(raw, density, primaryArgb, tintIcon = false))
+                                raw.recycle()
+                            }
+                    }
+                    val startPt = trackPoints.first()
+                    val endPt   = trackPoints.last()
+                    style.getSourceAs<GeoJsonSource>("start-source")?.setGeoJson(
+                        FeatureCollection.fromFeatures(listOf(
+                            Feature.fromGeometry(Point.fromLngLat(startPt.longitude, startPt.latitude))
+                        ))
+                    )
+                    style.getSourceAs<GeoJsonSource>("finish-source")?.setGeoJson(
+                        FeatureCollection.fromFeatures(listOf(
+                            Feature.fromGeometry(Point.fromLngLat(endPt.longitude, endPt.latitude))
+                        ))
+                    )
+                } else {
+                    // Вне режима summary — скрываем маркеры
+                    val empty = FeatureCollection.fromFeatures(emptyList())
+                    style.getSourceAs<GeoJsonSource>("start-source")?.setGeoJson(empty)
+                    style.getSourceAs<GeoJsonSource>("finish-source")?.setGeoJson(empty)
+                }
 
                 // ── Управление камерой ─────────────────────────────────────────────
                 val workoutStarted = currentLocation != null
@@ -461,15 +621,28 @@ fun MapViewComposable(
                         builder.include(LatLng(p.latitude, p.longitude))
                     }
                     val bounds = builder.build()
-                    // padding в пикселях; 80px (~26dp на mdpi/xhdpi) даёт отступ
-                    // от краёв экрана так чтобы трек не упирался в рамку.
+                    // Останавливаем TRACKING ДО post {} — чтобы LocationComponent не двигал
+                    // камеру за GPS пока ждём следующего frame.
                     if (enableLocationDot) {
                         map.locationComponent.cameraMode = CameraMode.NONE
                     }
-                    map.animateCamera(
-                        CameraUpdateFactory.newLatLngBounds(bounds, 80),
-                        800,
-                    )
+                    // 40dp в пикселях — корректный density-independent отступ.
+                    // Прежнее значение 80px = ~27dp на xxhdpi (3×), что почти незаметно.
+                    val paddingPx = (40 * mapView.resources.displayMetrics.density).toInt()
+                    // post {} гарантирует, что animateCamera вызывается после завершения
+                    // layout-прохода и MapView имеет финальные размеры — newLatLngBounds
+                    // использует width/height для расчёта zoom.
+                    // cancelTransitions() внутри post {}: отменяет любую анимацию камеры,
+                    // которая могла остаться от TRACKING-режима.
+                    mapView.post {
+                        if (map.style != null) {
+                            map.cancelTransitions()
+                            map.animateCamera(
+                                CameraUpdateFactory.newLatLngBounds(bounds, paddingPx),
+                                800,
+                            )
+                        }
+                    }
                     // Дальше cameraMode не трогаем — TRACKING после оверлея вернётся
                     // когда пользователь закроет оверлей и stat сбросится.
                     return@getMapAsync
@@ -481,10 +654,16 @@ fun MapViewComposable(
                 // NONE: пауза во время тренировки — пользователь листает карту вручную.
                 //       Также NONE применяется когда виден оверлей итогов (fitKey != null) —
                 //       не возвращаем TRACKING пока пользователь смотрит маршрут.
-                map.locationComponent.cameraMode = when {
-                    fitKey != null                   -> CameraMode.NONE
-                    !isTracking && workoutStarted    -> CameraMode.NONE
-                    else                             -> CameraMode.TRACKING
+                // runCatching: в summary-mode LocationComponent отключён (isEnabled=false),
+                // обращение к cameraMode на disabled компоненте может выбросить ISE.
+                if (enableLocationDot) {
+                    runCatching {
+                        map.locationComponent.cameraMode = when {
+                            fitKey != null                -> CameraMode.NONE
+                            !isTracking && workoutStarted -> CameraMode.NONE
+                            else                          -> CameraMode.TRACKING
+                        }
+                    }
                 }
             }
         },
@@ -534,4 +713,56 @@ private fun activateLocationComponent(
         cameraMode = CameraMode.TRACKING
         renderMode = RenderMode.NORMAL
     }
+}
+
+/**
+ * Создаёт bitmap маркера: белый круг с обводкой [primaryArgb] и иконкой внутри.
+ *
+ * Размер итогового маркера ~32dp — чуть крупнее scrub-маркера (circleRadius 10dp).
+ * Иконка занимает ~65% диаметра круга.
+ *
+ * @param icon       исходный PNG-bitmap иконки (не recycled)
+ * @param density    DisplayMetrics.density для перевода dp → px
+ * @param primaryArgb цвет обводки и опционального тинта иконки
+ * @param tintIcon   true — иконка перекрашивается в [primaryArgb] (активность);
+ *                   false — иконка сохраняет оригинальные цвета (флаг финиша)
+ */
+private fun makeMarkerBitmap(
+    icon: Bitmap,
+    density: Float,
+    primaryArgb: Int,
+    tintIcon: Boolean,
+): Bitmap {
+    val totalPx  = (32 * density).toInt()
+    val iconPx   = (20 * density).toInt()
+    val strokePx = (1.5f * density)
+    val cx = totalPx / 2f
+    val r  = cx - strokePx / 2f
+
+    val result = Bitmap.createBitmap(totalPx, totalPx, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(result)
+
+    // Белая заливка
+    canvas.drawCircle(cx, cx, r + strokePx / 2f, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.WHITE
+        style = Paint.Style.FILL
+    })
+    // Обводка ColorPrimary
+    canvas.drawCircle(cx, cx, r, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = primaryArgb
+        style = Paint.Style.STROKE
+        strokeWidth = strokePx
+    })
+    // Иконка по центру
+    val scaled = Bitmap.createScaledBitmap(icon, iconPx, iconPx, true)
+    val iconPaint = if (tintIcon) {
+        Paint().apply { colorFilter = PorterDuffColorFilter(primaryArgb, PorterDuff.Mode.SRC_IN) }
+    } else {
+        Paint()
+    }
+    val offset = (totalPx - iconPx) / 2f
+    canvas.drawBitmap(scaled, offset, offset, iconPaint)
+    scaled.recycle()
+
+    return result
 }
