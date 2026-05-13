@@ -24,7 +24,7 @@ import javax.inject.Inject
  * первый вызов WorkManager.getInstance(context) выполнит ленивую инициализацию
  * с нашей конфигурацией.
  *
- * [SingletonImageLoader.Factory] настраивает Coil использовать тот же [OkHttpClient],
+ * [ImageLoaderFactory] настраивает Coil использовать тот же [OkHttpClient],
  * что и Retrofit — с auth-интерцептором (Bearer-токен). Это нужно для загрузки
  * фото профиля, которое может требовать авторизацию. [newImageLoader] вызывается
  * лениво при первом обращении к Coil — после завершения Hilt-инъекции в [onCreate].

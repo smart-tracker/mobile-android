@@ -63,6 +63,9 @@ class UserProfileCacheImpl @Inject constructor(
 
                 if (user.height     != null) putString(KEY_HEIGHT, user.height.toString())
                 else                         remove(KEY_HEIGHT)
+
+                if (user.photoUrl   != null) putString(KEY_PHOTO_URL, user.photoUrl)
+                else                         remove(KEY_PHOTO_URL)
             }
             .apply()
     }
@@ -81,8 +84,9 @@ class UserProfileCacheImpl @Inject constructor(
                 email      = prefs.getString(KEY_EMAIL,       null) ?: "",
                 birthDate  = LocalDate.parse(prefs.getString(KEY_BIRTH_DATE, null) ?: return null),
                 gender     = Gender.valueOf(prefs.getString(KEY_GENDER, null) ?: return null),
-                weight     = prefs.getString(KEY_WEIGHT, null)?.toFloatOrNull(),
-                height     = prefs.getString(KEY_HEIGHT, null)?.toFloatOrNull(),
+                weight     = prefs.getString(KEY_WEIGHT,    null)?.toFloatOrNull(),
+                height     = prefs.getString(KEY_HEIGHT,    null)?.toFloatOrNull(),
+                photoUrl   = prefs.getString(KEY_PHOTO_URL, null),
             )
         } catch (e: Exception) {
             // При любой ошибке парсинга — считаем кэш невалидным
@@ -108,5 +112,6 @@ class UserProfileCacheImpl @Inject constructor(
         private const val KEY_GENDER      = "gender"
         private const val KEY_WEIGHT      = "weight"
         private const val KEY_HEIGHT      = "height"
+        private const val KEY_PHOTO_URL   = "photo_url"
     }
 }
