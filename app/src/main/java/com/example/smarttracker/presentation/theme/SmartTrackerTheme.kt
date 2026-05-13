@@ -27,17 +27,18 @@ val geologicaFontFamilyItalic = FontFamily(
 val ColorPrimary = androidx.compose.ui.graphics.Color(0xFF0A1928)  // Dark navy
 val ColorSecondary = androidx.compose.ui.graphics.Color(0xFF4DACA7) // Mint/teal accent
 val ColorPlaceholder = androidx.compose.ui.graphics.Color(0xFF525760)
-val ColorAccent = androidx.compose.ui.graphics.Color(0xFF00BCD4)
 val ColorLink = androidx.compose.ui.graphics.Color(0xFF0066CC)
-val ColorDivider = androidx.compose.ui.graphics.Color(0xFFE0E0E0)
 val ColorBackground = androidx.compose.ui.graphics.Color.White
 val ColorWhite = androidx.compose.ui.graphics.Color.White
+
+/** Красный для деструктивных действий (удалить фото, удалить аккаунт) и ошибок GPS. */
+val ColorDestructive = androidx.compose.ui.graphics.Color(0xFFFC3F1D)
 
 // ── Workout-specific colors ───────────────────────────────────────────────────
 /** Зелёный фон GPS-бейджа когда сигнал получен. */
 val ColorGpsActive = androidx.compose.ui.graphics.Color(0xFF4CAF50)
 /** Красный фон GPS-бейджа когда сигнал потерян / разрешения нет. */
-val ColorGpsInactive = androidx.compose.ui.graphics.Color(0xFFFC3F1D)
+val ColorGpsInactive = ColorDestructive
 /** Серый фон/обводка полей поиска и других «второстепенных» полей ввода. */
 val ColorFieldFill = androidx.compose.ui.graphics.Color(0xFFD9D9D9)
 

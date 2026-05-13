@@ -244,6 +244,8 @@ fun AppNavGraph(
                 onGenderToggle = viewModel::onGenderToggle,
                 onHeightChange = viewModel::onHeightChange,
                 onWeightChange = viewModel::onWeightChange,
+                onPhotoSelected = viewModel::onPhotoSelected,
+                onDeletePhoto = viewModel::onDeletePhoto,
                 onSave = viewModel::onSave,
                 onBack = { navController.popBackStack() },
                 onDeleteAccountClick = viewModel::onDeleteAccountClick,

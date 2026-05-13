@@ -127,9 +127,7 @@ fun StyledTextField(
                     focusedTextColor = ColorPrimary,
                     unfocusedTextColor = ColorPrimary,
                 ),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(UiTokens.ButtonHeight),
+                modifier = Modifier.fillMaxWidth(),
             )
         }
     }

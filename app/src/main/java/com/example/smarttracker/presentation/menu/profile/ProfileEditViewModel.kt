@@ -1,10 +1,15 @@
 package com.example.smarttracker.presentation.menu.profile
 
+import android.content.Context
+import android.net.Uri
+import android.provider.OpenableColumns
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.smarttracker.domain.model.Gender
 import com.example.smarttracker.domain.repository.AuthRepository
+import com.example.smarttracker.utils.ApiErrorHandler
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -13,6 +18,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.io.File
 import java.io.IOException
 import java.time.LocalDate
 import javax.inject.Inject
@@ -27,7 +33,10 @@ import javax.inject.Inject
 @HiltViewModel
 class ProfileEditViewModel @Inject constructor(
     private val authRepository: AuthRepository,
+    @ApplicationContext private val context: Context,
 ) : ViewModel() {
+
+    private val maxPhotoBytes = 5 * 1024 * 1024L  // 5 МБ
 
     private val _state = MutableStateFlow(ProfileEditUiState())
     val state: StateFlow<ProfileEditUiState> = _state.asStateFlow()
@@ -53,6 +62,7 @@ class ProfileEditViewModel @Inject constructor(
                     val m = user.birthDate.monthValue.toString().padStart(2, '0')
                     val y = user.birthDate.year.toString()
                     _state.update {
+                        val isPhotoChanged = user.photoUrl != it.photoUrl
                         it.copy(
                             isLoading  = false,
                             firstName  = user.firstName,
@@ -64,8 +74,10 @@ class ProfileEditViewModel @Inject constructor(
                                 Gender.MALE   -> "male"
                                 Gender.FEMALE -> "female"
                             },
-                            height = user.height?.let { h -> "%.0f".format(h) } ?: "",
-                            weight = user.weight?.let { w -> "%.0f".format(w) } ?: "",
+                            height    = user.height?.let { h -> "%.0f".format(h) } ?: "",
+                            weight    = user.weight?.let { w -> "%.0f".format(w) } ?: "",
+                            photoUrl  = user.photoUrl,
+                            photoKey  = if (isPhotoChanged) it.photoKey + 1 else it.photoKey,
                         )
                     }
                 }
@@ -125,6 +137,92 @@ class ProfileEditViewModel @Inject constructor(
                     it.copy(isSaving = false, errorMessage = errorMessage(e, "Ошибка сохранения"))
                 }
             }
+        }
+    }
+
+    fun onPhotoSelected(uri: Uri) {
+        viewModelScope.launch {
+            val extension = when (context.contentResolver.getType(uri)?.lowercase()) {
+                "image/png" -> ".png"
+                "image/jpeg" -> ".jpg"
+                else -> null
+            }
+            if (extension == null) {
+                _state.update { it.copy(errorMessage = "Поддерживаются только JPG и PNG") }
+                return@launch
+            }
+
+            // Проверяем размер до копирования файла
+            val size = context.contentResolver
+                .query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)
+                ?.use { c ->
+                    if (c.moveToFirst() && !c.isNull(0)) c.getLong(0) else null
+                }
+            if (size != null && size > maxPhotoBytes) {
+                _state.update { it.copy(errorMessage = "Фото не должно превышать 5 МБ") }
+                return@launch
+            }
+
+            _state.update { it.copy(isUploadingPhoto = true, errorMessage = null) }
+            val file = resolveUriToTempFile(uri, extension)
+            if (file == null) {
+                _state.update { it.copy(isUploadingPhoto = false, errorMessage = "Не удалось прочитать файл") }
+                return@launch
+            }
+
+            if ((size == null || size <= 0L) && file.length() > maxPhotoBytes) {
+                file.delete()
+                _state.update { it.copy(isUploadingPhoto = false, errorMessage = "Фото не должно превышать 5 МБ") }
+                return@launch
+            }
+
+            try {
+                authRepository.uploadPhoto(file)
+                    .onSuccess {
+                        // uploadPhoto обновил кэш — берём новый photoUrl из кэша
+                        val newPhotoUrl = authRepository.getUserInfo().getOrNull()?.photoUrl
+                        _state.update { it.copy(isUploadingPhoto = false, photoUrl = newPhotoUrl, photoKey = it.photoKey + 1) }
+                    }
+                    .onFailure { e ->
+                        _state.update { it.copy(isUploadingPhoto = false, errorMessage = ApiErrorHandler.getErrorMessage(e)) }
+                    }
+            } finally {
+                file.delete()
+            }
+        }
+    }
+
+    private fun resolveUriToTempFile(uri: Uri, extension: String): File? {
+        return runCatching {
+            val temp = File.createTempFile("profile_photo_", extension, context.cacheDir)
+            val input = context.contentResolver.openInputStream(uri)
+                ?: throw IOException("Unable to open input stream for uri: $uri")
+
+            input.use { inputStream ->
+                temp.outputStream().use { outputStream ->
+                    inputStream.copyTo(outputStream)
+                }
+            }
+
+            if (uri.authority == "${context.packageName}.provider") {
+                runCatching { context.contentResolver.delete(uri, null, null) }
+            }
+
+            temp
+        }.getOrNull()
+    }
+
+    fun onDeletePhoto() {
+        viewModelScope.launch {
+            _state.update { it.copy(isUploadingPhoto = true, errorMessage = null) }
+            authRepository.deletePhoto()
+                .onSuccess {
+                    val newPhotoUrl = authRepository.getUserInfo().getOrNull()?.photoUrl
+                    _state.update { it.copy(isUploadingPhoto = false, photoUrl = newPhotoUrl, photoKey = it.photoKey + 1) }
+                }
+                .onFailure { e ->
+                    _state.update { it.copy(isUploadingPhoto = false, errorMessage = ApiErrorHandler.getErrorMessage(e)) }
+                }
         }
     }
 

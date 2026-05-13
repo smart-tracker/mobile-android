@@ -2,6 +2,10 @@ package com.example.smarttracker.data.repository
 
 import android.util.Log
 import com.example.smarttracker.data.cache.RoleGoalCache
+import java.io.File
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MultipartBody
+import okhttp3.RequestBody.Companion.asRequestBody
 import com.example.smarttracker.data.local.RoleConfigStorage
 import com.example.smarttracker.data.local.TokenStorage
 import com.example.smarttracker.data.local.UserProfileCache
@@ -261,6 +265,22 @@ class AuthRepositoryImpl @Inject constructor(
         val user = api.updateProfile(dto).toDomain()
         userProfileCache.save(user)
         user
+    }
+
+    override suspend fun uploadPhoto(file: File): Result<Unit> = runCatching {
+        val mimeType = if (file.extension.equals("png", ignoreCase = true)) "image/png" else "image/jpeg"
+        val body = file.asRequestBody(mimeType.toMediaType())
+        val part = MultipartBody.Part.createFormData("file", file.name, body)
+        api.uploadPhoto(part)
+        // Ответ пустой — получаем новый image_path через GET /user/
+        val updated = api.getUserInfo().toDomain()
+        userProfileCache.save(updated)
+    }
+
+    override suspend fun deletePhoto(): Result<Unit> = runCatching {
+        api.deletePhoto()
+        val updated = api.getUserInfo().toDomain()
+        userProfileCache.save(updated)
     }
 
     /**

@@ -1,6 +1,7 @@
 package com.example.smarttracker.domain.repository
 
 import com.example.smarttracker.domain.model.AuthResult
+import java.io.File
 import com.example.smarttracker.domain.model.GoalResponse
 import com.example.smarttracker.domain.model.NicknameCheckResponse
 import com.example.smarttracker.domain.model.RegisterRequest
@@ -115,6 +116,18 @@ interface AuthRepository {
         gender: String?,
         nickname: String?,
     ): Result<User>
+
+    /**
+     * POST /user/photo — загрузка фото профиля (multipart/form-data, поле "file").
+     * jpg/png, до 5 МБ. После успеха обновляет кэш профиля через GET /user/.
+     */
+    suspend fun uploadPhoto(file: File): Result<Unit>
+
+    /**
+     * DELETE /user/photo — удаление фото профиля.
+     * Бэкенд автоматически возвращает плейсхолдер. После успеха обновляет кэш.
+     */
+    suspend fun deletePhoto(): Result<Unit>
 
     /**
      * DELETE /user/delete — удаление аккаунта.

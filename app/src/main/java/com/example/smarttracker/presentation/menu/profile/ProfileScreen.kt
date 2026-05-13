@@ -1,9 +1,11 @@
 package com.example.smarttracker.presentation.menu.profile
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -24,9 +26,14 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -36,11 +43,19 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.example.smarttracker.R
 import com.example.smarttracker.presentation.common.AppTab
+import com.example.smarttracker.presentation.common.ProfileAvatarImage
+import com.example.smarttracker.presentation.common.ProfileFieldBox
 import com.example.smarttracker.presentation.common.SmartTrackerBottomBar
+import com.example.smarttracker.presentation.common.UiTokens
 import com.example.smarttracker.presentation.theme.ColorPrimary
 import com.example.smarttracker.presentation.theme.ColorSecondary
+import com.example.smarttracker.presentation.theme.ProfileTextStyles
 import com.example.smarttracker.presentation.theme.geologicaFontFamily
 import com.example.smarttracker.presentation.theme.geologicaFontFamilyItalic
 
@@ -59,10 +74,7 @@ fun ProfileScreen(
     onLogout: () -> Unit,
     onEditProfile: () -> Unit = {},
 ) {
-    // Цвет заполненных полей: из Figma #2AC3B8 (чуть отличается от ColorSecondary)
-    val colorFieldValue = ColorSecondary
-    // Цвет незаполненных полей: ColorPrimary 30% прозрачности
-    val colorFieldEmpty = ColorPrimary.copy(alpha = 0.3f)
+    var showPhotoViewer by remember { mutableStateOf(false) }
 
     Scaffold(
         bottomBar = {
@@ -136,13 +148,15 @@ fun ProfileScreen(
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
                         Spacer(modifier = Modifier.height(8.dp))
-                        AvatarSection(firstName = state.firstName, lastTrainingDate = state.lastTrainingDate)
-                        Spacer(modifier = Modifier.height(24.dp))
-                        ProfileFields(
-                            state = state,
-                            colorFieldValue = colorFieldValue,
-                            colorFieldEmpty = colorFieldEmpty,
+                        AvatarSection(
+                            firstName = state.firstName,
+                            photoUrl = state.photoUrl,
+                            photoKey = state.photoKey,
+                            lastTrainingDate = state.lastTrainingDate,
+                            onAvatarClick = { showPhotoViewer = true },
                         )
+                        Spacer(modifier = Modifier.height(24.dp))
+                        ProfileFields(state = state)
                     }
                 }
             }
@@ -154,6 +168,13 @@ fun ProfileScreen(
                 modifier = Modifier.align(Alignment.BottomCenter),
             )
         }
+    }
+
+    if (showPhotoViewer) {
+        PhotoViewerDialog(
+            photoUrl = state.photoUrl,
+            onDismiss = { showPhotoViewer = false },
+        )
     }
 }
 
@@ -193,15 +214,23 @@ private fun EditButton(onClick: () -> Unit) {
 
 /**
  * @param firstName Имя пользователя — отображается крупным текстом под аватаром.
+ * @param photoUrl URL фото профиля (из image_path). Всегда не-null после логина.
  */
 @Composable
-private fun AvatarSection(firstName: String, lastTrainingDate: String?) {
+private fun AvatarSection(
+    firstName: String,
+    photoUrl: String?,
+    photoKey: Long,
+    lastTrainingDate: String?,
+    onAvatarClick: () -> Unit,
+) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        // Тёмный круг с иконкой профиля — имитация дефолтного аватара
-        Icon(
-            painter = painterResource(R.drawable.ic_profile_2),
-            contentDescription = null,
-            modifier = Modifier.size(94.dp),
+        ProfileAvatarImage(
+            photoUrl = photoUrl,
+            photoKey = photoKey,
+            modifier = Modifier
+                .size(96.dp)
+                .clickable(onClick = onAvatarClick),
         )
         Spacer(modifier = Modifier.height(12.dp))
         Text(
@@ -235,89 +264,78 @@ private fun AvatarSection(firstName: String, lastTrainingDate: String?) {
  * 3. Физические параметры (рост, вес)
  */
 @Composable
-private fun ProfileFields(
-    state: ProfileUiState,
-    colorFieldValue: Color,
-    colorFieldEmpty: Color,
-) {
+private fun ProfileFields(state: ProfileUiState) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp),
     ) {
-        // Группа 1: необязательные личные данные
-        ProfileField("Фамилия",          value = state.lastName,   colorValue = colorFieldValue, colorEmpty = colorFieldEmpty)
+        ProfileField("Фамилия",          value = state.lastName)
         Spacer(modifier = Modifier.height(8.dp))
-        ProfileField("Отчество",         value = state.middleName, colorValue = colorFieldValue, colorEmpty = colorFieldEmpty)
+        ProfileField("Отчество",         value = state.middleName)
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Группа 2: данные из регистрации (всегда заполнены)
-        ProfileField("Имя пользователя", value = state.username,   colorValue = colorFieldValue, colorEmpty = colorFieldEmpty)
+        ProfileField("Имя пользователя", value = state.username)
         Spacer(modifier = Modifier.height(8.dp))
-        ProfileField("Дата рождения",    value = state.birthDate,  colorValue = colorFieldValue, colorEmpty = colorFieldEmpty)
+        ProfileField("Дата рождения",    value = state.birthDate)
         Spacer(modifier = Modifier.height(8.dp))
-        ProfileField("Пол",              value = state.gender,     colorValue = colorFieldValue, colorEmpty = colorFieldEmpty)
+        ProfileField("Пол",              value = state.gender)
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Группа 3: физические параметры (необязательные)
-        ProfileField("Рост (см)",        value = state.height,     colorValue = colorFieldValue, colorEmpty = colorFieldEmpty)
+        ProfileField("Рост (см)",        value = state.height)
         Spacer(modifier = Modifier.height(8.dp))
-        ProfileField("Вес (кг)",         value = state.weight,     colorValue = colorFieldValue, colorEmpty = colorFieldEmpty)
+        ProfileField("Вес (кг)",         value = state.weight)
     }
 }
 
-/**
- * Одна строка профиля в рамке.
- *
- * @param label  Название поля (курсив, тёмный цвет)
- * @param value  Значение поля: если null — показывается «Не указано» приглушённым цветом;
- *               если строка — отображается бирюзовым (данные из API)
- */
 @Composable
-private fun ProfileField(
-    label: String,
-    value: String?,
-    colorValue: Color,
-    colorEmpty: Color,
-) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(40.dp)
-            .border(1.dp, ColorPrimary, RoundedCornerShape(5.dp)),
-        contentAlignment = Alignment.CenterStart,
-    ) {
+private fun ProfileField(label: String, value: String?) {
+    ProfileFieldBox {
         Text(
             modifier = Modifier.padding(start = 12.dp),
             text = buildAnnotatedString {
-                // Метка поля — тёмный цвет, курсив
-                withStyle(
-                    SpanStyle(
-                        fontFamily = geologicaFontFamilyItalic,
-                        fontStyle = FontStyle.Italic,
-                        fontWeight = FontWeight.Normal,
-                        fontSize = 14.sp,
-                        color = ColorPrimary,
-                    )
-                ) {
-                    append("$label: ")
-                }
-                // Значение — бирюзовый если заполнено, приглушённый если нет
-                withStyle(
-                    SpanStyle(
-                        fontFamily = geologicaFontFamilyItalic,
-                        fontStyle = FontStyle.Italic,
-                        fontWeight = FontWeight.Normal,
-                        fontSize = 14.sp,
-                        color = if (value != null) colorValue else colorEmpty,
-                    )
-                ) {
+                withStyle(ProfileTextStyles.fieldLabel) { append("$label: ") }
+                withStyle(if (value != null) ProfileTextStyles.fieldValue else ProfileTextStyles.fieldEmpty) {
                     append(value ?: "Не указано")
                 }
             },
         )
+    }
+}
+
+// ── Просмотр фото в полном размере ────────────────────────────────────────────
+
+/**
+ * Полноэкранный просмотрщик фото профиля.
+ * Тёмный фон + фото по центру. Тап в любом месте закрывает.
+ */
+@Composable
+private fun PhotoViewerDialog(photoUrl: String?, onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.88f))
+                .clickable(onClick = onDismiss),
+            contentAlignment = Alignment.Center,
+        ) {
+            AsyncImage(
+                model = ImageRequest.Builder(context)
+                    .data(photoUrl)
+                    .crossfade(true)
+                    .build(),
+                contentDescription = "Фото профиля",
+                contentScale = ContentScale.Fit,
+                error = painterResource(R.drawable.ic_profile_2),
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
     }
 }
 

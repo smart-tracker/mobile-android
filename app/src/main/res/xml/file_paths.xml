@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    FileProvider пути для передачи URI камере через TakePicture.
+    cache-path: context.cacheDir — временные файлы снимков.
+-->
+<paths>
+    <cache-path name="camera_photos" path="." />
+</paths>

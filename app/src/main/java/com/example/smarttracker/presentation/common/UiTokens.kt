@@ -45,4 +45,10 @@ object UiTokens {
 
     /** Отступ слева для inline-ошибок у полей. */
     val InlineErrorStartPadding: Dp = 32.dp
+
+    /** Высота поля профиля (просмотр и редактирование). */
+    val ProfileFieldHeight: Dp = 40.dp
+
+    /** Радиус скругления поля профиля. */
+    val ProfileFieldCornerRadius: Dp = 5.dp
 }

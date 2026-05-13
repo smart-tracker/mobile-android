@@ -30,7 +30,6 @@ import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -65,6 +64,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.smarttracker.R
+import com.example.smarttracker.presentation.common.PrimaryButton
 import com.example.smarttracker.presentation.common.UiTokens
 import com.example.smarttracker.presentation.theme.ColorBackground
 import com.example.smarttracker.presentation.theme.ColorPlaceholder
@@ -303,33 +303,11 @@ fun LoginScreen(
             Spacer(modifier = Modifier.height(12.dp))
 
             // ── Кнопка "Войти" ───────────────────────────────────────────────
-            Button(
+            PrimaryButton(
+                text = "Войти",
                 onClick = onSubmitLogin,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(UiTokens.ButtonHeight),
-                shape = RoundedCornerShape(UiTokens.CornerRadiusMedium),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = ColorPrimary,
-                    contentColor = ColorWhite,
-                    disabledContainerColor = ColorPlaceholder,
-                    disabledContentColor = ColorWhite,
-                ),
-                enabled = !state.isLoading
-            ) {
-                if (state.isLoading) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(UiTokens.ButtonLoadingIndicatorSize),
-                        color = ColorWhite,
-                        strokeWidth = 2.dp
-                    )
-                } else {
-                    Text(
-                        text = "Войти",
-                        style = androidx.compose.material3.MaterialTheme.typography.labelLarge,
-                    )
-                }
-            }
+                isLoading = state.isLoading,
+            )
 
             Spacer(modifier = Modifier.height(12.dp))
 
