@@ -5,6 +5,7 @@ import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import coil.ImageLoader
 import coil.ImageLoaderFactory
+import coil.util.DebugLogger
 import dagger.hilt.android.HiltAndroidApp
 import okhttp3.OkHttpClient
 import org.maplibre.android.MapLibre
@@ -44,9 +45,11 @@ class SmartTrackerApp : Application(), Configuration.Provider, ImageLoaderFactor
     }
 
     // Coil 2.x: ImageLoaderFactory.newImageLoader() — Application сам является Context
+    // DebugLogger пишет в logcat тег "Coil" — помогает диагностировать ошибки загрузки.
     override fun newImageLoader(): ImageLoader =
         ImageLoader.Builder(this)
             .okHttpClient(okHttpClient)
+            .logger(if (BuildConfig.DEBUG) DebugLogger() else null)
             .build()
 
     override val workManagerConfiguration: Configuration
