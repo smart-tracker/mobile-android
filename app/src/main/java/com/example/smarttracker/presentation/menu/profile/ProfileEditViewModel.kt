@@ -62,6 +62,7 @@ class ProfileEditViewModel @Inject constructor(
                     val m = user.birthDate.monthValue.toString().padStart(2, '0')
                     val y = user.birthDate.year.toString()
                     _state.update {
+                        val isPhotoChanged = user.photoUrl != it.photoUrl
                         it.copy(
                             isLoading  = false,
                             firstName  = user.firstName,
@@ -76,7 +77,7 @@ class ProfileEditViewModel @Inject constructor(
                             height    = user.height?.let { h -> "%.0f".format(h) } ?: "",
                             weight    = user.weight?.let { w -> "%.0f".format(w) } ?: "",
                             photoUrl  = user.photoUrl,
-                            photoKey  = it.photoKey + 1,
+                            photoKey  = if (isPhotoChanged) it.photoKey + 1 else it.photoKey,
                         )
                     }
                 }
@@ -141,32 +142,74 @@ class ProfileEditViewModel @Inject constructor(
 
     fun onPhotoSelected(uri: Uri) {
         viewModelScope.launch {
+            val extension = when (context.contentResolver.getType(uri)?.lowercase()) {
+                "image/png" -> ".png"
+                "image/jpeg", "image/jpg" -> ".jpg"
+                else -> null
+            }
+            if (extension == null) {
+                _state.update { it.copy(errorMessage = "Поддерживаются только JPG и PNG") }
+                return@launch
+            }
+
             // Проверяем размер до копирования файла
             val size = context.contentResolver
                 .query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)
-                ?.use { c -> if (c.moveToFirst()) c.getLong(0) else 0L } ?: 0L
-            if (size > maxPhotoBytes) {
+                ?.use { c ->
+                    if (c.moveToFirst() && !c.isNull(0)) c.getLong(0) else null
+                } ?: null
+            if (size != null && size > maxPhotoBytes) {
                 _state.update { it.copy(errorMessage = "Фото не должно превышать 5 МБ") }
                 return@launch
             }
 
             _state.update { it.copy(isUploadingPhoto = true, errorMessage = null) }
-            val file = resolveUriToTempFile(uri)
+            val file = resolveUriToTempFile(uri, extension)
             if (file == null) {
                 _state.update { it.copy(isUploadingPhoto = false, errorMessage = "Не удалось прочитать файл") }
                 return@launch
             }
-            authRepository.uploadPhoto(file)
-                .onSuccess {
-                    // uploadPhoto обновил кэш — берём новый photoUrl из кэша
-                    val newPhotoUrl = authRepository.getUserInfo().getOrNull()?.photoUrl
-                    _state.update { it.copy(isUploadingPhoto = false, photoUrl = newPhotoUrl, photoKey = it.photoKey + 1) }
-                }
-                .onFailure { e ->
-                    _state.update { it.copy(isUploadingPhoto = false, errorMessage = ApiErrorHandler.getErrorMessage(e)) }
-                }
-            file.delete()
+
+            if ((size == null || size <= 0L) && file.length() > maxPhotoBytes) {
+                file.delete()
+                _state.update { it.copy(isUploadingPhoto = false, errorMessage = "Фото не должно превышать 5 МБ") }
+                return@launch
+            }
+
+            try {
+                authRepository.uploadPhoto(file)
+                    .onSuccess {
+                        // uploadPhoto обновил кэш — берём новый photoUrl из кэша
+                        val newPhotoUrl = authRepository.getUserInfo().getOrNull()?.photoUrl
+                        _state.update { it.copy(isUploadingPhoto = false, photoUrl = newPhotoUrl, photoKey = it.photoKey + 1) }
+                    }
+                    .onFailure { e ->
+                        _state.update { it.copy(isUploadingPhoto = false, errorMessage = ApiErrorHandler.getErrorMessage(e)) }
+                    }
+            } finally {
+                file.delete()
+            }
         }
+    }
+
+    private fun resolveUriToTempFile(uri: Uri, extension: String): File? {
+        return runCatching {
+            val temp = File.createTempFile("profile_photo_", extension, context.cacheDir)
+            val input = context.contentResolver.openInputStream(uri)
+                ?: throw IOException("Unable to open input stream for uri: $uri")
+
+            input.use { inputStream ->
+                temp.outputStream().use { outputStream ->
+                    inputStream.copyTo(outputStream)
+                }
+            }
+
+            if (uri.authority == "${context.packageName}.provider") {
+                runCatching { context.contentResolver.delete(uri, null, null) }
+            }
+
+            temp
+        }.getOrNull()
     }
 
     fun onDeletePhoto() {
@@ -181,23 +224,6 @@ class ProfileEditViewModel @Inject constructor(
                     _state.update { it.copy(isUploadingPhoto = false, errorMessage = ApiErrorHandler.getErrorMessage(e)) }
                 }
         }
-    }
-
-    private fun resolveUriToTempFile(uri: Uri): File? {
-        val mimeType = context.contentResolver.getType(uri) ?: "image/jpeg"
-        val ext = if (mimeType.contains("png")) ".png" else ".jpg"
-        return runCatching {
-            val temp = File.createTempFile("profile_photo_", ext, context.cacheDir)
-            val input = context.contentResolver.openInputStream(uri)
-                ?: throw IOException("Unable to open input stream for uri: $uri")
-
-            input.use { inputStream ->
-                temp.outputStream().use { outputStream ->
-                    inputStream.copyTo(outputStream)
-                }
-            }
-            temp
-        }.getOrNull()
     }
 
     fun onDeleteAccountClick() = _state.update { it.copy(showDeleteConfirmDialog = true) }
