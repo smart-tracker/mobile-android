@@ -124,6 +124,10 @@ class LoginViewModel @Inject constructor(
             return "Введите email"
         }
 
+        if (!android.util.Patterns.EMAIL_ADDRESS.matcher(s.email).matches()) {
+            return "Некорректный формат email"
+        }
+
         if (s.password.isBlank()) {
             return "Введите пароль"
         }
