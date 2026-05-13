@@ -24,7 +24,10 @@ data class User(
 
     // Заполняются позже в профиле - не при регистрации
     val weight: Float? = null,
-    val height: Float? = null
+    val height: Float? = null,
+
+    /** URL фото профиля. Всегда не-null после первого логина — бэкенд подставляет плейсхолдер. */
+    val photoUrl: String? = null,
 
     // jwt_session и jwt_reload - не включаем в domain модель
     // Токены идут в AuthResult и сохраняются в EncryptedSharedPreferences

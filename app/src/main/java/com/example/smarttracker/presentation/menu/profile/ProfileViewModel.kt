@@ -96,8 +96,10 @@ class ProfileViewModel @Inject constructor(
                     Gender.MALE   -> "Мужской"
                     Gender.FEMALE -> "Женский"
                 },
-                weight = user.weight?.let { w -> "%.0f".format(w) },
-                height = user.height?.let { h -> "%.0f".format(h) },
+                weight    = user.weight?.let { w -> "%.0f".format(w) },
+                height    = user.height?.let { h -> "%.0f".format(h) },
+                photoUrl  = user.photoUrl,
+                photoKey  = it.photoKey + 1,
                 errorMessage = null,
             )
         }

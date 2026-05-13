@@ -3,7 +3,9 @@ package com.example.smarttracker.presentation.menu.profile
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -36,6 +38,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.example.smarttracker.R
 import com.example.smarttracker.presentation.common.AppTab
 import com.example.smarttracker.presentation.common.SmartTrackerBottomBar
@@ -136,7 +140,12 @@ fun ProfileScreen(
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
                         Spacer(modifier = Modifier.height(8.dp))
-                        AvatarSection(firstName = state.firstName, lastTrainingDate = state.lastTrainingDate)
+                        AvatarSection(
+                            firstName = state.firstName,
+                            photoUrl = state.photoUrl,
+                            photoKey = state.photoKey,
+                            lastTrainingDate = state.lastTrainingDate,
+                        )
                         Spacer(modifier = Modifier.height(24.dp))
                         ProfileFields(
                             state = state,
@@ -193,15 +202,25 @@ private fun EditButton(onClick: () -> Unit) {
 
 /**
  * @param firstName Имя пользователя — отображается крупным текстом под аватаром.
+ * @param photoUrl URL фото профиля (из image_path). Всегда не-null после логина.
  */
 @Composable
-private fun AvatarSection(firstName: String, lastTrainingDate: String?) {
+private fun AvatarSection(firstName: String, photoUrl: String?, photoKey: Long, lastTrainingDate: String?) {
+    val context = LocalContext.current
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        // Тёмный круг с иконкой профиля — имитация дефолтного аватара
-        Icon(
-            painter = painterResource(R.drawable.ic_profile_2),
-            contentDescription = null,
-            modifier = Modifier.size(94.dp),
+        AsyncImage(
+            model = ImageRequest.Builder(context)
+                .data(photoUrl)
+                .memoryCacheKey("$photoUrl/$photoKey")
+                .diskCacheKey("$photoUrl/$photoKey")
+                .crossfade(true)
+                .build(),
+            contentDescription = "Фото профиля",
+            placeholder = painterResource(R.drawable.ic_profile_2),
+            error = painterResource(R.drawable.ic_profile_2),
+            modifier = Modifier
+                .size(94.dp)
+                .border(1.dp, ColorPrimary, CircleShape),
         )
         Spacer(modifier = Modifier.height(12.dp))
         Text(

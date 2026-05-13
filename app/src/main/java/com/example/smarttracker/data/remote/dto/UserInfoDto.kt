@@ -1,6 +1,7 @@
 package com.example.smarttracker.data.remote.dto
 
 import android.util.Log
+import com.example.smarttracker.BuildConfig
 import com.example.smarttracker.domain.model.Gender
 import com.example.smarttracker.domain.model.User
 import com.google.gson.annotations.SerializedName
@@ -30,6 +31,7 @@ data class UserInfoResponseDto(
     val height: Float?,
     val gender: String,
     val nickname: String,
+    @SerializedName("image_path") val imagePath: String? = null,
 )
 
 /**
@@ -59,6 +61,10 @@ fun UserInfoResponseDto.toDomain(): User = User(
         "female" -> Gender.FEMALE
         else     -> Gender.MALE
     },
-    weight = weight,
-    height = height,
+    weight   = weight,
+    height   = height,
+    photoUrl = imagePath?.let { path ->
+        if (path.startsWith("http://") || path.startsWith("https://")) path
+        else BuildConfig.BASE_URL.trimEnd('/') + "/" + path.trimStart('/')
+    },
 )

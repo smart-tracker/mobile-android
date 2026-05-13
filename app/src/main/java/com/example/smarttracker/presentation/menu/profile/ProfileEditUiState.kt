@@ -31,6 +31,15 @@ data class ProfileEditUiState(
     /** Пустая строка = не указано. */
     val weight: String = "",
 
+    /** URL фото профиля. Обновляется после успешной загрузки/удаления фото. */
+    val photoUrl: String? = null,
+
+    /** Версия фото — ключ Coil-кэша. Инкрементируется при каждом изменении фото. */
+    val photoKey: Long = 0L,
+
+    /** true пока идёт upload или delete запрос к /user/photo */
+    val isUploadingPhoto: Boolean = false,
+
     val showDeleteConfirmDialog: Boolean = false,
     val isDeleting: Boolean = false,
     val errorMessage: String? = null,

@@ -1,5 +1,11 @@
 package com.example.smarttracker.presentation.menu.profile
 
+import android.Manifest
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.FileProvider
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -14,6 +20,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
@@ -22,12 +29,20 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -43,6 +58,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.example.smarttracker.R
 import com.example.smarttracker.presentation.common.AppTab
 import com.example.smarttracker.presentation.common.DateVisualTransformation
@@ -51,6 +68,8 @@ import com.example.smarttracker.presentation.theme.ColorPrimary
 import com.example.smarttracker.presentation.theme.ColorSecondary
 import com.example.smarttracker.presentation.theme.geologicaFontFamily
 import com.example.smarttracker.presentation.theme.geologicaFontFamilyItalic
+import java.io.File
+import kotlinx.coroutines.launch
 
 private val ColorDelete = Color(0xFFFC3F1D)
 
@@ -76,12 +95,41 @@ fun ProfileEditScreen(
     onGenderToggle: () -> Unit,
     onHeightChange: (String) -> Unit,
     onWeightChange: (String) -> Unit,
+    onPhotoSelected: (Uri) -> Unit,
+    onDeletePhoto: () -> Unit,
     onSave: () -> Unit,
     onBack: () -> Unit,
     onDeleteAccountClick: () -> Unit,
     onDismissDeleteDialog: () -> Unit,
     onConfirmDelete: () -> Unit,
 ) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val scope = rememberCoroutineScope()
+    var showPhotoSheet by remember { mutableStateOf(false) }
+
+    val context = LocalContext.current
+
+    val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
+        uri?.let { onPhotoSelected(it) }
+    }
+
+    // URI временного файла, куда камера сохранит снимок
+    var cameraOutputUri by remember { mutableStateOf<Uri?>(null) }
+
+    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
+        if (success) cameraOutputUri?.let { onPhotoSelected(it) }
+    }
+
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            val file = File.createTempFile("camera_photo_", ".jpg", context.cacheDir)
+            val uri = FileProvider.getUriForFile(context, "com.example.smarttracker.provider", file)
+            cameraOutputUri = uri
+            cameraLauncher.launch(uri)
+        }
+    }
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
@@ -132,7 +180,12 @@ fun ProfileEditScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Spacer(modifier = Modifier.height(8.dp))
-                    AvatarEditSection()
+                    AvatarEditSection(
+                        photoUrl = state.photoUrl,
+                        photoKey = state.photoKey,
+                        isUploading = state.isUploadingPhoto,
+                        onAvatarClick = { showPhotoSheet = true },
+                    )
                     Spacer(modifier = Modifier.height(24.dp))
 
                     Column(
@@ -212,6 +265,80 @@ fun ProfileEditScreen(
                         modifier = Modifier.padding(horizontal = 16.dp),
                     )
                 }
+            }
+        }
+    }
+
+    if (showPhotoSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showPhotoSheet = false },
+            sheetState = sheetState,
+            containerColor = Color.White,
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 32.dp),
+            ) {
+                Text(
+                    text = "Фото профиля",
+                    fontFamily = geologicaFontFamily,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp,
+                    color = ColorPrimary,
+                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp),
+                )
+                HorizontalDivider(color = ColorPrimary.copy(alpha = 0.12f))
+                Text(
+                    text = "Выбрать из галереи",
+                    fontFamily = geologicaFontFamily,
+                    fontWeight = FontWeight.Normal,
+                    fontSize = 16.sp,
+                    color = ColorPrimary,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            scope.launch { sheetState.hide() }.invokeOnCompletion {
+                                showPhotoSheet = false
+                                photoPicker.launch("image/*")
+                            }
+                        }
+                        .padding(horizontal = 24.dp, vertical = 16.dp),
+                )
+                HorizontalDivider(color = ColorPrimary.copy(alpha = 0.12f))
+                Text(
+                    text = "Сделать фото",
+                    fontFamily = geologicaFontFamily,
+                    fontWeight = FontWeight.Normal,
+                    fontSize = 16.sp,
+                    color = ColorPrimary,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            scope.launch { sheetState.hide() }.invokeOnCompletion {
+                                showPhotoSheet = false
+                                cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+                            }
+                        }
+                        .padding(horizontal = 24.dp, vertical = 16.dp),
+                )
+                HorizontalDivider(color = ColorPrimary.copy(alpha = 0.12f))
+                Text(
+                    text = "Удалить фото",
+                    fontFamily = geologicaFontFamily,
+                    fontWeight = FontWeight.Normal,
+                    fontSize = 16.sp,
+                    color = ColorDelete,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            scope.launch { sheetState.hide() }.invokeOnCompletion {
+                                showPhotoSheet = false
+                                onDeletePhoto()
+                            }
+                        }
+                        .padding(horizontal = 24.dp, vertical = 16.dp),
+                )
             }
         }
     }
@@ -296,16 +423,42 @@ private fun SaveButton(isSaving: Boolean, onClick: () -> Unit) {
 // ── Аватар + «Загрузить фото» ─────────────────────────────────────────────────
 
 @Composable
-private fun AvatarEditSection() {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Icon(
-            painter = painterResource(R.drawable.ic_profile_2),
-            contentDescription = null,
-            modifier = Modifier.size(96.dp),
-        )
+private fun AvatarEditSection(
+    photoUrl: String?,
+    photoKey: Long,
+    isUploading: Boolean,
+    onAvatarClick: () -> Unit,
+) {
+    val context = LocalContext.current
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.clickable(enabled = !isUploading, onClick = onAvatarClick),
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            AsyncImage(
+                model = ImageRequest.Builder(context)
+                    .data(photoUrl)
+                    .memoryCacheKey("$photoUrl/$photoKey")
+                    .diskCacheKey("$photoUrl/$photoKey")
+                    .crossfade(true)
+                    .build(),
+                contentDescription = "Фото профиля",
+                placeholder = painterResource(R.drawable.ic_profile_2),
+                error = painterResource(R.drawable.ic_profile_2),
+                modifier = Modifier
+                    .size(96.dp)
+                    .border(1.dp, ColorPrimary, CircleShape),
+            )
+            if (isUploading) {
+                CircularProgressIndicator(
+                    color = ColorSecondary,
+                    modifier = Modifier.size(40.dp),
+                )
+            }
+        }
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = "Загрузить фото",
+            text = if (isUploading) "Загружаем..." else "Изменить фото",
             fontFamily = geologicaFontFamily,
             fontStyle = FontStyle.Normal,
             fontWeight = FontWeight.Normal,

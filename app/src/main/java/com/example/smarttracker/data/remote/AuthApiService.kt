@@ -22,11 +22,14 @@ import com.example.smarttracker.data.remote.dto.RoleResponseDto
 import com.example.smarttracker.data.remote.dto.UpdateProfileRequestDto
 import com.example.smarttracker.data.remote.dto.UserInfoResponseDto
 import com.example.smarttracker.data.remote.dto.VerifyResetCodeResponseDto
+import okhttp3.MultipartBody
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
+import retrofit2.http.Multipart
 import retrofit2.http.PATCH
 import retrofit2.http.POST
+import retrofit2.http.Part
 import retrofit2.http.Query
 
 /**
@@ -167,6 +170,20 @@ interface AuthApiService {
      */
     @PATCH("user/edit")
     suspend fun updateProfile(@Body request: UpdateProfileRequestDto): UserInfoResponseDto
+
+    /**
+     * Загрузка фото профиля. multipart/form-data, поле "file", jpg/png до 5 МБ.
+     * Ответ пустой — обновление image_path получаем через повторный GET /user/.
+     */
+    @Multipart
+    @POST("user/photo")
+    suspend fun uploadPhoto(@Part photo: MultipartBody.Part)
+
+    /**
+     * Удаление фото профиля. Бэкенд автоматически подставляет плейсхолдер.
+     */
+    @DELETE("user/photo")
+    suspend fun deletePhoto()
 
     /**
      * Удаление аккаунта текущего пользователя.

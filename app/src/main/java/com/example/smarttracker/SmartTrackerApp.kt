@@ -3,7 +3,10 @@ package com.example.smarttracker
 import android.app.Application
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
+import coil.ImageLoader
+import coil.ImageLoaderFactory
 import dagger.hilt.android.HiltAndroidApp
+import okhttp3.OkHttpClient
 import org.maplibre.android.MapLibre
 import org.maplibre.android.WellKnownTileServer
 import javax.inject.Inject
@@ -19,18 +22,32 @@ import javax.inject.Inject
  * При наличии этого интерфейса WorkManager НЕ инициализируется автоматически —
  * первый вызов WorkManager.getInstance(context) выполнит ленивую инициализацию
  * с нашей конфигурацией.
+ *
+ * [SingletonImageLoader.Factory] настраивает Coil использовать тот же [OkHttpClient],
+ * что и Retrofit — с auth-интерцептором (Bearer-токен). Это нужно для загрузки
+ * фото профиля, которое может требовать авторизацию. [newImageLoader] вызывается
+ * лениво при первом обращении к Coil — после завершения Hilt-инъекции в [onCreate].
  */
 @HiltAndroidApp
-class SmartTrackerApp : Application(), Configuration.Provider {
+class SmartTrackerApp : Application(), Configuration.Provider, ImageLoaderFactory {
 
     @Inject
     lateinit var workerFactory: HiltWorkerFactory
+
+    @Inject
+    lateinit var okHttpClient: OkHttpClient
 
     override fun onCreate() {
         super.onCreate()
         // null = без API-ключа; WellKnownTileServer.MapLibre = стандартный tile-сервер
         MapLibre.getInstance(this, null, WellKnownTileServer.MapLibre)
     }
+
+    // Coil 2.x: ImageLoaderFactory.newImageLoader() — Application сам является Context
+    override fun newImageLoader(): ImageLoader =
+        ImageLoader.Builder(this)
+            .okHttpClient(okHttpClient)
+            .build()
 
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()
