@@ -25,6 +25,7 @@ import com.example.smarttracker.presentation.common.SmartTrackerBottomBar
 import com.example.smarttracker.presentation.menu.MenuScreen
 import com.example.smarttracker.presentation.theme.ColorPrimary
 import com.example.smarttracker.presentation.theme.geologicaFontFamily
+import com.example.smarttracker.presentation.calendar.TrainingHistoryScreen
 import com.example.smarttracker.presentation.workout.start.WorkoutStartScreen
 import com.example.smarttracker.presentation.workout.start.WorkoutStartViewModel
 
@@ -87,7 +88,14 @@ fun WorkoutHomeScreen(
                     onToggleFullscreenMap = viewModel::onToggleFullscreenMap,
                 )
             }
-            WorkoutTab.WORKOUTS -> PlaceholderScreen(label = stringResource(R.string.tab_workouts), padding = padding)
+            WorkoutTab.WORKOUTS -> TrainingHistoryScreen(
+                    padding = padding,
+                    onNavigateToStart = { currentTab = WorkoutTab.START },
+                    onTrainingClick = { item, activityName ->
+                        currentTab = WorkoutTab.START
+                        viewModel.showHistorySummary(item, activityName)
+                    },
+                )
             WorkoutTab.MENU    -> MenuScreen(
                 padding = padding,
                 onNavigateToProfile = onNavigateToProfile,
