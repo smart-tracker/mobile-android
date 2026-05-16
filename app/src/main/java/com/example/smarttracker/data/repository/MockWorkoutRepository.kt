@@ -10,6 +10,9 @@ import com.example.smarttracker.domain.repository.WorkoutRepository
 import java.util.UUID
 import javax.inject.Inject
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.flowOf
 
 /**
@@ -17,6 +20,10 @@ import kotlinx.coroutines.flow.flowOf
  * Заменяется реальной реализацией через DI после готовности backend-эндпоинтов типов тренировок.
  */
 class MockWorkoutRepository @Inject constructor() : WorkoutRepository {
+
+    // Mock: события завершения тренировки не генерируются
+    override val trainingCompletedFlow: SharedFlow<Unit> =
+        MutableSharedFlow<Unit>().asSharedFlow()
 
     override fun workoutTypesFlow(): Flow<List<WorkoutType>> = flowOf(
         listOf(
@@ -54,6 +61,9 @@ class MockWorkoutRepository @Inject constructor() : WorkoutRepository {
         Result.success(METActivity(baseMet = 8.0, usesSpeedZones = false, zones = emptyList()))
 
     override suspend fun getTrainingHistory(): Result<List<TrainingHistoryItem>> =
+        Result.success(emptyList())
+
+    override suspend fun getTrainingDetail(trainingId: String): Result<List<LocationPoint>> =
         Result.success(emptyList())
 
     override suspend fun savePendingFinish(

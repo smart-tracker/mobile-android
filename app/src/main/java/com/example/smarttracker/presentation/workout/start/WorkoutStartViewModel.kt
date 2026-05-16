@@ -47,9 +47,12 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import com.example.smarttracker.domain.model.TrainingHistoryItem
+import com.example.smarttracker.presentation.workout.summary.CumulativeTrackData
 import java.time.Instant
 import java.time.LocalDate
 import java.time.Period
+import java.time.ZoneId
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -784,6 +787,53 @@ class WorkoutStartViewModel @Inject constructor(
      */
     fun onToggleFullscreenMap() {
         _state.update { it.copy(isMapFullscreen = !it.isMapFullscreen) }
+    }
+
+    /**
+     * Показать SummaryOverlay для тренировки из истории.
+     *
+     * Сначала отображает overlay в состоянии загрузки ([WorkoutSummaryUiState.isLoading] = true),
+     * затем асинхронно загружает GPS-трек через GET /training/{id}/get_training.
+     * Если трек недоступен — overlay показывается со статистикой, но без карты.
+     *
+     * Используется из [com.example.smarttracker.presentation.workout.WorkoutHomeScreen]
+     * при клике на карточку тренировки в Day view истории.
+     */
+    fun showHistorySummary(item: TrainingHistoryItem, activityName: String) {
+        _state.update { it.copy(summaryOverlay = WorkoutSummaryUiState(isLoading = true)) }
+        viewModelScope.launch {
+            val points    = workoutRepository.getTrainingDetail(item.trainingId).getOrDefault(emptyList())
+            val distanceKm = ((item.distanceM ?: 0.0) / 1000.0).toFloat()
+            val durationMs = computeHistoryDurationMs(item.timeStart, item.timeEnd)
+            val workoutType = _state.value.workoutTypes.find { it.id == item.typeActivId }
+            val dateMs     = item.date.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+            val elevationM = calculateElevationGain(points).toFloat()
+            val cumData    = buildCumulativeData(points, emptyList())
+            val snapshot = WorkoutSummaryUiState(
+                dateDisplay      = WorkoutSummaryFormatters.formatDate(dateMs),
+                activityName     = activityName,
+                activityIconFile = workoutType?.iconFile,
+                activityIconUrl  = workoutType?.imageUrl,
+                activityIconKey  = item.typeActivId.toString(),
+                paceDisplay      = WorkoutSummaryFormatters.formatPace(distanceKm, durationMs),
+                distanceDisplay  = WorkoutSummaryFormatters.formatDistance(distanceKm),
+                durationDisplay  = WorkoutSummaryFormatters.formatDuration(durationMs),
+                elevationDisplay = WorkoutSummaryFormatters.formatElevation(elevationM),
+                trackPoints      = points,
+                cumulativeData   = cumData,
+            )
+            _state.update { it.copy(summaryOverlay = snapshot) }
+        }
+    }
+
+    /** Парсит ISO-строки времени из истории API (формат "2026-05-16T08:44:00.613000Z"). */
+    private fun computeHistoryDurationMs(start: String?, end: String?): Long {
+        if (start == null || end == null) return 0L
+        return try {
+            val s = java.time.OffsetDateTime.parse(start.trim()).toLocalDateTime()
+            val e = java.time.OffsetDateTime.parse(end.trim()).toLocalDateTime()
+            java.time.Duration.between(s, e).toMillis()
+        } catch (_: Exception) { 0L }
     }
 
     /**
