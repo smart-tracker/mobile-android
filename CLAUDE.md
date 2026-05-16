@@ -218,8 +218,9 @@ com.example.smarttracker/
 3. **`@Composable` import** — при правках `RegisterScreen.kt` инструмент иногда теряет
    `import androidx.compose.runtime.Composable`. Всегда проверять после правок.
 
-4. **`/auth/refresh`** — `refresh_token` передаётся как `@Query`, не `@Body`.
-   FastAPI трактует его как query param без явного `Body(...)`.
+4. **`/auth/refresh`** — `refresh_token` передаётся как JSON-тело (`@Body RefreshTokenRequestDto`).
+   FastAPI-роут использует `Body(...)` явно. Подтверждено OpenAPI-схемой (`requestBody: required`).
+   `@Query` — было ошибочное предположение, вызывало 422 → 4xx → logout.
 
 5. **`MAX_VERIFICATION_ATTEMPTS = 5`** — бэкенд блокирует после 5 неверных попыток.
    Android должен обрабатывать 400 `"Too many failed attempts"` и скрывать поле ввода.
@@ -404,6 +405,25 @@ with open(f'{git_dir}/COMMIT_MSG', 'wb') as f:
     f.write(msg.encode('utf-8'))
 ```
 Затем: `git commit -F "<git_dir>/COMMIT_MSG"`
+
+---
+
+## TODO
+
+- **`GET /training/{id}/get_training` — формат `gps_track`**
+  Сейчас бэк возвращает GeoJSON LineString без временны́х меток:
+  `{"type":"LineString","coordinates":[[lon,lat,alt], ...]}`
+  Нужно заменить на массив объектов с `recorded_at`:
+  ```json
+  "gps_track": [
+    {"lat": 61.774, "lon": 34.379, "alt": 5, "recorded_at": 1716890640613},
+    ...
+  ]
+  ```
+  После изменения на бэке — обновить `GetTrainingDetailResponseDto`:
+  убрать `JsonElement?`, вернуть `List<GpsTrackPointDto>?`,
+  добавить `recorded_at` в `GpsTrackPointDto`, обновить маппер.
+  Это разблокирует корректный elapsed и скорость в scrub-оверлее истории.
 
 ---
 
