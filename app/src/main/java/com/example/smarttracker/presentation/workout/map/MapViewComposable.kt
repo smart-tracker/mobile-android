@@ -163,6 +163,7 @@ fun MapViewComposable(
     // DisposableEffect(lifecycleOwner) создаёт замыкание один раз — без rememberUpdatedState
     // он бы зафиксировал начальный null и не видел последующих обновлений.
     val latestFitToTrackBoundsKey  = rememberUpdatedState(fitToTrackBoundsKey)
+    val latestTrackPoints          = rememberUpdatedState(trackPoints)
 
     val lifecycleOwner = LocalLifecycleOwner.current
 
@@ -306,8 +307,8 @@ fun MapViewComposable(
                         // Показывается только когда scrubPoint != null (fullscreen + scrub).
                         // Визуально совпадает с бегунком TrainingProgressBar.
                         val density = android.content.res.Resources.getSystem().displayMetrics.density
-                        val scrubRadiusPx = 10f * density
-                        val scrubStrokeWidthPx = 2.5f * density
+                        val scrubRadiusPx = 3f * density
+                        val scrubStrokeWidthPx = 0.5f * density
                         style.addSource(
                             GeoJsonSource("scrub-source",
                                 FeatureCollection.fromFeatures(emptyList()))
@@ -368,6 +369,13 @@ fun MapViewComposable(
                         // продолжают тикать после ON_STOP и крашат карту.
                         if (enableLocationDot) {
                             activateLocationComponent(map, style, context)
+                            // В summary-режиме (fitToTrackBoundsKey уже не null) скрываем
+                            // живую точку сразу — update ещё не успел это сделать, пока
+                            // style грузился. Компонент активирован и будет доступен
+                            // когда пользователь закроет оверлей (update re-enable-ит его).
+                            if (latestFitToTrackBoundsKey.value != null) {
+                                runCatching { map.locationComponent.isLocationComponentEnabled = false }
+                            }
                         }
 
                         // ── Начальное центрирование при загрузке стиля ────────────
@@ -412,6 +420,79 @@ fun MapViewComposable(
                             // В update-блоке TRACKING тоже выставляется, но он не запустится
                             // пока Compose-state не изменится: здесь это единственный шанс.
                             map.locationComponent.cameraMode = CameraMode.TRACKING
+                        }
+
+                        // ── Трек + fit-to-bounds при запоздалой загрузке style ────
+                        // Сценарий: пользователь переключился с другой вкладки →
+                        // MapView пересоздаётся, style загружается по сети. GPS-трек
+                        // приходит из history раньше чем style готов → update делает
+                        // early return (map.style == null), track-source остаётся
+                        // пустым, fit не запускается. Здесь style точно готов —
+                        // отрисовываем трек и позиционируем камеру.
+                        val pendingFitKey = latestFitToTrackBoundsKey.value
+                        val pendingPts    = latestTrackPoints.value
+                        if (pendingPts.size >= 2) {
+                            // Обновляем трек (track-source создан выше в этом же callback)
+                            val coords = pendingPts.map { Point.fromLngLat(it.longitude, it.latitude) }
+                            val trackFc = FeatureCollection.fromFeatures(
+                                listOf(Feature.fromGeometry(LineString.fromLngLats(coords)))
+                            )
+                            style.getSourceAs<GeoJsonSource>("track-source")?.setGeoJson(trackFc)
+
+                            // Маркеры старта и финиша (только в режиме summary)
+                            if (pendingFitKey != null) {
+                                val primaryArgb = android.graphics.Color.rgb(
+                                    (ColorPrimary.red   * 255).toInt(),
+                                    (ColorPrimary.green * 255).toInt(),
+                                    (ColorPrimary.blue  * 255).toInt(),
+                                )
+                                val iconRes = latestStartIconRes.value
+                                if (iconRes != null) {
+                                    state.lastLoadedStartIconRes = iconRes
+                                    BitmapFactory.decodeResource(context.resources, iconRes)?.let { raw ->
+                                        style.addImage("start-icon",
+                                            makeMarkerBitmap(raw, context.resources.displayMetrics.density, primaryArgb, tintIcon = true))
+                                        raw.recycle()
+                                    }
+                                }
+                                if (style.getImage("finish-icon") == null) {
+                                    BitmapFactory.decodeResource(context.resources, R.drawable.ic_finish_flag)?.let { raw ->
+                                        style.addImage("finish-icon",
+                                            makeMarkerBitmap(raw, context.resources.displayMetrics.density, primaryArgb, tintIcon = false))
+                                        raw.recycle()
+                                    }
+                                }
+                                val startPt = pendingPts.first()
+                                val endPt   = pendingPts.last()
+                                style.getSourceAs<GeoJsonSource>("start-source")?.setGeoJson(
+                                    FeatureCollection.fromFeatures(listOf(
+                                        Feature.fromGeometry(Point.fromLngLat(startPt.longitude, startPt.latitude))
+                                    ))
+                                )
+                                style.getSourceAs<GeoJsonSource>("finish-source")?.setGeoJson(
+                                    FeatureCollection.fromFeatures(listOf(
+                                        Feature.fromGeometry(Point.fromLngLat(endPt.longitude, endPt.latitude))
+                                    ))
+                                )
+                            }
+                        }
+                        if (pendingFitKey != null && pendingPts.size >= 2 && pendingFitKey != state.lastFittedKey) {
+                            state.lastFittedKey = pendingFitKey
+                            val builder = LatLngBounds.Builder()
+                            pendingPts.forEach { p -> builder.include(LatLng(p.latitude, p.longitude)) }
+                            val bounds = builder.build()
+                            if (enableLocationDot) {
+                                runCatching { map.locationComponent.cameraMode = CameraMode.NONE }
+                            }
+                            val paddingPx = (40 * context.resources.displayMetrics.density).toInt()
+                            mapView.post {
+                                if (map.style != null) {
+                                    map.cancelTransitions()
+                                    map.animateCamera(
+                                        CameraUpdateFactory.newLatLngBounds(bounds, paddingPx), 800
+                                    )
+                                }
+                            }
                         }
                     }
                 }
