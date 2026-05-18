@@ -122,8 +122,9 @@ private fun MonthWeekCard(
             }
             InfoRow(R.drawable.ic_time,      formatSeconds(totals.seconds))
             InfoRow(R.drawable.ic_distance,  formatDistanceM(totals.distanceM))
-            // Набор высоты: нет поля в TrainingHistoryItem → прочерк до появления данных на бэкенде.
-            InfoRow(R.drawable.ic_elevation, "--")
+            // Набор высоты — серверное поле elevation_gain из /training/history.
+            // formatDistanceM подходит идеально: "350 м" / "1.23 км" / "--" при null.
+            InfoRow(R.drawable.ic_elevation, formatDistanceM(totals.elevationM))
             InfoRow(R.drawable.ic_kcal,      formatKcal(totals.kilocalories))
         }
     }

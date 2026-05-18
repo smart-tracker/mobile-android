@@ -83,8 +83,9 @@ private fun WeekDayRow(
 @Composable
 private fun WeekDayCard(dayItems: List<TrainingHistoryItem>) {
     val totals = aggregateTotals(dayItems)
-    // Первые 3 тренировки (не distinct — показываем реальный порядок).
-    val stripIconIds = dayItems.take(3).map { it.typeActivId }
+    // Первые 3 тренировки в хронологическом порядке (как в DayTimelineView) —
+    // сортируем по timeStart, чтобы Week-превью совпадало с порядком Day view.
+    val stripIconIds = dayItems.sortedBy { it.timeStart }.take(3).map { it.typeActivId }
 
     Row(modifier = Modifier.height(WeekCardHeight)) {
         WeekActivityStrip(iconIds = stripIconIds)

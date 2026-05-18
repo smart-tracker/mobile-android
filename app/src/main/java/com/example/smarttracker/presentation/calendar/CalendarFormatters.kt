@@ -3,14 +3,38 @@ package com.example.smarttracker.presentation.calendar
 import com.example.smarttracker.domain.model.TrainingHistoryItem
 import java.time.DayOfWeek
 import java.time.LocalDate
+import java.time.OffsetDateTime
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+
+private val LocalTimeFmt: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 
 // ── Форматтеры времени / расстояний ──────────────────────────────────────────
 
-/** "2026-03-14T09:20:00" или "09:20:00" → "09:20". */
+/**
+ * ISO datetime → локальное время "HH:mm".
+ *
+ * API возвращает UTC ("2026-05-16T08:44:00.613000Z"), пользователь живёт в своём
+ * часовом поясе → конвертируем через [ZoneId.systemDefault]. Раньше функция
+ * вырезала substring без учёта таймзоны → для MSK тренировка в 11:44 показывалась
+ * как "08:44" (на 3 часа меньше реальности).
+ *
+ * Fallback: если строка без таймзоны ("09:20:00" или "2026-03-14T09:20:00") —
+ * берём первые 5 символов после 'T'. Это путь только для unit-тестов или
+ * нестандартных форматов; API всегда отдаёт OffsetDateTime.
+ */
 internal fun formatTime(iso: String?): String {
     if (iso == null) return "--:--"
+    val normalized = iso.trim().replace(' ', 'T')
+    // Основной путь: ISO с таймзоной → конвертация в локальное время.
+    runCatching {
+        return OffsetDateTime.parse(normalized)
+            .atZoneSameInstant(ZoneId.systemDefault())
+            .format(LocalTimeFmt)
+    }
+    // Fallback: строка без таймзоны → возвращаем первые "HH:mm" как есть.
     return try {
-        val t = if (iso.contains('T')) iso.substringAfter('T') else iso
+        val t = if (normalized.contains('T')) normalized.substringAfter('T') else normalized
         t.substring(0, 5)
     } catch (_: Exception) { "--:--" }
 }
@@ -81,18 +105,27 @@ internal fun TrainingHistoryItem.durationSeconds(): Long {
 internal fun totalDurationSeconds(items: List<TrainingHistoryItem>): Long =
     items.sumOf { it.durationSeconds() }
 
-/** Агрегированные итоги периода (день / неделя). */
+/** Агрегированные итоги периода (день / неделя / месяц). */
 internal data class PeriodTotals(
     val seconds: Long,
     val distanceM: Double?,
     val kilocalories: Double?,
+    val elevationM: Double?,
 )
 
-/** Суммирует длительность / дистанцию / калории по списку элементов. */
+/**
+ * Суммирует длительность / дистанцию / калории / набор высоты по списку.
+ *
+ * Nullable-поля: null если у всех элементов поле было null или сумма == 0 —
+ * чтобы [formatDistanceM]/[formatKcal] показали "--" вместо "0 м" / "0 кКал".
+ * `elevationM` приходит с сервера (поле `elevation_gain` в /training/history)
+ * и используется в MonthTimelineView вместо заглушки.
+ */
 internal fun aggregateTotals(items: List<TrainingHistoryItem>): PeriodTotals = PeriodTotals(
     seconds = totalDurationSeconds(items),
     distanceM = items.mapNotNull { it.distanceM }.sum().takeIf { it > 0.0 },
     kilocalories = items.mapNotNull { it.kilocalories }.sum().takeIf { it > 0.0 },
+    elevationM = items.mapNotNull { it.elevationGain }.sum().takeIf { it > 0.0 },
 )
 
 /** typeActivId самой длинной (по времени) тренировки из списка, или null если пуст. */

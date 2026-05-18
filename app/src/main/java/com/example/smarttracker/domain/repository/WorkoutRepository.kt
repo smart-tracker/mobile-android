@@ -101,12 +101,19 @@ interface WorkoutRepository {
     suspend fun getTrainingDetail(trainingId: String): Result<List<LocationPoint>>
 
     /**
-     * Эмитит [Unit] каждый раз, когда тренировка успешно сохранена на сервере.
-     * Используется [TrainingHistoryViewModel] для автоматического обновления истории.
-     * Работает как для онлайн-завершения ([saveTraining]), так и для офлайн-случая
-     * ([SaveTrainingWorker] → [saveTraining]).
+     * Удалить завершённую тренировку из истории на сервере.
+     * После успешного 200/204 эмитит [historyChangedFlow] → [TrainingHistoryViewModel]
+     * автоматически перезагрузит список.
      */
-    val trainingCompletedFlow: SharedFlow<Unit>
+    suspend fun deleteCompletedTraining(trainingId: String): Result<Unit>
+
+    /**
+     * Эмитит [Unit] каждый раз, когда содержимое истории меняется на сервере:
+     * - тренировка успешно сохранена ([saveTraining], в т.ч. через [SaveTrainingWorker]);
+     * - тренировка удалена ([deleteCompletedTraining]).
+     * Используется [TrainingHistoryViewModel] как единый триггер перезагрузки.
+     */
+    val historyChangedFlow: SharedFlow<Unit>
 
     /**
      * Сохранить параметры завершения тренировки в локальную очередь.

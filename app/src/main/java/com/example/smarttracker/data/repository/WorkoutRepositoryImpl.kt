@@ -76,12 +76,13 @@ class WorkoutRepositoryImpl @Inject constructor(
     private var activeRefreshJob: Job? = null
 
     /**
-     * Эмитит [Unit] при каждом успешном сохранении тренировки на сервере.
+     * Эмитит [Unit] при каждом изменении истории на сервере: успешное сохранение
+     * ([saveTraining]) или удаление ([deleteCompletedTraining]).
      * extraBufferCapacity=1: если подписчик ещё не готов, событие не теряется.
      * Используется [TrainingHistoryViewModel] для автообновления истории.
      */
-    private val _trainingCompletedFlow = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
-    override val trainingCompletedFlow: SharedFlow<Unit> = _trainingCompletedFlow.asSharedFlow()
+    private val _historyChangedFlow = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    override val historyChangedFlow: SharedFlow<Unit> = _historyChangedFlow.asSharedFlow()
 
     override fun workoutTypesFlow(): Flow<List<WorkoutType>> {
         // Запускаем обновление только если предыдущее уже завершилось.
@@ -171,7 +172,7 @@ class WorkoutRepositoryImpl @Inject constructor(
             // Уведомляем подписчиков об успешном завершении тренировки.
             // Работает и для онлайн-завершения (WorkoutStartViewModel), и для офлайн
             // (SaveTrainingWorker → этот же метод). TrainingHistoryViewModel перезагрузит историю.
-            _trainingCompletedFlow.tryEmit(Unit)
+            _historyChangedFlow.tryEmit(Unit)
             result
         } catch (e: IOException) {
             // Сеть недоступна — вызывающий код может поставить операцию в очередь
@@ -227,6 +228,15 @@ class WorkoutRepositoryImpl @Inject constructor(
     override suspend fun getTrainingDetail(trainingId: String): Result<List<com.example.smarttracker.domain.model.LocationPoint>> =
         runCatching {
             trainingApi.getTrainingDetail(trainingId).gpsPointsToDomain()
+        }
+
+    override suspend fun deleteCompletedTraining(trainingId: String): Result<Unit> =
+        runCatching {
+            trainingApi.deleteCompletedTraining(trainingId)
+        }.also { result ->
+            // Эмитим триггер только после успеха: TrainingHistoryViewModel перезагрузит список.
+            // Ошибка (нет сети, 404) → флоу не дёргаем, оверлей в UI останется открытым.
+            if (result.isSuccess) _historyChangedFlow.tryEmit(Unit)
         }
 
     override suspend fun savePendingFinish(

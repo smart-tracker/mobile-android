@@ -92,4 +92,13 @@ interface TrainingApiService {
      */
     @DELETE("training/{training_id}/delete")
     suspend fun deleteTraining(@Path("training_id") trainingId: String)
+
+    /**
+     * Удалить завершённую тренировку из истории.
+     * Вызывается из SummaryOverlay (origin = HISTORY) по тапу на иконку корзины.
+     * После 200/204 репозиторий эмитит historyChangedFlow → TrainingHistoryViewModel
+     * перезагружает список.
+     */
+    @DELETE("training/{training_id}/delete_completed")
+    suspend fun deleteCompletedTraining(@Path("training_id") trainingId: String)
 }

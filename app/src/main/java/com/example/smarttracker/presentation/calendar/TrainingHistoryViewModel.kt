@@ -38,10 +38,11 @@ class TrainingHistoryViewModel @Inject constructor(
                 _state.update { it.copy(workoutTypes = types) }
             }
         }
-        // Автообновление истории после успешного сохранения тренировки.
-        // trainingCompletedFlow эмитит из saveTraining() (онлайн) и SaveTrainingWorker (офлайн).
+        // Автообновление истории при любом изменении: сохранение тренировки
+        // (saveTraining, в т.ч. SaveTrainingWorker для офлайна) или удаление
+        // (deleteCompletedTraining). historyChangedFlow эмитит единый триггер.
         viewModelScope.launch {
-            workoutRepository.trainingCompletedFlow.collect {
+            workoutRepository.historyChangedFlow.collect {
                 loadHistory()
             }
         }

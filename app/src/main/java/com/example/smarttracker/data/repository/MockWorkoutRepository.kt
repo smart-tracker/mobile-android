@@ -21,8 +21,8 @@ import kotlinx.coroutines.flow.flowOf
  */
 class MockWorkoutRepository @Inject constructor() : WorkoutRepository {
 
-    // Mock: события завершения тренировки не генерируются
-    override val trainingCompletedFlow: SharedFlow<Unit> =
+    // Mock: события изменения истории не генерируются
+    override val historyChangedFlow: SharedFlow<Unit> =
         MutableSharedFlow<Unit>().asSharedFlow()
 
     override fun workoutTypesFlow(): Flow<List<WorkoutType>> = flowOf(
@@ -65,6 +65,9 @@ class MockWorkoutRepository @Inject constructor() : WorkoutRepository {
 
     override suspend fun getTrainingDetail(trainingId: String): Result<List<LocationPoint>> =
         Result.success(emptyList())
+
+    override suspend fun deleteCompletedTraining(trainingId: String): Result<Unit> =
+        Result.success(Unit)
 
     override suspend fun savePendingFinish(
         trainingId: String,

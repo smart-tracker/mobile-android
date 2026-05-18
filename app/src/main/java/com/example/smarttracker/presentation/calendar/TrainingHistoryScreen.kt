@@ -86,13 +86,17 @@ fun TrainingHistoryScreen(
                     modifier = Modifier
                         .weight(1f)
                         .pointerInput(state.viewMode) {
+                            // Инвертированный жест: spread (пальцы расходятся) →
+                            // углубление в детали (zoomIn: MONTH→WEEK→DAY);
+                            // pinch (пальцы сходятся) → обобщение (zoomOut: DAY→WEEK→MONTH).
+                            // Совпадает с привычным жестом «увеличения» на карте/фото.
                             detectTransformGestures { _, _, zoomChange, _ ->
                                 accumulatedScale *= zoomChange
                                 if (accumulatedScale > 1.3f) {
-                                    viewModel.onZoomOut()
+                                    viewModel.onZoomIn()
                                     accumulatedScale = 1f
                                 } else if (accumulatedScale < 0.7f) {
-                                    viewModel.onZoomIn()
+                                    viewModel.onZoomOut()
                                     accumulatedScale = 1f
                                 }
                             }

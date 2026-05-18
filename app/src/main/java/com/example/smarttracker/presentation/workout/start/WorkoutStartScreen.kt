@@ -83,6 +83,7 @@ import com.example.smarttracker.presentation.workout.summary.ScrubDisplayStats
 import com.example.smarttracker.presentation.workout.summary.StatsOverlayCard
 import com.example.smarttracker.presentation.workout.summary.SummaryBody
 import com.example.smarttracker.presentation.workout.summary.SummaryHeader
+import com.example.smarttracker.presentation.workout.summary.SummaryOrigin
 import com.example.smarttracker.presentation.workout.summary.TrainingProgressBar
 import com.example.smarttracker.presentation.workout.summary.WorkoutSummaryFormatters
 import com.example.smarttracker.presentation.workout.summary.WorkoutSummaryUiState
@@ -120,6 +121,7 @@ fun WorkoutStartScreen(
     onSearchQueryChange: (String) -> Unit,
     onCloseSummary: () -> Unit,
     onToggleFullscreenMap: () -> Unit,
+    onDeleteHistoryTraining: () -> Unit,
 ) {
     // Запрашиваем разрешения при открытии экрана.
     LocationPermissionHandler(onPermissionsResult = { /* обработка в сервисе */ })
@@ -145,8 +147,13 @@ fun WorkoutStartScreen(
     val scrubStats: ScrubDisplayStats? = if (scrubIndex != null && summary != null) {
         val cd = summary.cumulativeData
         ScrubDisplayStats(
+            // speed читается из cumulativeData (вычисляется в buildCumulativeData)
+            // вместо trackPoints[i].speed: для истории sensor-speed = null
+            // (бэк не отдаёт скорости в gps_track), поэтому считаем сами как
+            // Δdistance/Δtime между соседними точками. Для FINISH даёт ту же
+            // шкалу, но через расчёт, а не sensor — единая логика для обоих режимов.
             speedDisplay     = WorkoutSummaryFormatters.formatInstantPace(
-                                   summary.trackPoints[scrubIndex].speed),
+                                   cd.speedsMs.getOrElse(scrubIndex) { 0f }),
             elapsedDisplay   = WorkoutSummaryFormatters.formatDuration(
                                    cd.elapsedMs.getOrElse(scrubIndex) { 0L }),
             distanceDisplay  = WorkoutSummaryFormatters.formatDistance(
@@ -185,7 +192,13 @@ fun WorkoutStartScreen(
         // должен понимать, какая дата у показываемой тренировки.
         AnimatedContent(targetState = overlayVisible, label = "header") { showOverlay ->
             if (showOverlay && summary != null) {
-                SummaryHeader(dateDisplay = summary.dateDisplay)
+                SummaryHeader(
+                    dateDisplay = summary.dateDisplay,
+                    // Иконка корзины только для оверлея из истории — FINISH-оверлей
+                    // не предлагает удаление (юзер только что закончил тренировку).
+                    showDelete = summary.origin == SummaryOrigin.HISTORY,
+                    onDeleteClick = onDeleteHistoryTraining,
+                )
             } else {
                 ActiveHeader(dateDisplay = state.currentDate)
             }

@@ -86,6 +86,7 @@ fun WorkoutHomeScreen(
                     onSearchQueryChange = viewModel::onSearchQueryChange,
                     onCloseSummary = viewModel::onCloseSummaryOverlay,
                     onToggleFullscreenMap = viewModel::onToggleFullscreenMap,
+                    onDeleteHistoryTraining = viewModel::onDeleteHistoryTraining,
                 )
             }
             WorkoutTab.WORKOUTS -> TrainingHistoryScreen(

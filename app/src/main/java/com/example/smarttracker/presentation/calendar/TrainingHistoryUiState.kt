@@ -7,7 +7,7 @@ import java.time.LocalDate
 /**
  * Режим просмотра истории тренировок.
  *
- * Переключение: пинч-зум (spread → zoomOut, pinch → zoomIn).
+ * Переключение: пинч-зум (spread → zoomIn — детальнее, pinch → zoomOut — обзорнее).
  * Тап на день в Week view → DAY для той даты.
  * Тап на неделю в Month view → WEEK для той недели.
  * Кнопка «Назад» → предыдущий режим из бэкстека.
