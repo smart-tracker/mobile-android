@@ -647,8 +647,15 @@ class WorkoutStartViewModel @Inject constructor(
             val timeEnd = Instant.now()
                 .atZone(ZoneOffset.UTC)
                 .format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)
-            val distanceMeters = state.distanceMeters.takeIf { it > 0 }
-            val kilocalories   = state.kilocalories.takeIf { it > 0 }
+            // Шлём фактические значения даже при 0.0 — иначе Gson дропает null-поля,
+            // и в тело /save_training уходит только {"time_end":"..."} без
+            // total_distance_meters / total_kilocalories. Бэк на таком пустом
+            // теле падает с 500 (баг сервера, не обрабатывает Optional как
+            // отсутствующее поле). 0.0 валиден семантически: тренировка без
+            // движения → 0 м, 0 ккал. Подтверждено в логе 2026-05-18 19:41
+            // (training_id 7aa98edb-..., 1 GPS-точка, 17 сек → 500).
+            val distanceMeters = state.distanceMeters
+            val kilocalories   = state.kilocalories
 
             if (!isTrainingRegisteredOnServer) {
                 // Тренировка не зарегистрирована на сервере (startTraining не успел или нет сети).
