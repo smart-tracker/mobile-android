@@ -16,6 +16,7 @@ data class TrainingHistoryResponseDto(
     val kilocalories: Double?,
     @SerializedName("distance_m") val distanceM: Double?,
     @SerializedName("avg_speed") val avgSpeed: Double?,
+    @SerializedName("elevation_gain") val elevationGain: Double?,
 )
 
 /**
@@ -31,5 +32,6 @@ fun TrainingHistoryResponseDto.toDomain(): TrainingHistoryItem = TrainingHistory
     kilocalories = kilocalories,
     distanceM = distanceM,
     avgSpeed = avgSpeed,
+    elevationGain = elevationGain,
 )
 

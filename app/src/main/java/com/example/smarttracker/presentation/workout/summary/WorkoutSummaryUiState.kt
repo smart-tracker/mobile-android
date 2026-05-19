@@ -12,12 +12,32 @@ import java.io.File
  * @property distancesKm накопленная дистанция от старта до точки i, км
  * @property elevationsM накопленный набор высоты от старта до точки i, м
  * @property elapsedMs   прошедшее время от старта до точки i, мс
+ * @property speedsMs    мгновенная скорость на отрезке (i-1 → i), м/с.
+ *                       Для i=0 равна 0. Для истории, где сервер не отдаёт
+ *                       `speed` в gps_track, вычисляется на клиенте как
+ *                       Δdistance / Δtime между соседними точками.
+ *                       Для онлайн-завершения это даёт ту же шкалу, что
+ *                       sensor-speed (haversine + GPS-timestamps).
  */
 data class CumulativeTrackData(
     val distancesKm: List<Float> = emptyList(),
     val elevationsM: List<Float> = emptyList(),
     val elapsedMs:   List<Long>  = emptyList(),
+    val speedsMs:    List<Float> = emptyList(),
 )
+
+/**
+ * Источник оверлея итогов: определяет поведение [onCloseSummaryOverlay].
+ *
+ * - [FINISH]  — оверлей открыт после завершения активной тренировки.
+ *               При закрытии нужно сбрасывать live-поля (trackPoints/elapsedMs/...)
+ *               и рестартовать discovery-GPS.
+ * - [HISTORY] — оверлей открыт как превью из истории во время DAY view.
+ *               При закрытии нельзя трогать live-состояние: если параллельно
+ *               идёт активная тренировка, её данные будут затёрты, а GPS-сервис
+ *               переключён на discovery UUID → молчаливая потеря точек.
+ */
+enum class SummaryOrigin { FINISH, HISTORY }
 
 /**
  * Снимок итогов завершённой тренировки. Используется как поле
@@ -27,6 +47,12 @@ data class CumulativeTrackData(
  * Все строковые поля готовы к отрисовке — форматирование делается
  * в момент построения снимка через [WorkoutSummaryFormatters].
  *
+ * @property origin           источник оверлея: завершение тренировки или превью истории
+ * @property trainingId       серверный UUID тренировки. Заполняется только для
+ *                            [SummaryOrigin.HISTORY] — нужен для DELETE /training/{id}/delete_completed
+ *                            при тапе на иконку корзины. Для FINISH остаётся null
+ *                            (после завершения id уже передан в saveTraining, а оверлей
+ *                            закрывается без операций удаления).
  * @property dateDisplay      дата старта тренировки "dd.MM.yyyy (День)" в русской локали
  * @property activityName     название типа активности ("Бег", "Ходьба" и т.д.)
  * @property activityIconFile скачанный файл иконки из IconCacheManager, null если не загружен
@@ -41,6 +67,8 @@ data class CumulativeTrackData(
  * @property isLoading        true пока загружаются данные (для будущего экрана истории)
  */
 data class WorkoutSummaryUiState(
+    val origin: SummaryOrigin = SummaryOrigin.FINISH,
+    val trainingId: String? = null,
     val dateDisplay: String = "",
     val activityName: String = "",
     val activityIconFile: File? = null,

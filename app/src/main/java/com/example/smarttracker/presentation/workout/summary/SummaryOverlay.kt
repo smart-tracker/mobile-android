@@ -3,6 +3,7 @@ package com.example.smarttracker.presentation.workout.summary
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.horizontalDrag
@@ -22,9 +23,15 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -57,10 +64,25 @@ import com.example.smarttracker.presentation.workout.activityIconRes
 
 // ── Шапка ─────────────────────────────────────────────────────────────────────
 
+/**
+ * Шапка SummaryOverlay: дата по центру, опциональная иконка корзины справа.
+ *
+ * Иконка корзины показывается только при [showDelete] = true (передаётся вызывающим
+ * для оверлея, открытого из истории — [SummaryOrigin.HISTORY]).
+ * AlertDialog подтверждения держится внутри этого composable — вызывающему достаточно
+ * передать колбэк [onDeleteClick]; подтверждение «Удалить»/«Отмена» рисуется здесь.
+ *
+ * Стрелка «назад» убрана — закрытие оверлея делается системной кнопкой Back
+ * или переключением вкладки в нижнем баре [WorkoutHomeScreen].
+ */
 @Composable
-fun SummaryHeader(dateDisplay: String) {
-    // Стрелка назад убрана — закрытие оверлея делается системной кнопкой Back
-    // или переключением вкладки в нижнем баре WorkoutHomeScreen.
+fun SummaryHeader(
+    dateDisplay: String,
+    showDelete: Boolean = false,
+    onDeleteClick: () -> Unit = {},
+) {
+    var showConfirmDialog by remember { mutableStateOf(false) }
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -70,6 +92,35 @@ fun SummaryHeader(dateDisplay: String) {
         Text(
             text = dateDisplay,
             style = WorkoutTextStyles.screenHeaderDate,
+        )
+        if (showDelete) {
+            Image(
+                painter = painterResource(R.drawable.ic_delete),
+                contentDescription = "Удалить тренировку",
+                colorFilter = ColorFilter.tint(ColorPrimary),
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .padding(end = 14.dp)
+                    .size(24.dp)
+                    .clickable { showConfirmDialog = true },
+            )
+        }
+    }
+
+    if (showConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showConfirmDialog = false },
+            title = { Text("Удалить тренировку?") },
+            text = { Text("Действие нельзя отменить. Запись будет удалена с сервера.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showConfirmDialog = false
+                    onDeleteClick()
+                }) { Text("Удалить") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showConfirmDialog = false }) { Text("Отмена") }
+            },
         )
     }
 }

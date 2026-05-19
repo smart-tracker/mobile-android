@@ -11,6 +11,7 @@ import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import org.maplibre.android.MapLibre
 import org.maplibre.android.WellKnownTileServer
+import org.maplibre.android.module.http.HttpRequestUtil
 import javax.inject.Inject
 
 /**
@@ -43,6 +44,10 @@ class SmartTrackerApp : Application(), Configuration.Provider, ImageLoaderFactor
         super.onCreate()
         // null = без API-ключа; WellKnownTileServer.MapLibre = стандартный tile-сервер
         MapLibre.getInstance(this, null, WellKnownTileServer.MapLibre)
+        // Нативный C++ HTTP-стек MapLibre (Mbgl-HttpRequest) использует собственный TLS-bundle
+        // и не доверяет ряду CA (→ "Chain validation failed"). Подменяем на OkHttp,
+        // который использует системный Android trust store — тот же, что работает для API.
+        HttpRequestUtil.setOkHttpClient(okHttpClient)
     }
 
     // Coil 2.x: ImageLoaderFactory.newImageLoader() — Application сам является Context

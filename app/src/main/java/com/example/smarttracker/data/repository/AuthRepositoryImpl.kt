@@ -12,6 +12,7 @@ import com.example.smarttracker.data.local.UserProfileCache
 import com.example.smarttracker.data.remote.AuthApiService
 import com.example.smarttracker.data.remote.dto.EmailVerificationDto
 import com.example.smarttracker.data.remote.dto.LoginRequestDto
+import com.example.smarttracker.data.remote.dto.RefreshTokenRequestDto
 import com.example.smarttracker.data.remote.dto.NicknameCheckRequestDto
 import com.example.smarttracker.data.remote.dto.ResendEmailDto
 import com.example.smarttracker.data.remote.dto.UpdateProfileRequestDto
@@ -157,19 +158,18 @@ class AuthRepositoryImpl @Inject constructor(
      * Обновление access token по refresh token.
      * Новая пара токенов заменяет старую в хранилище.
      *
-     * Refresh token передаётся как @Query (не @Body) — подтверждено
-     * сигнатурой FastAPI-роута (нюанс #7 в CONTEXT.md).
+     * Refresh token передаётся в JSON-теле (@Body) — FastAPI-роут использует Body(...).
      *
      * ⚠️ ВАЖНО: Роли НЕ перезагружаются — остаются из TokenStorage (предыдущего входа).
      * Причина: refreshToken вызывается часто (при экспирации access token),
      * не нужно каждый раз ходить на getUserRoles.
-     * 
+     *
      * Если нужна актуальная информация о ролях → вызовите login() повторно.
      * Роли обновляются только при явном входе в систему.
      */
     override suspend fun refreshToken(refreshToken: String): Result<AuthResult> =
         runCatching {
-            val result = api.refreshToken(refreshToken).toDomain()
+            val result = api.refreshToken(RefreshTokenRequestDto(refreshToken)).toDomain()
             
             // Сохранить токены, роли остаются из TokenStorage (уже актуальные)
             val currentRoles = tokenStorage.getUserRoles()

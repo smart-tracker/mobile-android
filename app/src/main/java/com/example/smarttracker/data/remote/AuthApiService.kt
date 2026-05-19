@@ -9,6 +9,7 @@ import com.example.smarttracker.data.remote.dto.GoalResponseDto
 import com.example.smarttracker.data.remote.dto.LoginRequestDto
 import com.example.smarttracker.data.remote.dto.NicknameCheckRequestDto
 import com.example.smarttracker.data.remote.dto.NicknameCheckResponseDto
+import com.example.smarttracker.data.remote.dto.RefreshTokenRequestDto
 import com.example.smarttracker.data.remote.dto.RegisterRequestDto
 import com.example.smarttracker.data.remote.dto.RegisterResultDto
 import com.example.smarttracker.data.remote.dto.ResendCodeResponseDto
@@ -30,7 +31,6 @@ import retrofit2.http.Multipart
 import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.Part
-import retrofit2.http.Query
 
 /**
  * Retrofit-интерфейс для эндпоинтов авторизации.
@@ -72,13 +72,10 @@ interface AuthApiService {
 
     /**
      * Обновление access token по refresh token.
-     *
-     * Нюанс: FastAPI без явного Body(...) трактует строковый параметр
-     * POST-роута как query param, а не тело запроса. Поэтому @Query, не @Body.
-     * Подтверждено сигнатурой: `async def refresh_token(refresh_token: str, ...)`.
+     * FastAPI-роут использует Body(...) — refresh_token в JSON-теле, не query param.
      */
     @POST("auth/refresh")
-    suspend fun refreshToken(@Query("refresh_token") token: String): AuthResponseDto
+    suspend fun refreshToken(@Body request: RefreshTokenRequestDto): AuthResponseDto
 
     /**
      * Проверка доступности nickname.

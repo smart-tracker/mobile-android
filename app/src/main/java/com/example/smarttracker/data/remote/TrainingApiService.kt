@@ -1,6 +1,7 @@
 package com.example.smarttracker.data.remote
 
 import com.example.smarttracker.data.remote.dto.ActiveTrainingResponseDto
+import com.example.smarttracker.data.remote.dto.GetTrainingDetailResponseDto
 import com.example.smarttracker.data.remote.dto.TrainingHistoryResponseDto
 import com.example.smarttracker.data.remote.dto.GpsPointsBatchRequestDto
 import com.example.smarttracker.data.remote.dto.GpsPointsSaveResponseDto
@@ -79,9 +80,25 @@ interface TrainingApiService {
     suspend fun getTrainingHistory(): List<TrainingHistoryResponseDto>
 
     /**
+     * Получить полные данные тренировки включая GPS-трек.
+     * Используется для отображения SummaryOverlay из истории тренировок.
+     */
+    @GET("training/{training_id}/get_training")
+    suspend fun getTrainingDetail(@Path("training_id") trainingId: String): GetTrainingDetailResponseDto
+
+    /**
      * Удалить тренировку (тестовый эндпоинт).
      * Не используется в production-потоке.
      */
     @DELETE("training/{training_id}/delete")
     suspend fun deleteTraining(@Path("training_id") trainingId: String)
+
+    /**
+     * Удалить завершённую тренировку из истории.
+     * Вызывается из SummaryOverlay (origin = HISTORY) по тапу на иконку корзины.
+     * После 200/204 репозиторий эмитит historyChangedFlow → TrainingHistoryViewModel
+     * перезагружает список.
+     */
+    @DELETE("training/{training_id}/delete_completed")
+    suspend fun deleteCompletedTraining(@Path("training_id") trainingId: String)
 }

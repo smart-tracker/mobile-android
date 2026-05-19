@@ -27,6 +27,7 @@ import com.example.smarttracker.domain.repository.AuthRepository
 import com.example.smarttracker.domain.repository.LocationRepository
 import com.example.smarttracker.domain.repository.WorkoutRepository
 import com.example.smarttracker.domain.usecase.CalculateTrainingStatsUseCase
+import com.example.smarttracker.presentation.workout.summary.SummaryOrigin
 import com.example.smarttracker.presentation.workout.summary.WorkoutSummaryFormatters
 import com.example.smarttracker.presentation.workout.summary.WorkoutSummaryUiState
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -47,9 +48,12 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import com.example.smarttracker.domain.model.TrainingHistoryItem
+import com.example.smarttracker.presentation.workout.summary.CumulativeTrackData
 import java.time.Instant
 import java.time.LocalDate
 import java.time.Period
+import java.time.ZoneId
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -235,6 +239,10 @@ class WorkoutStartViewModel @Inject constructor(
 
     // Наблюдатель за GPS-точками: обновляет GPS-статус и статистику
     private var observerJob: Job? = null
+
+    // Загрузка GPS-трека для превью истории. Отменяется в onCloseSummaryOverlay,
+    // чтобы поздний ответ сети не возрождал уже закрытый оверлей.
+    private var historyDetailJob: Job? = null
 
     init {
         // Устанавливаем текущую дату
@@ -617,6 +625,7 @@ class WorkoutStartViewModel @Inject constructor(
                                     System.currentTimeMillis()
         val type = state.selectedType
         val snapshot = WorkoutSummaryUiState(
+            origin           = SummaryOrigin.FINISH,
             dateDisplay      = WorkoutSummaryFormatters.formatDate(summaryStartTs),
             activityName     = type?.name.orEmpty(),
             activityIconFile = type?.iconFile,
@@ -638,8 +647,15 @@ class WorkoutStartViewModel @Inject constructor(
             val timeEnd = Instant.now()
                 .atZone(ZoneOffset.UTC)
                 .format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)
-            val distanceMeters = state.distanceMeters.takeIf { it > 0 }
-            val kilocalories   = state.kilocalories.takeIf { it > 0 }
+            // Шлём фактические значения даже при 0.0 — иначе Gson дропает null-поля,
+            // и в тело /save_training уходит только {"time_end":"..."} без
+            // total_distance_meters / total_kilocalories. Бэк на таком пустом
+            // теле падает с 500 (баг сервера, не обрабатывает Optional как
+            // отсутствующее поле). 0.0 валиден семантически: тренировка без
+            // движения → 0 м, 0 ккал. Подтверждено в логе 2026-05-18 19:41
+            // (training_id 7aa98edb-..., 1 GPS-точка, 17 сек → 500).
+            val distanceMeters = state.distanceMeters
+            val kilocalories   = state.kilocalories
 
             if (!isTrainingRegisteredOnServer) {
                 // Тренировка не зарегистрирована на сервере (startTraining не успел или нет сети).
@@ -741,8 +757,15 @@ class WorkoutStartViewModel @Inject constructor(
     }
 
     /**
-     * Закрытие оверлея итогов — возвращает экран в состояние «можно начать новую тренировку».
-     * Сбрасывает live-поля, перезапускает discovery-GPS.
+     * Закрытие оверлея итогов.
+     *
+     * Поведение зависит от [WorkoutSummaryUiState.origin]:
+     *  - [SummaryOrigin.FINISH]  — оверлей завершённой тренировки → возвращаемся в состояние
+     *    «можно начать новую тренировку»: сбрасываем live-поля и рестартуем discovery-GPS.
+     *  - [SummaryOrigin.HISTORY] — превью из истории → закрываем только оверлей, не трогая
+     *    live-состояние. Если параллельно идёт активная тренировка, её данные сохраняются.
+     *    Дополнительно отменяем [historyDetailJob], чтобы поздний ответ сети не возрождал
+     *    уже закрытый оверлей.
      *
      * Вызывается:
      *  - тапом стрелки «назад» в оверлее
@@ -750,7 +773,19 @@ class WorkoutStartViewModel @Inject constructor(
      *  - переключением вкладки в нижнем баре (см. WorkoutHomeScreen)
      */
     fun onCloseSummaryOverlay() {
-        if (_state.value.summaryOverlay == null) return
+        val overlay = _state.value.summaryOverlay ?: return
+
+        if (overlay.origin == SummaryOrigin.HISTORY) {
+            // История: только закрываем оверлей, отменяем pending-загрузку.
+            // Live-поля (trackPoints/elapsedMs/distance/...) НЕ трогаем —
+            // если идёт активная тренировка, её состояние должно остаться.
+            historyDetailJob?.cancel()
+            historyDetailJob = null
+            _state.update { it.copy(summaryOverlay = null, isMapFullscreen = false) }
+            return
+        }
+
+        // FINISH: полный сброс live-полей и рестарт discovery-GPS
         pausedElapsedMs = 0L
         trainingStartTimestamp = 0L
         _state.update { it.copy(
@@ -784,6 +819,94 @@ class WorkoutStartViewModel @Inject constructor(
      */
     fun onToggleFullscreenMap() {
         _state.update { it.copy(isMapFullscreen = !it.isMapFullscreen) }
+    }
+
+    /**
+     * Удаление тренировки из истории (вызов из SummaryOverlay по тапу на иконку корзины).
+     *
+     * Безопасный no-op если:
+     *  - оверлей закрыт (overlay == null);
+     *  - оверлей не HISTORY (FINISH-оверлей не должен предлагать удаление);
+     *  - trainingId не известен (странный кейс, но fallback).
+     *
+     * После успеха закрываем оверлей через [onCloseSummaryOverlay] (не трогаем live-поля,
+     * это HISTORY-ветка). TrainingHistoryViewModel сам перезагрузит список через
+     * historyChangedFlow → loadHistory.
+     */
+    fun onDeleteHistoryTraining() {
+        val overlay = _state.value.summaryOverlay ?: return
+        if (overlay.origin != SummaryOrigin.HISTORY) return
+        val trainingId = overlay.trainingId ?: return
+        viewModelScope.launch {
+            workoutRepository.deleteCompletedTraining(trainingId)
+                .onSuccess { onCloseSummaryOverlay() }
+                .onFailure { e -> Log.e(TAG, "deleteCompletedTraining failed for $trainingId", e) }
+        }
+    }
+
+    /**
+     * Показать SummaryOverlay для тренировки из истории.
+     *
+     * Сначала отображает overlay в состоянии загрузки ([WorkoutSummaryUiState.isLoading] = true),
+     * затем асинхронно загружает GPS-трек через GET /training/{id}/get_training.
+     * Если трек недоступен — overlay показывается со статистикой, но без карты.
+     *
+     * Используется из [com.example.smarttracker.presentation.workout.WorkoutHomeScreen]
+     * при клике на карточку тренировки в Day view истории.
+     */
+    fun showHistorySummary(item: TrainingHistoryItem, activityName: String) {
+        // Если уже идёт загрузка предыдущего превью — отменяем, чтобы её поздний
+        // ответ не перетёр новый снимок.
+        historyDetailJob?.cancel()
+        _state.update { it.copy(summaryOverlay = WorkoutSummaryUiState(
+            origin     = SummaryOrigin.HISTORY,
+            trainingId = item.trainingId,
+            isLoading  = true,
+        )) }
+        historyDetailJob = viewModelScope.launch {
+            val points    = workoutRepository.getTrainingDetail(item.trainingId).getOrDefault(emptyList())
+            val distanceKm = ((item.distanceM ?: 0.0) / 1000.0).toFloat()
+            val durationMs = computeHistoryDurationMs(item.timeStart, item.timeEnd)
+            val workoutType = _state.value.workoutTypes.find { it.id == item.typeActivId }
+            val dateMs     = item.date.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+            // Приоритет: серверное elevation_gain из списка истории (item.elevationGain).
+            // Fallback на клиентский расчёт по точкам — на случай старого ответа без поля
+            // или null от сервера.
+            val elevationM = (item.elevationGain ?: calculateElevationGain(points)).toFloat()
+            val cumData    = buildCumulativeData(points, emptyList())
+            val snapshot = WorkoutSummaryUiState(
+                origin           = SummaryOrigin.HISTORY,
+                trainingId       = item.trainingId,
+                dateDisplay      = WorkoutSummaryFormatters.formatDate(dateMs),
+                activityName     = activityName,
+                activityIconFile = workoutType?.iconFile,
+                activityIconUrl  = workoutType?.imageUrl,
+                activityIconKey  = item.typeActivId.toString(),
+                paceDisplay      = WorkoutSummaryFormatters.formatPace(distanceKm, durationMs),
+                distanceDisplay  = WorkoutSummaryFormatters.formatDistance(distanceKm),
+                durationDisplay  = WorkoutSummaryFormatters.formatDuration(durationMs),
+                elevationDisplay = WorkoutSummaryFormatters.formatElevation(elevationM),
+                trackPoints      = points,
+                cumulativeData   = cumData,
+            )
+            // Защита от гонки: если оверлей закрыли или уже переключили на другую
+            // тренировку, пока шла загрузка, не перетираем актуальный snapshot.
+            _state.update {
+                val currentOverlay = it.summaryOverlay
+                if (currentOverlay == null || currentOverlay.trainingId != item.trainingId) it
+                else it.copy(summaryOverlay = snapshot)
+            }
+        }
+    }
+
+    /** Парсит ISO-строки времени из истории API (формат "2026-05-16T08:44:00.613000Z"). */
+    private fun computeHistoryDurationMs(start: String?, end: String?): Long {
+        if (start == null || end == null) return 0L
+        return try {
+            val s = java.time.OffsetDateTime.parse(start.trim()).toLocalDateTime()
+            val e = java.time.OffsetDateTime.parse(end.trim()).toLocalDateTime()
+            java.time.Duration.between(s, e).toMillis()
+        } catch (_: Exception) { 0L }
     }
 
     /**
@@ -833,6 +956,7 @@ class WorkoutStartViewModel @Inject constructor(
         val distances = ArrayList<Float>(n)
         val elevations = ArrayList<Float>(n)
         val elapsed    = ArrayList<Long>(n)
+        val speeds     = ArrayList<Float>(n)
         var cumDistM     = 0.0
         var cumElevM     = 0f
         var totalPausedMs = 0L
@@ -841,9 +965,11 @@ class WorkoutStartViewModel @Inject constructor(
         // Если передавать (altitude ?: 0.0), null-точка трактуется как высота 0 → ложный
         // скачок +300 м при переходе от 300 м к null и затем снова к 305 м (60× расхождение).
         var prevAlt: Double? = points.first().altitude
-        distances.add(0f); elevations.add(0f); elapsed.add(0L)
+        distances.add(0f); elevations.add(0f); elapsed.add(0L); speeds.add(0f)
         for (i in 1 until n) {
             val isGap = i in gapSet
+            // Δdistance этого шага — нужен и для накопленной дистанции, и для скорости.
+            var stepDistM = 0.0
             if (isGap) {
                 // Gap-пара: пользователь стоял на паузе. Haversine не считаем — телепорт
                 // не отражает реального движения. Время паузы вычитаем из elapsed.
@@ -852,9 +978,10 @@ class WorkoutStartViewModel @Inject constructor(
                 // calculateDeltaDistance(points, i - 1) возвращает расстояние от точки (i-2)
                 // до КОНЦА списка — не шаг, а хвост. Исправляем: передаём пару из двух
                 // соседних точек, fromIndex=0 → startIdx=max(0,-1)=0 → haversine одного шага.
-                cumDistM += calculateTrainingStatsUseCase.calculateDeltaDistance(
+                stepDistM = calculateTrainingStatsUseCase.calculateDeltaDistance(
                     listOf(points[i - 1], points[i]), 0
                 )
+                cumDistM += stepDistM
                 val altCur = points[i].altitude
                 if (altCur != null && prevAlt != null) {
                     val dAlt = (altCur - prevAlt).toFloat()
@@ -866,11 +993,20 @@ class WorkoutStartViewModel @Inject constructor(
             distances.add((cumDistM / 1000.0).toFloat())
             elevations.add(cumElevM)
             elapsed.add(points[i].timestampUtc - t0 - totalPausedMs)
+            // Мгновенная скорость м/с. Для FINISH дублирует sensor-speed, но даёт single
+            // source of truth (UI читает speeds[i] всегда из cumulativeData). Для HISTORY
+            // sensor-speed = null, расчёт = только этот способ.
+            // На gap-парах stepDistM=0 → speed=0, что корректно (пользователь стоял).
+            // Защита от деления на ноль: dtMs <= 0 → 0 (для дубль-точек с одинаковым timestamp).
+            val dtMs = points[i].timestampUtc - points[i - 1].timestampUtc
+            val speedMs = if (dtMs > 0L) (stepDistM / (dtMs / 1000.0)).toFloat() else 0f
+            speeds.add(speedMs)
         }
         return com.example.smarttracker.presentation.workout.summary.CumulativeTrackData(
             distancesKm = distances,
             elevationsM = elevations,
             elapsedMs   = elapsed,
+            speedsMs    = speeds,
         )
     }
 

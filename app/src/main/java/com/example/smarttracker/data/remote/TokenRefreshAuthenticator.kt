@@ -5,7 +5,7 @@ import com.example.smarttracker.data.local.TokenStorage
 import com.example.smarttracker.data.remote.dto.AuthResponseDto
 import com.google.gson.Gson
 import okhttp3.Authenticator
-import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -33,7 +33,7 @@ import javax.inject.Singleton
  *   1. Проверить, что это не сам refresh-запрос (избежать рекурсии)
  *   2. Проверить счётчик повторов (не более 1)
  *   3. Взять refresh token из TokenStorage
- *   4. POST /auth/refresh?refresh_token=... (синхронно через refreshClient)
+ *   4. POST /auth/refresh body={"refresh_token":"..."} (синхронно через refreshClient)
  *   5. Успех → сохранить новую пару токенов, вернуть исходный запрос с новым Bearer
  *   6. 4xx → signalSessionExpired() (принудительный выход + UI-сигнал), вернуть null
  *   7. 5xx / сетевая ошибка → вернуть null (временная проблема, logout не нужен)
@@ -89,17 +89,15 @@ class TokenRefreshAuthenticator @Inject constructor(
 
         Log.d(TAG, "Access token истёк (401), пробуем обновить через refresh token")
 
-        // Строим URL: baseUrl/auth/refresh?refresh_token=...
-        // trimEnd('/') защита от двойного слэша если BASE_URL заканчивается на '/'
-        val url = "${baseUrl.trimEnd('/')}/auth/refresh".toHttpUrl()
-            .newBuilder()
-            .addQueryParameter("refresh_token", refreshToken)
-            .build()
+        // POST /auth/refresh с JSON-телом {"refresh_token": "..."}
+        // FastAPI-роут использует Body(...) — query param игнорируется.
+        val url = "${baseUrl.trimEnd('/')}/auth/refresh"
+        val requestBody = gson.toJson(mapOf("refresh_token" to refreshToken))
+            .toRequestBody("application/json".toMediaType())
 
         val refreshRequest = Request.Builder()
             .url(url)
-            // POST без тела — FastAPI принимает refresh_token как @Query param
-            .post("".toRequestBody(null))
+            .post(requestBody)
             .build()
 
         // use {} гарантирует закрытие соединения в connection pool при любом исходе.

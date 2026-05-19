@@ -135,4 +135,22 @@ object WorkoutTextStyles {
         fontWeight = FontWeight.Light,
         fontSize = 20.sp,
     )
+
+    // ── Карточки таймлайна истории тренировок (Day/Week/Month) ──────────────
+
+    /** Строка инфо в карточках таймлайна — 14sp Normal ColorPrimary. */
+    val timelineInfo = TextStyle(
+        fontFamily = geologicaFontFamily,
+        fontWeight = FontWeight.Normal,
+        fontSize = 14.sp,
+        color = ColorPrimary,
+    )
+
+    /** Жирная метка в карточке таймлайна (напр., «Тр. - N») — 14sp Bold ColorPrimary. */
+    val timelineLabelBold = TextStyle(
+        fontFamily = geologicaFontFamily,
+        fontWeight = FontWeight.Bold,
+        fontSize = 14.sp,
+        color = ColorPrimary,
+    )
 }

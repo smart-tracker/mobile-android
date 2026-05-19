@@ -16,5 +16,6 @@ data class TrainingHistoryItem(
     val kilocalories: Double?,
     val distanceM: Double?,
     val avgSpeed: Double?,
+    val elevationGain: Double?,
 )
 

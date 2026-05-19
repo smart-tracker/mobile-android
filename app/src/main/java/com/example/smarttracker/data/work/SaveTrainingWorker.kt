@@ -84,11 +84,16 @@ class SaveTrainingWorker @AssistedInject constructor(
 
         var hasTransientFailures = false
         for (item in pending) {
+            // Фолбэк на 0.0 для null-полей: бэкенд валит 500 при отсутствии
+            // total_distance_meters / total_kilocalories в теле (Optional на
+            // схеме, но не обрабатываемое на сервере). 0.0 валиден семантически.
+            // Защищает от старых записей в Room, созданных до фикса в
+            // WorkoutStartViewModel.onFinishClick (тогда поля могли быть null).
             workoutRepository.saveTraining(
                 trainingId          = item.trainingId,
                 timeEnd             = item.timeEnd,
-                totalDistanceMeters = item.totalDistanceMeters,
-                totalKilocalories   = item.totalKilocalories,
+                totalDistanceMeters = item.totalDistanceMeters ?: 0.0,
+                totalKilocalories   = item.totalKilocalories ?: 0.0,
             ).onSuccess {
                 Log.d(TAG, "saveTraining success for ${item.trainingId}, removing from queue")
                 pendingFinishDao.delete(item.trainingId)

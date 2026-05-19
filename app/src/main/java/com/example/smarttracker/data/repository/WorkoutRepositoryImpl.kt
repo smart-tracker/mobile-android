@@ -12,6 +12,7 @@ import com.example.smarttracker.data.remote.TrainingApiService
 import com.example.smarttracker.data.remote.dto.GpsPointsBatchRequestDto
 import com.example.smarttracker.data.remote.dto.TrainingSaveRequestDto
 import com.example.smarttracker.data.remote.dto.TrainingStartRequestDto
+import com.example.smarttracker.data.remote.dto.gpsPointsToDomain
 import com.example.smarttracker.data.remote.dto.toDomain
 import com.example.smarttracker.data.remote.dto.toGpsPointDto
 import com.example.smarttracker.domain.model.ActiveTrainingConflictException
@@ -31,6 +32,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -70,6 +74,15 @@ class WorkoutRepositoryImpl @Inject constructor(
 
     /** Дебаунс: не допускаем параллельных вызовов refreshFromNetwork при быстрой навигации. */
     private var activeRefreshJob: Job? = null
+
+    /**
+     * Эмитит [Unit] при каждом изменении истории на сервере: успешное сохранение
+     * ([saveTraining]) или удаление ([deleteCompletedTraining]).
+     * extraBufferCapacity=1: если подписчик ещё не готов, событие не теряется.
+     * Используется [TrainingHistoryViewModel] для автообновления истории.
+     */
+    private val _historyChangedFlow = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    override val historyChangedFlow: SharedFlow<Unit> = _historyChangedFlow.asSharedFlow()
 
     override fun workoutTypesFlow(): Flow<List<WorkoutType>> {
         // Запускаем обновление только если предыдущее уже завершилось.
@@ -152,10 +165,15 @@ class WorkoutRepositoryImpl @Inject constructor(
         totalKilocalories: Double?,
     ): Result<SaveTrainingResult> = runCatching {
         try {
-            trainingApi.saveTraining(
+            val result = trainingApi.saveTraining(
                 trainingId,
                 TrainingSaveRequestDto(timeEnd, totalDistanceMeters, totalKilocalories),
             ).toDomain()
+            // Уведомляем подписчиков об успешном завершении тренировки.
+            // Работает и для онлайн-завершения (WorkoutStartViewModel), и для офлайн
+            // (SaveTrainingWorker → этот же метод). TrainingHistoryViewModel перезагрузит историю.
+            _historyChangedFlow.tryEmit(Unit)
+            result
         } catch (e: IOException) {
             // Сеть недоступна — вызывающий код может поставить операцию в очередь
             throw NetworkUnavailableException(e)
@@ -205,6 +223,20 @@ class WorkoutRepositoryImpl @Inject constructor(
     override suspend fun getTrainingHistory(): Result<List<com.example.smarttracker.domain.model.TrainingHistoryItem>> =
         runCatching {
             trainingApi.getTrainingHistory().map { it.toDomain() }
+        }
+
+    override suspend fun getTrainingDetail(trainingId: String): Result<List<com.example.smarttracker.domain.model.LocationPoint>> =
+        runCatching {
+            trainingApi.getTrainingDetail(trainingId).gpsPointsToDomain()
+        }
+
+    override suspend fun deleteCompletedTraining(trainingId: String): Result<Unit> =
+        runCatching {
+            trainingApi.deleteCompletedTraining(trainingId)
+        }.also { result ->
+            // Эмитим триггер только после успеха: TrainingHistoryViewModel перезагрузит список.
+            // Ошибка (нет сети, 404) → флоу не дёргаем, оверлей в UI останется открытым.
+            if (result.isSuccess) _historyChangedFlow.tryEmit(Unit)
         }
 
     override suspend fun savePendingFinish(

@@ -6,6 +6,7 @@ import com.example.smarttracker.domain.model.METActivity
 import com.example.smarttracker.domain.model.SaveTrainingResult
 import com.example.smarttracker.domain.model.WorkoutType
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.SharedFlow
 import com.example.smarttracker.domain.model.TrainingHistoryItem
 
 /**
@@ -91,6 +92,28 @@ interface WorkoutRepository {
      * Возвращает список элементов истории; пустой список если записей нет.
      */
     suspend fun getTrainingHistory(): Result<List<TrainingHistoryItem>>
+
+    /**
+     * Получить GPS-трек конкретной тренировки из истории.
+     * Использует GET /training/{training_id}/get_training.
+     * Возвращает пустой список если трек недоступен или произошла ошибка сети.
+     */
+    suspend fun getTrainingDetail(trainingId: String): Result<List<LocationPoint>>
+
+    /**
+     * Удалить завершённую тренировку из истории на сервере.
+     * После успешного 200/204 эмитит [historyChangedFlow] → [TrainingHistoryViewModel]
+     * автоматически перезагрузит список.
+     */
+    suspend fun deleteCompletedTraining(trainingId: String): Result<Unit>
+
+    /**
+     * Эмитит [Unit] каждый раз, когда содержимое истории меняется на сервере:
+     * - тренировка успешно сохранена ([saveTraining], в т.ч. через [SaveTrainingWorker]);
+     * - тренировка удалена ([deleteCompletedTraining]).
+     * Используется [TrainingHistoryViewModel] как единый триггер перезагрузки.
+     */
+    val historyChangedFlow: SharedFlow<Unit>
 
     /**
      * Сохранить параметры завершения тренировки в локальную очередь.
