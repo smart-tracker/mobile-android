@@ -41,8 +41,13 @@ class GmsLocationTracker(context: Context) : LocationTracker {
 
         val request = LocationRequest.Builder(gmsPriority, config.intervalMs)
             .setMinUpdateDistanceMeters(config.minDistanceMeters)
-            // Ждать точного фикса перед первой доставкой — уменьшает прыжки в начале трека
-            .setWaitForAccurateLocation(true)
+            // setWaitForAccurateLocation(false): не ждать «идеального» fix'а после Doze
+            // maintenance window — отдавать доступную точку немедленно. Защита от прыжков
+            // в начале трека обеспечивается фильтрами в LocationTrackingService:
+            // Layer 1 (accuracy > threshold → reject), Layer 4 (антидребезг по расстоянию)
+            // и moving average smoothing. При true FLP после выхода из Doze может
+            // несколько минут ждать «точную» точку → провал в треке.
+            .setWaitForAccurateLocation(false)
             .build()
 
         val callback = object : LocationCallback() {

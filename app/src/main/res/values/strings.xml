@@ -51,4 +51,21 @@
     <string name="register_step4_title">Подтверждение почты (4/4)</string>
     <string name="register_create_account">Создать аккаунт</string>
     <string name="register_next">Далее</string>
+
+    <!-- Уведомление активной тренировки -->
+    <string name="notif_workout_title">Тренировка идёт</string>
+    <string name="notif_workout_title_paused">Тренировка на паузе</string>
+    <string name="notif_speed_kmh_format">Скорость: %1$.1f км/ч</string>
+    <string name="notif_speed_unknown">Скорость: —</string>
+    <string name="notif_paused">На паузе (%1$s)</string>
+    <string name="notif_action_pause">Пауза</string>
+    <string name="notif_action_resume">Продолжить</string>
+
+    <!-- Оптимизация батареи (Doze whitelist) -->
+    <string name="battery_opt_dialog_title">Точная запись тренировок</string>
+    <string name="battery_opt_dialog_message">Чтобы GPS-точки сохранялись при выключенном экране, разрешите приложению работать без оптимизации батареи. Без этого Android может прерывать запись через 5 минут после блокировки экрана.</string>
+    <string name="battery_opt_dialog_confirm">Открыть настройки</string>
+    <string name="battery_opt_dialog_dismiss">Позже</string>
+    <string name="battery_opt_banner_text">Запись может прерываться при выключенном экране</string>
+    <string name="battery_opt_banner_action">Настроить</string>
 </resources>

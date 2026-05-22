@@ -49,12 +49,19 @@ import coil.compose.AsyncImage
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.example.smarttracker.data.system.BatteryOptimizationHelper
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import android.os.Build
@@ -124,8 +131,41 @@ fun WorkoutStartScreen(
     onToggleFullscreenMap: () -> Unit,
     onDeleteHistoryTraining: () -> Unit,
 ) {
+    // ── Статус Doze whitelist (для баннера) ──────────────────────────────────────
+    // batteryOptimized = true → приложение в whitelist → баннер скрыт.
+    // false → Android Doze будет throttle'ить GPS-обновления при выключенном экране.
+    // Состояние локальное (не в VM): нужно только для баннера на этом экране,
+    // нет других потребителей. При наличии других — перенести в WorkoutStartViewModel.UiState.
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    var batteryOptimized by remember {
+        mutableStateOf(BatteryOptimizationHelper.isIgnoringBatteryOptimizations(ctx))
+    }
+    // Обновляем статус при возврате из системных настроек (юзер мог нажать "Разрешить"
+    // в системном диалоге Doze whitelist). ON_RESUME — стандартный hook для перепроверки
+    // системных permissions при возврате на экран.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                batteryOptimized = BatteryOptimizationHelper.isIgnoringBatteryOptimizations(ctx)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    // Launcher для запуска системного диалога Doze whitelist из баннера.
+    // После закрытия диалога ON_RESUME выше обновит batteryOptimized.
+    val bannerBatteryOptLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult(),
+    ) {
+        batteryOptimized = BatteryOptimizationHelper.isIgnoringBatteryOptimizations(ctx)
+    }
+
     // Запрашиваем разрешения при открытии экрана.
-    LocationPermissionHandler(onPermissionsResult = { /* обработка в сервисе */ })
+    LocationPermissionHandler(
+        onPermissionsResult = { /* обработка в сервисе */ },
+        onBatteryOptResult  = { granted -> batteryOptimized = granted },
+    )
 
     // Локальное состояние шторки выбора активности — чисто UI, не нужно в ViewModel
     var showTypeSelector by remember { mutableStateOf(false) }
@@ -212,6 +252,22 @@ fun WorkoutStartScreen(
             }
         }
         HorizontalDivider(color = ColorPrimary, thickness = 1.dp)
+
+        // ── Баннер: Doze whitelist не выдан ─────────────────────────────────────
+        // Показывается только в основном (pre-start) режиме экрана. Скрыт во время
+        // активной тренировки (юзер уже в процессе — не дёргать), в оверлее итогов
+        // и в fullscreen-карте.
+        // Тап на "Настроить" → системный диалог запроса whitelist; статус обновится
+        // через ON_RESUME observer и баннер исчезнет.
+        if (!batteryOptimized && !overlayVisible && !isFullscreen && !state.isTracking) {
+            BatteryOptBanner(
+                onConfigureClick = {
+                    bannerBatteryOptLauncher.launch(
+                        BatteryOptimizationHelper.buildRequestIntent(ctx)
+                    )
+                }
+            )
+        }
 
         // ── Тело: таймер/статистика (active) ↔ активность/карточки (summary) ──
         // В полноэкранном режиме карты схлопывается в ноль, оставляя только шапку.
@@ -729,6 +785,51 @@ private fun WorkoutTypeIcon(
             error = painterResource(R.drawable.placeholder),
             modifier = Modifier.size(36.dp),
         )
+    }
+}
+
+/**
+ * Баннер-предупреждение: приложение не в Doze whitelist.
+ *
+ * Показывается под шапкой стартового экрана когда юзер отказался от системного
+ * запроса (или установлен сторонним способом). Без whitelist Android Doze
+ * throttle'ит GPS-обновления через ~5-10 мин после выключения экрана —
+ * точки могут не записаться при длительной тренировке с заблокированным экраном.
+ *
+ * Цвет фона — мягкий амбер для warning'а (не критическая ошибка, а инфо-сообщение).
+ * Заметный, но не агрессивный — юзер может продолжать без настройки.
+ */
+@Composable
+private fun BatteryOptBanner(onConfigureClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color(0xFFFFF4D6))   // soft amber
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = stringResource(R.string.battery_opt_banner_text),
+            style = WorkoutTextStyles.statLabel,
+            color = ColorPrimary,
+            modifier = Modifier.weight(1f),
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        OutlinedButton(
+            onClick = onConfigureClick,
+            shape = RoundedCornerShape(6.dp),
+            border = BorderStroke(1.dp, ColorPrimary),
+            colors = ButtonDefaults.outlinedButtonColors(
+                containerColor = Color.White,
+                contentColor   = ColorPrimary,
+            ),
+            modifier = Modifier.height(36.dp),
+        ) {
+            Text(
+                text  = stringResource(R.string.battery_opt_banner_action),
+                color = ColorPrimary,
+            )
+        }
     }
 }
 

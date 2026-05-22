@@ -98,6 +98,14 @@ object LocationConfig {
     const val PREFS_RECOVERY       = "location_service_recovery"
     const val KEY_ACTIVE_TRAINING  = "active_training_id"
 
+    /** Crash-recovery: момент старта/последнего resume тренировки (wall-clock ms).
+     *  Используется как база chronometer'а в foreground-уведомлении. */
+    const val KEY_SESSION_STARTED_AT     = "session_started_at"
+    /** Crash-recovery: накопленное время до текущей паузы (мс). */
+    const val KEY_PAUSED_ACCUMULATED_MS  = "paused_accumulated_ms"
+    /** Crash-recovery: число записанных GPS-точек тренировки (для точного gap-индекса паузы). */
+    const val KEY_RECORDED_POINT_COUNT   = "recorded_point_count"
+
     // ── Синхронизация GPS-точек с сервером ──────────────────────────────────────
 
     /** Интервал между попытками отправки GPS-точек на сервер (мс) */

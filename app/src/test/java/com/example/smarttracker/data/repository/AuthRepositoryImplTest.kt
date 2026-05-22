@@ -3,6 +3,7 @@ package com.example.smarttracker.data.repository
 import com.example.smarttracker.data.cache.RoleGoalCache
 import com.example.smarttracker.data.local.RoleConfigStorage
 import com.example.smarttracker.data.local.TokenStorage
+import com.example.smarttracker.data.local.UserProfileCache
 import com.example.smarttracker.data.remote.AuthApiService
 import com.example.smarttracker.data.remote.dto.AuthResponseDto
 import com.example.smarttracker.data.remote.dto.LoginRequestDto
@@ -34,6 +35,7 @@ class AuthRepositoryImplTest {
 
     private lateinit var api: AuthApiService
     private lateinit var tokenStorage: TokenStorage
+    private lateinit var userProfileCache: UserProfileCache
     private lateinit var roleGoalCache: RoleGoalCache
     private lateinit var roleConfigStorage: RoleConfigStorage
     private lateinit var repository: AuthRepositoryImpl
@@ -42,10 +44,11 @@ class AuthRepositoryImplTest {
     fun setUp() {
         api               = mock()
         tokenStorage      = mock()
+        userProfileCache  = mock()
         roleGoalCache     = mock()
         roleConfigStorage = mock()
 
-        repository = AuthRepositoryImpl(api, tokenStorage, roleGoalCache, roleConfigStorage)
+        repository = AuthRepositoryImpl(api, tokenStorage, userProfileCache, roleGoalCache, roleConfigStorage)
     }
 
     // ── login() — порядок токенов и ролей (критический инвариант) ────────────

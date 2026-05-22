@@ -5,17 +5,10 @@ import android.content.Context
 import android.content.Intent
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.work.BackoffPolicy
-import androidx.work.Constraints
-import androidx.work.ExistingWorkPolicy
-import androidx.work.NetworkType
-import androidx.work.OneTimeWorkRequestBuilder
-import androidx.work.WorkManager
-import androidx.work.workDataOf
 import com.example.smarttracker.data.location.LocationConfig
 import com.example.smarttracker.data.location.LocationTrackingService
-import com.example.smarttracker.data.work.SaveTrainingWorker
-import com.example.smarttracker.data.work.SyncGpsPointsWorker
+import com.example.smarttracker.utils.formatHhMmSs
+import com.example.smarttracker.data.work.OfflineFinishScheduler
 import com.example.smarttracker.data.location.OfflineMapManager
 import com.example.smarttracker.domain.model.ActiveTrainingConflictException
 import com.example.smarttracker.domain.model.Gender
@@ -58,7 +51,6 @@ import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import java.util.UUID
-import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import androidx.core.content.edit
 
@@ -79,6 +71,7 @@ class WorkoutStartViewModel @Inject constructor(
     private val calculateTrainingStatsUseCase: CalculateTrainingStatsUseCase,
     private val offlineMapManager: OfflineMapManager,
     private val authRepository: AuthRepository,
+    private val offlineFinishScheduler: OfflineFinishScheduler,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
 
@@ -136,9 +129,13 @@ class WorkoutStartViewModel @Inject constructor(
          * Индексы первой точки после каждого resume (0-based в [trackPoints]).
          * Пара (i-1, i) где i ∈ pauseGapIndices — gap-пара: точки разделены паузой,
          * haversine и разница timestampUtc не отражают реальное движение.
-         * Используется [buildCumulativeData] для симметрии с live-расчётами:
-         *   - дистанция: gap-пара пропускается (≡ resumeAnchorPointCount + 1)
-         *   - elapsed: время паузы вычитается (≡ pausedElapsedMs в таймере)
+         *
+         * Значения приходят из сервиса (`RecordingState.recordedPointCount`) — это точный
+         * индекс, по которому ляжет первая пост-резюм точка. ViewModel не вычисляет его
+         * сам по размеру [trackPoints]: тот отстаёт от буфера сервиса на 1-2 точки.
+         *
+         * Используется и в live-расчёте дистанции ([observeTrackingData]), и в
+         * [buildCumulativeData] (summary) — обе пропускают gap-пары по этому набору.
          */
         val pauseGapIndices: List<Int> = emptyList(),
         /**
@@ -194,13 +191,6 @@ class WorkoutStartViewModel @Inject constructor(
     private var trainingStartTimestamp: Long = 0L
 
     /**
-     * WorkManager для постановки в очередь [SaveTrainingWorker].
-     * Инициализируется лениво через getInstance — при реализации [Configuration.Provider]
-     * в SmartTrackerApp WorkManager использует HiltWorkerFactory.
-     */
-    private val workManager = WorkManager.getInstance(context)
-
-    /**
      * Сигнал принудительного выхода из сессии (оба токена истекли).
      * WorkoutHomeScreen наблюдает этот flow и при true вызывает onLogout().
      * Делегирует в authRepository.sessionExpiredFlow → tokenStorage.sessionExpiredFlow.
@@ -215,14 +205,6 @@ class WorkoutStartViewModel @Inject constructor(
     // false = тренировка начата офлайн с localUUID, при финише нужно сохранить typeActivId
     // в PendingFinish чтобы SyncGpsPointsWorker смог зарегистрировать её позже.
     private var isTrainingRegisteredOnServer: Boolean = false
-
-    /**
-     * Количество точек в Room на момент паузы.
-     * При возобновлении observeTrackingData использует max(processedCount, якорь),
-     * чтобы пропустить дистанцию от последней точки до паузы до первой точки после.
-     * @Volatile: пишется из Main-thread (onPauseClick), читается из Dispatchers.Default.
-     */
-    @Volatile private var resumeAnchorPointCount: Int = 0
 
     // UUID и Job discovery-фазы: GPS ищется сразу при открытии экрана,
     // до того как пользователь нажмёт «Начать тренировку».
@@ -251,6 +233,7 @@ class WorkoutStartViewModel @Inject constructor(
 
         collectWorkoutTypes()
         loadUserProfile()
+        observeServiceRecordingState()
         val favIds = loadFavoriteIds()
         if (favIds.isNotEmpty()) _state.update { it.copy(favoriteIds = favIds) }
         // Сначала читаем последнюю сохранённую точку для начального центрирования карты.
@@ -262,6 +245,83 @@ class WorkoutStartViewModel @Inject constructor(
             if (last != null) _state.update { it.copy(lastKnownLocation = last) }
             // GPS стартует сразу после первичного чтения — иконка по-прежнему видна без нажатия «Начать».
             startDiscoveryGps()
+        }
+    }
+
+    /**
+     * Подписывается на поток состояния записи из сервиса.
+     *
+     * Сервис — источник истины для двух вещей:
+     *  1. Факт pause/resume — если он пришёл из notification, синхронизируем UI-state.
+     *  2. Точный gap-индекс (`recordedPointCount`) — сервис знает реальное число
+     *     записанных точек, VM по [UiState.trackPoints] его надёжно не вычислит.
+     *
+     * gap-индекс пишем в [UiState.pauseGapIndices] ВСЕГДА на событии паузы — вне
+     * зависимости от того, кто инициировал (UI-кнопка или notification). Поэтому
+     * [applyPauseLocally] больше не трогает pauseGapIndices.
+     *
+     * Защита от рекурсии: applyPauseLocally/applyResumeLocally вызываем только если
+     * `state.isTracking` ещё не синхронизирован — иначе изменение пришло из VM,
+     * обратный вызов setRecording не делаем.
+     */
+    private fun observeServiceRecordingState() {
+        viewModelScope.launch {
+            LocationTrackingService.recordingStateFlow.collect { rs ->
+                val current = _state.value
+                if (!rs.isRecording) {
+                    // Точный gap-индекс от сервиса — индекс первой пост-резюм точки.
+                    // dedup: одна пауза эмитится один раз, но защищаемся от повторов.
+                    if (rs.recordedPointCount !in current.pauseGapIndices) {
+                        _state.update {
+                            it.copy(pauseGapIndices = it.pauseGapIndices + rs.recordedPointCount)
+                        }
+                    }
+                    if (current.isTracking) applyPauseLocally()
+                } else {
+                    if (!current.isTracking && current.isWorkoutStarted) applyResumeLocally()
+                }
+            }
+        }
+    }
+
+    /**
+     * Применяет паузу к UI-state без обращения к сервису: замораживает таймер.
+     * gap-индекс здесь НЕ пишется — это делает [observeServiceRecordingState]
+     * по точному значению из сервиса.
+     */
+    private fun applyPauseLocally() {
+        pausedElapsedMs = _state.value.elapsedMs
+        timerJob?.cancel()
+        _state.update { it.copy(isTracking = false) }
+    }
+
+    /**
+     * Возобновляет UI-state без обращения к сервису.
+     * Используется обработчиком события из notification — сервис уже в записи,
+     * нужно только синхронизировать таймер и флаг tracking.
+     */
+    private fun applyResumeLocally() {
+        startElapsedTimer()
+        _state.update { it.copy(isTracking = true) }
+    }
+
+    /**
+     * Запускает (или перезапускает) корутину-таймер тренировки.
+     * `startTimeMs` сдвигается в прошлое на [pausedElapsedMs] — таймер продолжается
+     * с накопленного времени, пауза не учитывается.
+     */
+    private fun startElapsedTimer() {
+        startTimeMs = System.currentTimeMillis() - pausedElapsedMs
+        timerJob?.cancel()
+        timerJob = viewModelScope.launch {
+            while (isActive) {
+                val elapsed = System.currentTimeMillis() - startTimeMs
+                _state.update { it.copy(
+                    elapsedMs    = elapsed,
+                    timerDisplay = formatDuration(elapsed),
+                ) }
+                delay(1000)
+            }
         }
     }
 
@@ -538,17 +598,7 @@ class WorkoutStartViewModel @Inject constructor(
             }
         }
 
-        startTimeMs = System.currentTimeMillis() - pausedElapsedMs
-        timerJob = viewModelScope.launch {
-            while (isActive) {
-                val elapsed = System.currentTimeMillis() - startTimeMs
-                _state.update { it.copy(
-                    elapsedMs    = elapsed,
-                    timerDisplay = formatDuration(elapsed),
-                ) }
-                delay(1000)
-            }
-        }
+        startElapsedTimer()
 
         _state.update { it.copy(
             isTracking       = true,
@@ -572,15 +622,7 @@ class WorkoutStartViewModel @Inject constructor(
 
     /** Нажатие «Пауза» — замораживает таймер; GPS продолжает работать, запись в Room останавливается */
     fun onPauseClick() {
-        pausedElapsedMs = _state.value.elapsedMs
-        timerJob?.cancel()
-        _state.update { it.copy(isTracking = false) }
-        // +1: calculateDeltaDistance начинает с (fromIndex-1), поэтому якорь на размер списка
-        // дал бы пару (последняя точка до паузы → первая точка после паузы) — это и есть gap.
-        // С +1 startIdx == size, пара gap'а не попадает в расчёт.
-        val gapIdx = _state.value.trackPoints.size  // первая точка после resume будет здесь
-        resumeAnchorPointCount = gapIdx + 1
-        _state.update { it.copy(pauseGapIndices = it.pauseGapIndices + gapIdx) }
+        applyPauseLocally()
         // GPS-трекер продолжает работать (сервис жив), но точки в Room не пишутся
         LocationTrackingService.setRecording(context, false)
     }
@@ -688,7 +730,7 @@ class WorkoutStartViewModel @Inject constructor(
                                 .atZone(ZoneOffset.UTC)
                                 .format(DateTimeFormatter.ISO_OFFSET_DATE_TIME),
                         )
-                        enqueueOfflineFinishWork(trainingId)
+                        offlineFinishScheduler.enqueue(trainingId)
                     }
                 }
             } else {
@@ -726,7 +768,7 @@ class WorkoutStartViewModel @Inject constructor(
                                         typeActivId         = null,
                                     )
                                 }
-                                enqueueOfflineFinishWork(trainingId)
+                                offlineFinishScheduler.enqueue(trainingId)
                             }
                             else -> {
                                 // HTTP 4xx/5xx или прочие ошибки — не ставим в очередь,
@@ -937,8 +979,8 @@ class WorkoutStartViewModel @Inject constructor(
      * Вычисляется один раз в [onFinishClick] и хранится в снимке [WorkoutSummaryUiState].
      *
      * Симметрия с live-расчётами (критично для совпадения итогов в конце scrubbing):
-     * - **Дистанция:** gap-пары (индексы из [pauseGapIndices]) пропускаются — аналогично
-     *   `resumeAnchorPointCount + 1` в `observeTrackingData`.
+     * - **Дистанция:** gap-пары (индексы из [pauseGapIndices]) пропускаются — тот же
+     *   набор gap-индексов, что использует live-расчёт в `observeTrackingData`.
      * - **Elapsed:** время каждой паузы (timestampUtc[gap] − timestampUtc[gap−1]) вычитается
      *   нарастающим итогом — аналогично `startTimeMs = now − pausedElapsedMs` в таймере.
      * - **Высота:** null-точки пропускаются через `prevAlt: Double?` — идентично
@@ -1095,29 +1137,31 @@ class WorkoutStartViewModel @Inject constructor(
                         restartTimeout()
                     }
 
+                    // gap-индексы из сервиса: пары (i-1, i) с i ∈ gapSet — это «телепорт»
+                    // через паузу, реального движения там нет. Читаем до withContext.
+                    val gapSet = _state.value.pauseGapIndices.toHashSet()
+
                     // Инкрементальный расчёт на фоновом потоке, чтобы не блокировать UI.
                     // Внутри withContext нет точек приостановки, поэтому collectLatest
                     // не может прервать блок посередине — все аккумуляторы обновляются атомарно.
                     val (newDistanceM, avgSpeedMps, kilocalories) = withContext(Dispatchers.Default) {
-                        // effectiveCount: при первом вызове после возобновления с паузы
-                        // пропускаем точки от якоря до сейчас, чтобы не засчитать движение
-                        // совершённое пока запись была выключена (пауза).
-                        val effectiveCount = maxOf(processedCount, resumeAnchorPointCount)
-                        val delta = calculateTrainingStatsUseCase.calculateDeltaDistance(
-                            points, effectiveCount
-                        )
-                        accumulatedDistanceM += delta
+                        // Считаем дистанцию только новых пар [processedCount, points.size).
+                        // Gap-пары пропускаем — симметрично с buildCumulativeData (summary).
+                        for (i in maxOf(1, processedCount) until points.size) {
+                            if (i in gapSet) continue
+                            accumulatedDistanceM += calculateTrainingStatsUseCase
+                                .calculateDeltaDistance(listOf(points[i - 1], points[i]), 0)
+                        }
 
-                        // Калории уже инкрементальны на уровне точки, поэтому считаем
-                        // только вклад новых точек, начиная с effectiveCount.
-                        for (index in effectiveCount until points.size) {
+                        // Калории инкрементальны на уровне точки. Gap-точка имеет
+                        // calories=null (сервис сбрасывает prevCaloriePoint на resume) →
+                        // её вклад 0, отдельно пропускать не нужно.
+                        for (index in processedCount until points.size) {
                             accumulatedKilocalories += points[index].calories ?: 0.0
                         }
                         val kcal = accumulatedKilocalories
 
                         processedCount = points.size
-                        // Якорь одноразовый — сбрасываем после первого применения
-                        if (resumeAnchorPointCount > 0) resumeAnchorPointCount = 0
 
                         // Длительность по монотонным часам (elapsedNanos) — не зависит от NTP/смены времени.
                         // Известное ограничение: elapsedNanos продолжает тикать во время паузы,
@@ -1181,34 +1225,6 @@ class WorkoutStartViewModel @Inject constructor(
                 }
             }
         }
-    }
-
-    /**
-     * Ставит цепочку GPS-sync → save_training в WorkManager.
-     * GPS-точки загружаются первыми, чтобы сервер принял их до закрытия тренировки.
-     * Уникальное имя по trainingId: KEEP — не заменяем уже запущенную цепочку.
-     */
-    private fun enqueueOfflineFinishWork(trainingId: String) {
-        val constraints = Constraints.Builder()
-            .setRequiredNetworkType(NetworkType.CONNECTED)
-            .build()
-
-        val gpsWork = OneTimeWorkRequestBuilder<SyncGpsPointsWorker>()
-            .setInputData(workDataOf(SyncGpsPointsWorker.KEY_TRAINING_ID to trainingId))
-            .setConstraints(constraints)
-            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
-            .build()
-
-        val saveWork = OneTimeWorkRequestBuilder<SaveTrainingWorker>()
-            .setInputData(workDataOf(SaveTrainingWorker.KEY_TRAINING_ID to trainingId))
-            .setConstraints(constraints)
-            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
-            .build()
-
-        workManager
-            .beginUniqueWork("offline_finish_$trainingId", ExistingWorkPolicy.KEEP, gpsWork)
-            .then(saveWork)
-            .enqueue()
     }
 
     override fun onCleared() {
@@ -1358,17 +1374,8 @@ class WorkoutStartViewModel @Inject constructor(
     companion object {
         private const val TAG = "WorkoutStartViewModel"
 
-        /**
-         * Форматирует миллисекунды в строку "HH:MM:SS" с ведущими нулями.
-         * Используется для таймера тренировки.
-         */
-        fun formatDuration(elapsedMs: Long): String {
-            val totalSec = elapsedMs / 1000L
-            val hours   = totalSec / 3600L
-            val minutes = (totalSec % 3600L) / 60L
-            val seconds = totalSec % 60L
-            return "%02d:%02d:%02d".format(hours, minutes, seconds)
-        }
+        /** Форматирует миллисекунды в "HH:MM:SS" для таймера тренировки. */
+        fun formatDuration(elapsedMs: Long): String = formatHhMmSs(elapsedMs)
 
         /**
          * Форматирует скорость (м/с) в темп "M:SS мин/км".

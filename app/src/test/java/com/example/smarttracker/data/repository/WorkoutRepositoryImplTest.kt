@@ -3,6 +3,7 @@ package com.example.smarttracker.data.repository
 import com.example.smarttracker.data.local.IconCacheManager
 import com.example.smarttracker.data.local.db.ActivityTypeDao
 import com.example.smarttracker.data.local.db.ActivityTypeEntity
+import com.example.smarttracker.data.local.db.METActivityDao
 import com.example.smarttracker.data.local.db.PendingFinishDao
 import com.example.smarttracker.data.remote.AuthApiService
 import com.example.smarttracker.data.remote.TrainingApiService
@@ -43,6 +44,7 @@ class WorkoutRepositoryImplTest {
     private lateinit var trainingApi: TrainingApiService
     private lateinit var iconCache: IconCacheManager
     private lateinit var activityTypeDao: ActivityTypeDao
+    private lateinit var metActivityDao: METActivityDao
     private lateinit var pendingFinishDao: PendingFinishDao
     private lateinit var repository: WorkoutRepositoryImpl
 
@@ -52,10 +54,11 @@ class WorkoutRepositoryImplTest {
         trainingApi      = mock()
         iconCache        = mock()
         activityTypeDao  = mock()
+        metActivityDao   = mock()
         pendingFinishDao = mock()
         // refreshFromNetwork запускается в фоне через downloadScope.launch;
         // runCatching перехватывает любые ошибки тихо, поэтому authApi можно не стабить.
-        repository = WorkoutRepositoryImpl(authApi, trainingApi, iconCache, activityTypeDao, pendingFinishDao)
+        repository = WorkoutRepositoryImpl(authApi, trainingApi, iconCache, activityTypeDao, metActivityDao, pendingFinishDao)
     }
 
     // ── workoutTypesFlow() ────────────────────────────────────────────────────

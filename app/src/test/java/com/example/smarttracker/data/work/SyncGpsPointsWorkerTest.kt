@@ -8,6 +8,7 @@ import androidx.work.WorkerFactory
 import androidx.work.WorkerParameters
 import androidx.work.testing.TestListenableWorkerBuilder
 import androidx.work.workDataOf
+import com.example.smarttracker.data.local.db.PendingFinishDao
 import com.example.smarttracker.domain.model.LocationPoint
 import com.example.smarttracker.domain.model.NetworkUnavailableException
 import com.example.smarttracker.domain.repository.LocationRepository
@@ -49,12 +50,14 @@ class SyncGpsPointsWorkerTest {
     private lateinit var context: Context
     private lateinit var locationRepository: LocationRepository
     private lateinit var workoutRepository: WorkoutRepository
+    private lateinit var pendingFinishDao: PendingFinishDao
 
     @Before
     fun setUp() {
         context              = ApplicationProvider.getApplicationContext()
         locationRepository   = mock()
         workoutRepository    = mock()
+        pendingFinishDao     = mock()
     }
 
     // ── Вспомогательный метод ─────────────────────────────────────────────────
@@ -72,7 +75,7 @@ class SyncGpsPointsWorkerTest {
                     workerClassName: String,
                     workerParameters: WorkerParameters,
                 ): ListenableWorker = SyncGpsPointsWorker(
-                    appContext, workerParameters, locationRepository, workoutRepository
+                    appContext, workerParameters, locationRepository, workoutRepository, pendingFinishDao
                 )
             })
             .build()
@@ -176,7 +179,7 @@ class SyncGpsPointsWorkerTest {
                     workerClassName: String,
                     workerParameters: WorkerParameters,
                 ): ListenableWorker = SyncGpsPointsWorker(
-                    appContext, workerParameters, locationRepository, workoutRepository
+                    appContext, workerParameters, locationRepository, workoutRepository, pendingFinishDao
                 )
             })
             .build()
