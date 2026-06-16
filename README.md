@@ -12,6 +12,10 @@
 |:---:|:---:|:---:|:---:|
 | ![Запуск тренировки](screenshots/screen_workout_start.png) | ![Сводка тренировки](screenshots/screen_workout_finish.png) | ![История тренировок](screenshots/screen_calendar_month.png) | ![Вход](screenshots/screen_login.png) |
 
+| Меню | Профиль | Редактирование профиля | Календарь (день) |
+|:---:|:---:|:---:|:---:|
+| ![Меню](screenshots/screen_menu.png) | ![Профиль](screenshots/screen_profile.png) | ![Редактирование профиля](screenshots/screen_profile_edit.png) | ![Календарь по дням](screenshots/screen_calendar_day.png) |
+
 ---
 
 ## Возможности
