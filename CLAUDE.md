@@ -374,6 +374,16 @@ com.example.smarttracker/
     Порядок приоритета: GMS → HMS → AOSP. `LocationTrackingService` — foreground service,
     показывает постоянное уведомление. `LocationRepository` сохраняет точки в Room.
 
+28. **Crash-recovery тренировки — контракт сервис↔ViewModel** — recovery-префы
+    (`PREFS_RECOVERY`) пишет ТОЛЬКО сервис (полный контекст: id, chronometer,
+    `isRecording`, профиль калорий, gap-индексы, `KEY_IS_REGISTERED`, heartbeat
+    каждые ~5 сек). `WorkoutStartViewModel.init` обязан вызывать
+    `readRecoverableSession()` ДО `startDiscoveryGps()`: discovery-интент на живой
+    восстановленный сервис перезапишет его `trainingId` и молча убьёт запись.
+    Протухание — по heartbeat (`RECOVERY_STALE_MS`, 2 мин). Основная ветка
+    `onStartCommand` останавливает старый `activeTracker` перед новым — иначе
+    двойные GPS-колбэки. `pauseGapIndices` класть в state ДО `observeTrackingData`.
+
 ---
 
 ## Текущие ограничения и временные решения
