@@ -1,16 +1,20 @@
 # Контекст проекта SmartTracker — Android
 
+> # ⚠️ АРХИВ — файл не актуален
+> **Состояние на март 2026, дальше не вёлся. Коду НЕ доверять.**
+> Проверка от 2026-07-03 нашла прямые расхождения с кодом (устаревшие
+> статусы DI, несуществующие файлы, неверные шаги регистрации и др.).
+> Актуальные источники:
+> - **CLAUDE.md** — правила, конфигурация, критические нюансы
+> - **PROJECT.md** — полный справочник по кодовой базе (каждый файл/класс/функция)
+> - **BACK_REQ.md** — задачи для бэкенда (BR-1…BR-13)
+>
+> Файл сохранён как исторический журнал. Новое сюда НЕ записывать.
+
 ## Что это за проект
 Android-приложение для создания, трекинга и анализа тренировок.
 Организация на GitHub: `smart-tracker`
 Репозиторий: `smart-tracker/mobile-android`, ветка `main`
-
----
-
-Базовый промт
-
-Продолжаем проект SmartTracker Android.
-Прочитай CONTEXT.md и /memories/repo/ и файлы проекта — там всё актуальное состояние.
 
 ---
 
@@ -59,38 +63,30 @@ DI: Hilt | UI: Jetpack Compose | Сеть: Retrofit | Токены: EncryptedSha
 3. `/auth/verify-email` → ✅ 200 OK (JWT токены, пользователь авторизован)
 4. **Навигация:** RegisterScreen → VerifyEmailScreen → HomeScreen ✅ успешна
 
-**⚠️ Password Recovery (важно):**
-- На backend (`smart-tracker/api`, ветка `main`) сейчас **нет** эндпоинтов:
-  - `POST /auth/forgot-password`
-  - `POST /auth/resend-reset-code`
-  - `POST /auth/reset-password`
-- Поэтому в Android временно включён `MockPasswordRecoveryRepository` через DI в `AuthModule`.
-- Подготовленная real-реализация `PasswordRecoveryRepositoryImpl` оставлена в коде, но **не активна** до готовности backend.
+**~~⚠️ Password Recovery~~ — УСТАРЕЛО (оставлено как история):**
+- Эндпоинты давно реализованы на бэке: `POST /password-reset/request`,
+  `/verify-code`, `/resend-verify-code`, `/confirm`.
+- В DI подключён реальный `PasswordRecoveryRepositoryImpl` (см. `AuthModule`);
+  `MockPasswordRecoveryRepository` остался в коде, но не используется.
 
 ---
 
-### � Статус production: Сервер runtastic.gottland.ru
+### Статус production: Сервер runtastic.gottland.ru
 
-> Сервер: FastAPI + PostgreSQL, uvicorn слушает `0.0.0.0:8000`, SSL терминируется внешним балансировщиком хостинга.
-> Uvicorn **не управляется systemd** — перезапуск только вручную от пользователя `mihail`.
-> `.env` находится в `/home/mihail/api/.env`.
-> API документация доступна по адресу https://runtastic.gottland.ru/docs
+> Сервер: FastAPI + PostgreSQL.
+> API документация: https://runtastic.gottland.ru/docs
+> Инфраструктурные детали сервера удалены из этого файла по итогам
+> security-ревизии (2026-07-03): репозиторий может быть публичным,
+> внутренности сервера в нём не хранить. Операционные задачи бэка —
+> в BACK_REQ.md (BR-6 синхронизация моделей с БД, BR-13 systemd).
 
-**✅ Статус:**
+**✅ Статус (март 2026):**
 - Регистрация пользователей работает корректно
 - Email верификация работает (отправка кодов на реальные адреса)
 - JWT авторизация функционирует
-- API эндпоинты стабильны
-
-### ✅ Исправлено на сервере (сессия)
-
-| Ошибка | Причина | Решение |
-|---|---|---|
-| `Chain validation failed` (TLS) | Сервер отдавал только leaf-cert | Само исправилось (certbot обновил конфиг) |
-| HTTP 500 — `ConnectionRefusedError: ('127.0.0.1', 5434)` | `.env` имел `POSTGRES_PORT=5434`, PostgreSQL слушает `5432` | `sed -i` в `.env`, заменено на 5432 |
-| HTTP 500 — `NotNullViolationError: null value in column "last_name"` | Схема БД имела NOT NULL на необязательных полях | `ALTER TABLE users ALTER COLUMN last_name/middle_name/weight/height DROP NOT NULL` |
-
-> ⚠️ **Важно:** `ALTER TABLE` сделан напрямую в БД — SQLAlchemy-модели на бэке **не синхронизированы**. Бэкенд-команде нужно обновить модели.
+- Известные серверные починки той сессии: TLS-цепочка (certbot),
+  порт PostgreSQL в конфиге, NOT NULL на необязательных колонках users
+  (`ALTER TABLE` вручную → модели SQLAlchemy рассинхронизированы — BR-6).
 
 
 
@@ -117,7 +113,9 @@ DI: Hilt | UI: Jetpack Compose | Сеть: Retrofit | Токены: EncryptedSha
 
 6. **`remaining_seconds` — nullable** — `EmailVerificationResponse.remaining_seconds: Optional[int]` на бэкенде. В `ResendCodeResponseDto` тип `Int?`. ✅ Расхождение исправлено.
 
-7. **`/auth/refresh` — query param, не body** — FastAPI без явного `Body(...)` трактует `refresh_token: str` как query parameter. В `AuthApiService` (МОБ-2.2) использовать `@POST("auth/refresh") suspend fun refreshToken(@Query("refresh_token") token: String): AuthResponseDto`.
+7. ~~**`/auth/refresh` — query param, не body**~~ — **ОПРОВЕРГНУТО, не использовать.**
+   Фактически: `@Body RefreshTokenRequestDto` (JSON-тело), подтверждено OpenAPI-схемой.
+   Query-param давал 422 → 4xx → ложный logout. См. нюанс 4 в CLAUDE.md.
 
 11. **`DateVisualTransformation` — подход к форматированию даты** — state хранит только цифры `"04052004"` (max 8), `DateVisualTransformation` добавляет точки только визуально через `OffsetMapping`. `parseBirthDate()` парсит из 8-цифрной строки: `digits[0..1]` — день, `[2..3]` — месяц, `[4..7]` — год. Альтернативный подход (вставлять точки в строку программно) — **содержит баг курсора**, не использовать.
 
@@ -447,6 +445,11 @@ PasswordRecovery полностью интегрирован с API:
 
 ## Известные баги и нюансы Backend API
 
+> ⚠️ **Перенесено в `BACK_REQ.md`** — канонический список задач для бэкенда
+> теперь там (BR-1…BR-13, с приоритетами и критериями приёмки).
+> Список ниже сохранён как исторический журнал; новые требования к бэку
+> сюда НЕ добавлять.
+
 **Статус:** Разработка ведётся с production API на `https://runtastic.gottland.ru/`. Некоторые баги из первоначального аудита могут быть актуальны для API.
 
 ### Критические для мониторинга
@@ -459,6 +462,13 @@ PasswordRecovery полностью интегрирован с API:
 
 - **API-4:** `debug_code` в response `/register` должен отсутствовать в production (только при DEBUG=true)
 - **API-5:** Проверить, что хеширование паролей использует `bcrypt`, а не `sha256_crypt`
-- **API-6:** `/auth/refresh` передаёт `refresh_token` как query param (текущая реализация Android-клиента соответствует)
+- ~~**API-6:** `/auth/refresh` передаёт `refresh_token` как query param~~ — **устарело: фактически JSON-тело (`@Body`), см. нюанс 4 CLAUDE.md**
 - **API-7:** CORS конфигурация — проверить, что не используется `allow_origins=["*"]` с `allow_credentials=True`
 - **API-8:** Коды верификации должны генерироваться через `secrets`, а не `random`
+- **API-9 (149-ФЗ):** зеркальная проверка домена почты в `POST /auth/register` —
+  разрешать регистрацию только с российских почтовых доменов (Яндекс/VK/Mail.ru/Rambler).
+  Android уже проверяет на клиенте (`EmailValidator.isAllowedDomain` + захардкоженный список
+  в `AllowedEmailDomainsRepositoryImpl`), но клиентская валидация обходится прямым HTTP-запросом.
+  Плюс нужен `GET /auth/allowed-email-domains` → `{"domains": [...]}`, чтобы Android
+  обновлял список без релиза APK. Login и password-recovery НЕ ограничивать —
+  закон касается только новой регистрации.

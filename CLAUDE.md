@@ -7,6 +7,30 @@ Backend API: `https://runtastic.gottland.ru/` (FastAPI + PostgreSQL)
 API Docs: https://runtastic.gottland.ru/docs
 Версия: `0.2` (versionCode 1)
 
+## Статус проекта: PRODUCTION (не дипломный прототип)
+Проект перешёл из статуса дипломной работы в **полноценную разработку
+с целью публичного выката**. Следствия — обязательны, без исключений:
+
+- **Никаких послаблений «для диплома сойдёт»** — каждое решение оценивать
+  как для боевого продукта с реальными пользователями и их данными.
+- **Безопасность — приоритет №1:** утечки токенов/PII, логирование
+  чувствительных данных, небезопасные дефолты (backup, exported,
+  cleartext) — блокеры, а не «потом починим».
+- **Соответствие законодательству РФ обязательно** (149-ФЗ: регистрация
+  только через российские почты/ID — реализовано; далее проверять новые
+  фичи на 152-ФЗ о персональных данных, особенно GPS-треки = геоданные).
+- **Временные решения** (хардкоды, моки, обходы) допустимы только с
+  TODO-планом замены и записью в тех-долг (CLAUDE.md TODO).
+- **Задачи для бэкенда — только в `BACK_REQ.md`** (канонический список,
+  формат BR-N: что/зачем/статус Android/приёмка). В CLAUDE.md и CONTEXT.md —
+  лишь ссылки на BR-номера, без дублирования содержания.
+- **Тесты обязательны** для новой бизнес-логики; известные дыры покрытия
+  (RegisterViewModel, ProfileViewModel, WorkoutStartViewModel) — тех-долг
+  к закрытию до релиза.
+- **Перед релизом:** включить минификацию + proguard-правила, подписание,
+  убрать debug_code на бэке, ревизия публичности CONTEXT.md
+  (содержит инфраструктурные детали сервера).
+
 ---
 
 ## Команды
@@ -34,7 +58,7 @@ API Docs: https://runtastic.gottland.ru/docs
 
 ## Конфигурация
 - minSdk=26, compileSdk=35, targetSdk=35, jvmTarget="17"
-- Gradle: 8.6, AGP: 8.13.2, Kotlin: 1.9.24, Compose Compiler Extension: 1.5.14
+- Gradle: 8.13 (wrapper), AGP: 8.13.2, Kotlin: 1.9.24, Compose Compiler Extension: 1.5.14
 - Все версии библиотек — только через `gradle/libs.versions.toml`
 - `minSdk=26` → `java.time` (LocalDate) доступен нативно, desugaring не нужен
 
@@ -80,26 +104,34 @@ com.example.smarttracker/
 │   │   ├── LocationTrackerFactory.kt           (runtime: GMS/HMS/AOSP)
 │   │   ├── RuntimeDetector.kt
 │   │   ├── LocationConfig.kt
-│   │   ├── OfflineMapManager.kt
-│   │   ├── trackers/  GmsLocationTracker, HmsLocationTracker, AospLocationTracker
+│   │   ├── OfflineMapManager.kt                (no-op стаб после перехода на raster-тайлы)
+│   │   ├── tracker/   LocationTracker (интерфейс), GmsLocationTracker,
+│   │   │              HmsLocationTracker, AospLocationTracker
 │   │   └── model/     LocationRuntime (enum), TrackLocation, TrackingConfig
 │   ├── remote/
-│   │   ├── AuthApiService.kt       (17 эндпоинтов)
-│   │   ├── TrainingApiService.kt   (7 эндпоинтов)
+│   │   ├── AuthApiService.kt       (auth, password-reset, роли/цели, профиль;
+│   │   │                            актуальный список методов — PROJECT.md)
+│   │   ├── TrainingApiService.kt   (тренировки; актуальный список — PROJECT.md)
+│   │   ├── AuthInterceptor.kt      (buildAuthInterceptor: Bearer только на хост API)
 │   │   ├── TokenRefreshAuthenticator.kt
-│   │   └── dto/        (26 DTO-классов + mappers)
+│   │   └── dto/        (DTO + mappers; актуальный состав — PROJECT.md)
 │   ├── repository/
 │   │   ├── AuthRepositoryImpl.kt
 │   │   ├── WorkoutRepositoryImpl.kt
 │   │   ├── PasswordRecoveryRepositoryImpl.kt
-│   │   ├── LocationRepositoryImpl.kt       (Room persistence)
-│   │   ├── MockPasswordRecoveryRepository.kt
-│   │   └── MockWorkoutRepository.kt
+│   │   ├── AllowedEmailDomainsRepositoryImpl.kt  (149-ФЗ, хардкод до BR-4)
+│   │   ├── location/LocationRepositoryImpl.kt    (Room persistence)
+│   │   ├── MockPasswordRecoveryRepository.kt     (в DI не используется)
+│   │   └── MockWorkoutRepository.kt              (в DI не используется)
+│   ├── system/
+│   │   └── BatteryOptimizationHelper.kt    (Doze whitelist)
 │   └── work/
 │       ├── SyncGpsPointsWorker.kt
-│       └── SaveTrainingWorker.kt
+│       ├── SaveTrainingWorker.kt
+│       └── OfflineFinishScheduler.kt       (постановка цепочки, reconcilePending)
 ├── di/
-│   └── AuthModule.kt   (Hilt, 17 provides + 7 bindings, оба ApiService)
+│   └── AuthModule.kt   (Hilt, единственный модуль; @Provides + @Binds,
+│                        актуальный состав — PROJECT.md)
 ├── domain/
 │   ├── model/
 │   │   ├── ActiveTrainingResult, ActiveTrainingConflictException
@@ -123,25 +155,33 @@ com.example.smarttracker/
 │   │   ├── AuthRepository
 │   │   ├── WorkoutRepository
 │   │   ├── PasswordRecoveryRepository
-│   │   └── LocationRepository
-│   └── usecase/
-│       ├── CalculateTrainingStatsUseCase   (haversine, инкрементальный расчёт)
-│       ├── CalorieCalculator               (MET + Харрис-Бенедикт, object)
-│       ├── LoginUseCase
-│       └── RegisterUseCase
+│   │   ├── LocationRepository
+│   │   └── AllowedEmailDomainsRepository   (149-ФЗ, домены почты для регистрации)
+│   ├── usecase/
+│   │   ├── CalculateTrainingStatsUseCase   (haversine, инкрементальный расчёт)
+│   │   ├── CalorieCalculator               (MET + Харрис-Бенедикт, object)
+│   │   ├── LoginUseCase
+│   │   └── RegisterUseCase
+│   └── validation/
+│       └── EmailValidator                  (формат + isAllowedDomain, 149-ФЗ)
 ├── presentation/
 │   ├── MainActivity.kt
-│   ├── AppViewModel.kt             (startRoute, logout)
+│   ├── AppViewModel.kt             (startRoute, logout, reconcilePending)
 │   ├── navigation/  AppNavGraph.kt, Screen.kt
-│   ├── theme/       SmartTrackerTheme.kt, WorkoutTextStyles.kt
+│   ├── theme/       SmartTrackerTheme.kt, WorkoutTextStyles.kt, ProfileTextStyles.kt
 │   ├── common/      StyledTextField, StepScaffold, SmartTrackerBottomBar,
-│   │                UiTokens, DateVisualTransformation
+│   │                UiTokens, DateVisualTransformation, PrimaryButton,
+│   │                ProfileAvatarImage, ProfileFieldBox
 │   ├── auth/
 │   │   ├── login/    LoginScreen, LoginViewModel, LoginUiState, LoginEvent
 │   │   ├── register/ RegisterScreen, RegisterViewModel, RegisterUiState,
 │   │   │             RegisterEvent, RegisterComponents, LegalScreens
 │   │   └── forgot/   ForgotPasswordScreen, ForgotPasswordViewModel,
 │   │                 ForgotPasswordUiState, ForgotPasswordEvent
+│   ├── calendar/    TrainingHistoryScreen, TrainingHistoryViewModel,
+│   │                TrainingHistoryUiState, DayTimelineView, WeekTimelineView,
+│   │                MonthTimelineView, CalendarComponents, CalendarConstants,
+│   │                CalendarFormatters
 │   ├── menu/
 │   │   ├── MenuScreen.kt
 │   │   └── profile/  ProfileScreen, ProfileViewModel, ProfileUiState,
@@ -149,12 +189,13 @@ com.example.smarttracker/
 │   └── workout/
 │       ├── WorkoutHomeScreen.kt        (Scaffold + нижний бар)
 │       ├── ActivityIcons.kt            (iconKey → drawable res)
-│       ├── WorkoutSummaryFormatters.kt
 │       ├── start/      WorkoutStartScreen, WorkoutStartViewModel
-│       ├── summary/    SummaryOverlay, WorkoutSummaryUiState
+│       ├── summary/    SummaryOverlay, WorkoutSummaryUiState,
+│       │               WorkoutSummaryFormatters
 │       ├── map/        MapViewComposable, OfflineMapFallback
 │       └── permission/ LocationPermissionHandler
-└── utils/
+└── utils/       ApiErrorHandler (перевод ошибок API на русский),
+                 ApiErrorScenarios (справочник форматов ошибок), DurationFormatter
 ```
 
 ---
@@ -206,6 +247,22 @@ com.example.smarttracker/
 
 ---
 
+## PROJECT.md — поддержание актуальности
+
+`PROJECT.md` — полный справочник по кодовой базе (каждый файл, класс, функция).
+Привязан к коммиту (хеш в шапке). Правила:
+
+- В PR, который **добавляет/удаляет файл** или **меняет публичные сигнатуры**
+  (классы, функции, поля моделей/DTO, эндпоинты, миграции Room) — обновить
+  соответствующую секцию PROJECT.md и хеш коммита в шапке.
+- Правки только тела функции без смены сигнатуры/поведения — PROJECT.md не трогать.
+- Формат секции файла: назначение → классы/функции с сигнатурами → особенности.
+  Иерархия: `## 2.x` часть → `### пакет` → `#### файл.kt`. Не добавлять H1.
+- При крупном рефакторинге (переименование пакетов, >10 файлов) — дешевле
+  перегенерировать секцию целиком, чем править точечно.
+
+---
+
 ## Критические нюансы (не забыть!)
 
 1. **`username` vs `nickname`** — в domain это `username`, в API это `nickname`.
@@ -238,9 +295,11 @@ com.example.smarttracker/
 
 10. **Legal-блок регистрации** — использовать `LinkAnnotation`, не `ClickableText` (deprecated).
 
-11. **Auth-интерцептор в OkHttpClient** — добавляет `Authorization: Bearer <token>` ко всем
-    запросам автоматически. Токен читается из `TokenStorage` в момент запроса.
-    Применяется ко всем эндпоинтам включая публичные (сервер игнорирует лишний заголовок).
+11. **Auth-интерцептор в OkHttpClient** — `buildAuthInterceptor` (data/remote/AuthInterceptor.kt)
+    добавляет `Authorization: Bearer <token>` ТОЛЬКО к запросам на хост API
+    (host-check против утечки JWT: клиент общий с Coil/IconCacheManager,
+    URL картинок приходят с сервера). Токен читается из `TokenStorage` в момент запроса.
+    Публичные эндпоинты своего хоста тоже получают заголовок (сервер игнорирует).
 
 12. **Тайминг `getUserRoles` в `login()` и `verifyEmail()`** — токены СНАЧАЛА сохраняются
     в `TokenStorage`, и только ПОТОМ вызывается `getUserRoles()`. Если сохранить после —
@@ -347,14 +406,17 @@ com.example.smarttracker/
 - `POST /auth/verify-email` → access_token, refresh_token
 - `POST /auth/resend-code` → message, expires_at, remaining_seconds
 - `POST /auth/login` → access_token, refresh_token
-- `POST /auth/refresh` → access_token, refresh_token (**query param!**)
+- `POST /auth/refresh` → access_token, refresh_token (**refresh_token — JSON-тело, `@Body RefreshTokenRequestDto`; см. нюанс 4. Query-param — старое ошибочное предположение, давало 422**)
 - `POST /auth/check-nickname` → is_available
 - `GET /role/` → `[{role_id, name, ...}]`
 - `GET /role/user_roles` → `[{role_id, name}]` (**Bearer-токен обязателен**)
 - `GET /goal/` → `[{goal_id, description, id_role}]`
 - `GET /user/` → user info (id, firstName, lastName, email, username, birthDate, gender, weight, height)
 - `PATCH /user/edit` → обновлённый user info
+- `POST /user/photo` → пусто (multipart, поле "file", jpg/png до 5 МБ; новый image_path — повторным `GET /user/`)
+- `DELETE /user/photo` → пусто (бэкенд подставляет плейсхолдер)
 - `DELETE /user/delete` → пусто
+- `GET /training/types_activity` → живёт в **AuthApiService** (исторически), см. список тренировок ниже
 
 ## API эндпоинты (восстановление пароля) — AuthApiService
 - `POST /password-reset/request` → `{}` (тело пустое)
@@ -374,7 +436,10 @@ com.example.smarttracker/
 - `POST /training/{training_id}/gps_points` → подтверждение сохранения — загрузить пачку GPS-точек
 - `POST /training/{training_id}/save_training` → `{training_id, ...}` — завершить тренировку
 - `GET /training/history` → `[{training_id, type_activ_id, time_start, time_end, distance, ...}]`
-- `DELETE /training/{training_id}/delete` → пусто
+- `GET /training/{training_id}/get_training` → полные данные тренировки + gps_track
+  (сейчас GeoJSON без временных меток — формат меняется по BR-5)
+- `DELETE /training/{training_id}/delete` → пусто (тестовый, в production-потоке не используется)
+- `DELETE /training/{training_id}/delete_completed` → пусто (удаление из истории, вызывается из SummaryOverlay)
 
 ---
 
@@ -410,20 +475,20 @@ with open(f'{git_dir}/COMMIT_MSG', 'wb') as f:
 
 ## TODO
 
-- **`GET /training/{id}/get_training` — формат `gps_track`**
-  Сейчас бэк возвращает GeoJSON LineString без временны́х меток:
-  `{"type":"LineString","coordinates":[[lon,lat,alt], ...]}`
-  Нужно заменить на массив объектов с `recorded_at`:
-  ```json
-  "gps_track": [
-    {"lat": 61.774, "lon": 34.379, "alt": 5, "recorded_at": 1716890640613},
-    ...
-  ]
-  ```
-  После изменения на бэке — обновить `GetTrainingDetailResponseDto`:
-  убрать `JsonElement?`, вернуть `List<GpsTrackPointDto>?`,
-  добавить `recorded_at` в `GpsTrackPointDto`, обновить маппер.
-  Это разблокирует корректный elapsed и скорость в scrub-оверлее истории.
+> Задачи для бэкенда — в **BACK_REQ.md** (BR-1…BR-13). Здесь — только
+> Android-часть, которая разблокируется после выполнения BR-задачи.
+
+- **После BR-5 (gps_track с `recorded_at`)** — обновить
+  `GetTrainingDetailResponseDto`: убрать `JsonElement?`, вернуть
+  `List<GpsTrackPointDto>?`, добавить `recorded_at` в `GpsTrackPointDto`,
+  обновить маппер. Разблокирует elapsed/скорость в scrub-оверлее истории
+  и экспорт GPX.
+
+- **После BR-4 (`GET /auth/allowed-email-domains`)** — заменить
+  `AllowedEmailDomainsRepositoryImpl` на сетевую реализацию с кэшем
+  (план в TODO-комментарии внутри impl), хардкод оставить fallback'ом.
+  Клиентская часть 149-ФЗ уже реализована: `EmailValidator.isAllowedDomain`,
+  проверка только на регистрации (login/recovery не ограничиваются).
 
 ---
 
