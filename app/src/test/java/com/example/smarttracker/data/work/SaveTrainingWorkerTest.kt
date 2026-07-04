@@ -13,6 +13,7 @@ import com.example.smarttracker.data.local.db.PendingFinishEntity
 import com.example.smarttracker.domain.model.NetworkUnavailableException
 import com.example.smarttracker.domain.model.SaveTrainingResult
 import com.example.smarttracker.domain.model.TrainingAlreadyClosedException
+import com.example.smarttracker.domain.repository.LocationRepository
 import com.example.smarttracker.domain.repository.WorkoutRepository
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -56,12 +57,14 @@ class SaveTrainingWorkerTest {
     private lateinit var context: Context
     private lateinit var pendingFinishDao: PendingFinishDao
     private lateinit var workoutRepository: WorkoutRepository
+    private lateinit var locationRepository: LocationRepository
 
     @Before
     fun setUp() {
-        context          = ApplicationProvider.getApplicationContext()
-        pendingFinishDao = mock()
-        workoutRepository = mock()
+        context            = ApplicationProvider.getApplicationContext()
+        pendingFinishDao   = mock()
+        workoutRepository  = mock()
+        locationRepository = mock()
     }
 
     // ── Вспомогательный метод ─────────────────────────────────────────────────
@@ -79,7 +82,8 @@ class SaveTrainingWorkerTest {
                     workerClassName: String,
                     workerParameters: WorkerParameters,
                 ): ListenableWorker = SaveTrainingWorker(
-                    appContext, workerParameters, pendingFinishDao, workoutRepository
+                    appContext, workerParameters, pendingFinishDao, workoutRepository,
+                    locationRepository,
                 )
             })
         if (trainingId != null) {

@@ -7,6 +7,7 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.example.smarttracker.data.local.db.PendingFinishDao
 import com.example.smarttracker.domain.model.TrainingAlreadyClosedException
+import com.example.smarttracker.domain.repository.LocationRepository
 import com.example.smarttracker.domain.repository.WorkoutRepository
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
@@ -33,6 +34,7 @@ class SaveTrainingWorker @AssistedInject constructor(
     @Assisted params: WorkerParameters,
     private val pendingFinishDao: PendingFinishDao,
     private val workoutRepository: WorkoutRepository,
+    private val locationRepository: LocationRepository,
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
@@ -97,6 +99,10 @@ class SaveTrainingWorker @AssistedInject constructor(
             ).onSuccess {
                 Log.d(TAG, "saveTraining success for ${item.trainingId}, removing from queue")
                 pendingFinishDao.delete(item.trainingId)
+                // Тренировка закрыта на сервере — локальные GPS-точки больше не нужны
+                // (SyncGpsPointsWorker уже загрузил их на предыдущем шаге цепочки).
+                // Без чистки точки закрытых тренировок копились бы в Room вечно.
+                locationRepository.deletePointsForTraining(item.trainingId)
             }.onFailure { e ->
                 when (e) {
                     is TrainingAlreadyClosedException -> {
@@ -104,6 +110,7 @@ class SaveTrainingWorker @AssistedInject constructor(
                         // Повтор бессмысленен — удаляем запись из очереди.
                         Log.w(TAG, "Training ${item.trainingId} already closed (HTTP ${e.httpCode}), removing from queue")
                         pendingFinishDao.delete(item.trainingId)
+                        locationRepository.deletePointsForTraining(item.trainingId)
                     }
                     else -> {
                         // Сеть или 5xx — транзиентная ошибка, повторим через backoff
