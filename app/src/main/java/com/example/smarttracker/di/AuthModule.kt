@@ -17,8 +17,9 @@ import com.example.smarttracker.data.local.db.PendingFinishDao
 import com.example.smarttracker.data.local.db.SmartTrackerDatabase
 import androidx.room.RoomDatabase
 import androidx.sqlite.db.SupportSQLiteDatabase
-import okhttp3.Interceptor
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import com.example.smarttracker.data.remote.AuthApiService
+import com.example.smarttracker.data.remote.buildAuthInterceptor
 import com.example.smarttracker.data.remote.TokenRefreshAuthenticator
 import com.example.smarttracker.data.remote.TrainingApiService
 import com.example.smarttracker.data.repository.AllowedEmailDomainsRepositoryImpl
@@ -113,24 +114,21 @@ abstract class AuthModule {
             tokenStorage: TokenStorage,
             tokenAuthenticator: TokenRefreshAuthenticator,
         ): OkHttpClient {
-            // Интерцептор авторизации: добавляет Bearer-токен ко всем запросам.
-            // Читает токен из TokenStorage — он уже должен быть сохранён к моменту вызова.
-            // Порядок важен: authInterceptor добавляется ДО logging, чтобы Authorization-заголовок
-            // был виден в логах.
-            val authInterceptor = Interceptor { chain ->
-                val token = tokenStorage.getAccessToken()
-                val request = if (token != null) {
-                    chain.request().newBuilder()
-                        .addHeader("Authorization", "Bearer $token")
-                        .build()
-                } else {
-                    chain.request()
-                }
-                chain.proceed(request)
-            }
+            // Интерцептор авторизации: добавляет Bearer-токен ТОЛЬКО к запросам
+            // на хост API (см. buildAuthInterceptor — этот же клиент используется
+            // Coil/IconCacheManager для внешних URL картинок, токен не должен
+            // уходить на чужие хосты). Токен читается из TokenStorage в момент
+            // каждого запроса.
+            val apiHost = BuildConfig.BASE_URL.toHttpUrl().host
+            val authInterceptor = buildAuthInterceptor(tokenStorage, apiHost)
             val logging = HttpLoggingInterceptor().apply {
                 level = if (BuildConfig.DEBUG) HttpLoggingInterceptor.Level.BODY
                         else HttpLoggingInterceptor.Level.NONE
+                // Токен не должен попадать даже в debug-logcat: лог легко
+                // уходит наружу вместе с bug-репортом. ⚠️ Тела auth-запросов
+                // (пароли, коды верификации) при Level.BODY всё равно логируются —
+                // logcat debug-сборки не передавать третьим лицам.
+                redactHeader("Authorization")
             }
             return OkHttpClient.Builder()
                 .addInterceptor(authInterceptor)
