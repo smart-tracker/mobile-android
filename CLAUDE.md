@@ -384,6 +384,17 @@ com.example.smarttracker/
     `onStartCommand` останавливает старый `activeTracker` перед новым — иначе
     двойные GPS-колбэки. `pauseGapIndices` класть в state ДО `observeTrackingData`.
 
+29. **`TokenStorage` — контракт «не бросает» + самовосстановление** —
+    EncryptedSharedPreferences кидает RuntimeException (AEADBadTagException при
+    повреждённых префах/восстановлении из бэкапа; KeyStoreException после OTA).
+    Хранилище вызывается из OkHttp-интерцептора и Authenticator'а: не-IOException
+    там OkHttp 4 перебрасывает на dispatcher-потоке → краш процесса на любом
+    запросе. Поэтому: (1) все методы реализаций TokenStorage обязаны не бросать —
+    сбой = null/emptyList + лог; (2) `TokenStorageImpl` пересоздаёт повреждённое
+    хранилище (удаляет файл + master-key, цена — перелогин); (3) интерцептор и
+    authenticator дополнительно страхуются try/catch. Тесты:
+    AuthTokenFlowTest + TokenRefreshAuthenticatorTest (кейсы «storage бросает»).
+
 ---
 
 ## Текущие ограничения и временные решения
