@@ -22,7 +22,14 @@ import okhttp3.Interceptor
  */
 fun buildAuthInterceptor(tokenStorage: TokenStorage, apiHost: String): Interceptor =
     Interceptor { chain ->
-        val token = tokenStorage.getAccessToken()
+        // try/catch — страховка поверх контракта TokenStorage «не бросает»:
+        // не-IOException из интерцептора OkHttp 4 перебрасывает на dispatcher-потоке
+        // после уведомления callback'а → uncaught → краш процесса на ЛЮБОМ запросе.
+        val token = try {
+            tokenStorage.getAccessToken()
+        } catch (e: Exception) {
+            null // запрос уйдёт без Authorization → штатный 401 вместо краша
+        }
         val request = if (!token.isNullOrBlank() && chain.request().url.host == apiHost) {
             chain.request().newBuilder()
                 .addHeader("Authorization", "Bearer $token")

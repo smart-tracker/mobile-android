@@ -173,4 +173,27 @@ class AuthTokenFlowTest {
 
         assertEquals("Bearer secret-token", server.takeRequest().getHeader("Authorization"))
     }
+
+    // ── Отказоустойчивость: сбой хранилища не роняет запрос ──────────────────
+
+    @Test
+    fun `сбой хранилища токенов не роняет запрос — уходит без Authorization`() {
+        // EncryptedSharedPreferences может кинуть RuntimeException (AEADBadTagException,
+        // KeyStoreException). Не-IOException из интерцептора OkHttp 4 перебрасывает
+        // на dispatcher-потоке → краш процесса. Интерцептор обязан деградировать
+        // до запроса без заголовка (штатный 401), а не пробрасывать исключение.
+        server.enqueue(MockResponse().setResponseCode(200).setBody("{}"))
+        whenever(tokenStorage.getAccessToken())
+            .thenThrow(RuntimeException("Keystore corrupted"))
+
+        val response = client.newCall(
+            Request.Builder().url(server.url("/api")).build()
+        ).execute()
+
+        assertEquals(200, response.code)
+        assertNull(
+            "При сбое хранилища запрос должен уйти без Authorization",
+            server.takeRequest().getHeader("Authorization")
+        )
+    }
 }
