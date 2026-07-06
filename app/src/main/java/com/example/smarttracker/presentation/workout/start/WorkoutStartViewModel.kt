@@ -190,12 +190,8 @@ class WorkoutStartViewModel @Inject constructor(
      */
     private var trainingStartTimestamp: Long = 0L
 
-    /**
-     * Сигнал принудительного выхода из сессии (оба токена истекли).
-     * WorkoutHomeScreen наблюдает этот flow и при true вызывает onLogout().
-     * Делегирует в authRepository.sessionExpiredFlow → tokenStorage.sessionExpiredFlow.
-     */
-    val sessionExpired: StateFlow<Boolean> = authRepository.sessionExpiredFlow
+    // Сигнал истечения сессии обрабатывается глобально в AppNavGraph
+    // (AppViewModel.sessionExpired) — локальное делегирование удалено.
 
     // UUID тренировки: генерируется при первом старте, сохраняется при паузе/возобновлении,
     // сбрасывается в null при завершении (onFinishClick).
@@ -213,6 +209,11 @@ class WorkoutStartViewModel @Inject constructor(
 
     // Профиль пользователя (вес/рост/возраст/пол) для расчёта калорий в LocationTrackingService
     private var userProfile: User? = null
+
+    // type_activ_id восстановленной после смерти процесса тренировки.
+    // Типы активностей грузятся асинхронно — collectWorkoutTypes подставит
+    // selectedType по этому id, когда список придёт. null = восстановления не было.
+    private var recoveredTypeActivId: Int? = null
 
     // Таймер — отдельный Job, считает wall-clock время с учётом паузы
     private var timerJob: Job? = null
@@ -243,9 +244,67 @@ class WorkoutStartViewModel @Inject constructor(
         viewModelScope.launch {
             val last = locationRepository.getLastKnownPoint()
             if (last != null) _state.update { it.copy(lastKnownLocation = last) }
-            // GPS стартует сразу после первичного чтения — иконка по-прежнему видна без нажатия «Начать».
-            startDiscoveryGps()
+            // Crash-recovery: если процесс был убит ОС во время тренировки, сервис
+            // перезапущен через START_STICKY и пишет точки headless. Проверяем ДО
+            // discovery: discovery-intent на живой восстановленный сервис перезаписал бы
+            // его trainingId и молча убил запись (см. readRecoverableSession).
+            val recovered = LocationTrackingService.readRecoverableSession(context)
+            if (recovered != null) {
+                reattachToRecoveredSession(recovered)
+            } else {
+                // GPS стартует сразу после первичного чтения — иконка по-прежнему видна без нажатия «Начать».
+                startDiscoveryGps()
+            }
         }
+    }
+
+    /**
+     * Восстанавливает UI-состояние тренировки, пережившей смерть процесса.
+     *
+     * Сервис после OOM-kill перезапускается ОС (START_STICKY) и продолжает запись
+     * headless; эта функция возвращает ViewModel в согласованное с ним состояние:
+     * таймер, статистика (полный пересчёт из Room через [observeTrackingData]),
+     * gap-индексы пауз, выбранный тип активности и путь финиша (isRegisteredOnServer).
+     *
+     * Discovery-GPS НЕ запускается — сервис уже трекает тренировку.
+     */
+    private fun reattachToRecoveredSession(
+        s: LocationTrackingService.Companion.RecoverableSession,
+    ) {
+        Log.i(TAG, "Re-attach to recovered session: id=${s.trainingId}, " +
+            "recording=${s.isRecording}, registered=${s.isRegisteredOnServer}")
+
+        currentTrainingId            = s.trainingId
+        isTrainingRegisteredOnServer = s.isRegisteredOnServer
+        trainingStartTimestamp       = s.trainingStartedAt
+        recoveredTypeActivId         = s.typeActivId.takeIf { it >= 0 }
+
+        // Восстанавливаем elapsed: при записи — от виртуальной базы sessionStartedAt,
+        // на паузе — зафиксированный pausedAccumulatedMs.
+        pausedElapsedMs = if (s.isRecording)
+            (System.currentTimeMillis() - s.sessionStartedAt).coerceAtLeast(0L)
+        else
+            s.pausedAccumulatedMs
+
+        // gap-индексы — ДО observeTrackingData: наблюдатель читает их из state
+        // при расчёте дистанции (телепорт через паузу не должен считаться движением).
+        _state.update { it.copy(
+            isWorkoutStarted = true,
+            isTracking       = s.isRecording,
+            pauseGapIndices  = s.pauseGapIndices,
+            gpsStatus        = GpsStatus.SEARCHING,
+            elapsedMs        = pausedElapsedMs,
+            timerDisplay     = formatDuration(pausedElapsedMs),
+            // Тип активности подставится в collectWorkoutTypes по recoveredTypeActivId,
+            // когда список типов загрузится.
+        ) }
+
+        if (s.isRecording) startElapsedTimer()
+
+        // Полный пересчёт статистики из Room: observeTrackingData обработает все
+        // существующие точки как новые (processedCount = 0) и восстановит
+        // дистанцию/калории/трек, затем продолжит инкрементально.
+        observeTrackingData(s.trainingId)
     }
 
     /**
@@ -389,8 +448,11 @@ class WorkoutStartViewModel @Inject constructor(
                 .collect { types ->
                     _state.update { current ->
                         // Сохраняем выбор пользователя при фоновом обновлении списка.
+                        // recoveredTypeActivId — тип восстановленной после смерти процесса
+                        // тренировки: приоритетнее дефолта, но не выбора пользователя.
                         val selected = current.selectedType
                             ?.let { s -> types.find { it.id == s.id } }
+                            ?: recoveredTypeActivId?.let { rid -> types.find { it.id == rid } }
                             ?: types.firstOrNull()
                         // Первая эмиссия: берём первые 3; последующие: обновляем iconFile, порядок не трогаем.
                         val pinned = if (current.pinnedTypes.isEmpty())
@@ -751,7 +813,16 @@ class WorkoutStartViewModel @Inject constructor(
                         timeEnd             = timeEnd,
                         totalDistanceMeters = distanceMeters,
                         totalKilocalories   = kilocalories,
-                    ).onFailure { e ->
+                    ).onSuccess {
+                        // Тренировка закрыта на сервере — локальные точки больше не нужны
+                        // (история тянет трек с сервера). Без чистки неотправленные точки
+                        // (упавший финальный sync) лежали бы в Room вечно, база росла.
+                        // Хвост, не успевший на сервер, теряется осознанно — сервер
+                        // не примет gps_points для закрытой тренировки.
+                        withContext(NonCancellable) {
+                            locationRepository.deletePointsForTraining(trainingId)
+                        }
+                    }.onFailure { e ->
                         when (e) {
                             is NetworkUnavailableException -> {
                                 // Сеть пропала после регистрации — ставим в очередь без typeActivId:

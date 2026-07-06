@@ -82,7 +82,15 @@ class TokenRefreshAuthenticator @Inject constructor(
             return null
         }
 
-        val refreshToken = tokenStorage.getRefreshToken() ?: run {
+        // try/catch — страховка поверх контракта TokenStorage «не бросает»:
+        // authenticate() выполняется на OkHttp-потоке, необработанное исключение
+        // здесь роняет процесс (именно так выглядели вылеты «refresh не смог обновиться»).
+        val refreshToken = try {
+            tokenStorage.getRefreshToken()
+        } catch (e: Exception) {
+            Log.e(TAG, "Хранилище токенов недоступно: ${e.javaClass.simpleName}")
+            null
+        } ?: run {
             Log.w(TAG, "Refresh token отсутствует — пользователь не авторизован")
             return null
         }
@@ -136,10 +144,17 @@ class TokenRefreshAuthenticator @Inject constructor(
             return null
         }
 
-        // Сохраняем обновлённые токены; роли не меняются (обновляются только при login)
-        val currentRoles = tokenStorage.getUserRoles()
-        tokenStorage.saveTokens(authDto.accessToken, authDto.refreshToken, currentRoles)
-        Log.d(TAG, "Токены успешно обновлены, повторяем исходный запрос")
+        // Сохраняем обновлённые токены; роли не меняются (обновляются только при login).
+        // try/catch: сбой записи не должен ронять процесс — новый access-токен всё
+        // равно рабочий для повторного запроса. Цена несохранённого refresh-токена —
+        // принудительный logout при следующем истечении access (сервер уже ротировал).
+        try {
+            val currentRoles = tokenStorage.getUserRoles()
+            tokenStorage.saveTokens(authDto.accessToken, authDto.refreshToken, currentRoles)
+            Log.d(TAG, "Токены успешно обновлены, повторяем исходный запрос")
+        } catch (e: Exception) {
+            Log.e(TAG, "Не удалось сохранить обновлённые токены: ${e.javaClass.simpleName}")
+        }
 
         // Повторяем исходный запрос с новым access token
         return response.request.newBuilder()

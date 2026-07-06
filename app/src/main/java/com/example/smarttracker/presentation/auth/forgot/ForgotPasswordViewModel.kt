@@ -6,6 +6,7 @@ import com.example.smarttracker.data.local.TokenStorage
 import com.example.smarttracker.domain.model.ForgotPasswordRequest
 import com.example.smarttracker.domain.model.ResetPasswordRequest
 import com.example.smarttracker.domain.repository.PasswordRecoveryRepository
+import com.example.smarttracker.domain.validation.EmailValidator
 import com.example.smarttracker.utils.ApiErrorHandler
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
@@ -110,8 +111,10 @@ class ForgotPasswordViewModel @Inject constructor(
             return
         }
         
-        // Simple email format check (proper validation happens on API)
-        if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
+        // Формат — через доменный EmailValidator (android.util.Patterns в JVM
+        // unit-тестах — null-поле → NPE). Проверка домена 149-ФЗ здесь НЕ нужна:
+        // восстановление пароля существующего аккаунта закон не ограничивает.
+        if (!EmailValidator.isValid(email)) {
             _uiState.value = _uiState.value.copy(
                 emailError = "Некорректный формат email"
             )

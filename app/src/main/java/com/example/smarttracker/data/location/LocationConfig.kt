@@ -105,6 +105,37 @@ object LocationConfig {
     const val KEY_PAUSED_ACCUMULATED_MS  = "paused_accumulated_ms"
     /** Crash-recovery: число записанных GPS-точек тренировки (для точного gap-индекса паузы). */
     const val KEY_RECORDED_POINT_COUNT   = "recorded_point_count"
+    /** Crash-recovery: флаг записи на момент падения (false = тренировка была на паузе).
+     *  Без него START_STICKY-рестарт молча возобновлял запись, убитую на паузе. */
+    const val KEY_IS_RECORDING           = "is_recording"
+    /** Crash-recovery: момент первого нажатия «Начать» (wall-clock ms), не сдвигается
+     *  при resume — нужен ViewModel для даты тренировки на экране итогов. */
+    const val KEY_TRAINING_STARTED_AT    = "training_started_at"
+    /** Crash-recovery: heartbeat — момент последней записи состояния сервисом.
+     *  ViewModel считает сессию протухшей, если heartbeat старше [RECOVERY_STALE_MS]
+     *  (сервис мёртв и START_STICKY-рестарта не было). */
+    const val KEY_LAST_PERSIST_AT        = "last_persist_at"
+    /** Crash-recovery: gap-индексы пауз через запятую ("34,78") — для восстановления
+     *  pauseGapIndices во ViewModel (иначе дистанция посчитает телепорт через паузу). */
+    const val KEY_PAUSE_GAP_INDICES      = "pause_gap_indices"
+    /** Crash-recovery: true = startTraining подтверждён сервером (trainingId — serverUUID).
+     *  Определяет путь финиша после восстановления: прямой saveTraining или офлайн-цепочка. */
+    const val KEY_IS_REGISTERED          = "is_registered_on_server"
+
+    // Crash-recovery: профиль калорий и параметры трекинга. Без них START_STICKY-рестарт
+    // терял CF/MET (calories=null до конца тренировки) и откатывал интервал/точность
+    // на профиль бега даже для велотренировки.
+    const val KEY_TYPE_ACTIV_ID          = "type_activ_id"
+    const val KEY_WEIGHT_KG              = "weight_kg"
+    const val KEY_HEIGHT_CM              = "height_cm"
+    const val KEY_AGE_YEARS              = "age_years"
+    const val KEY_IS_MALE                = "is_male"
+    const val KEY_INTERVAL_MS            = "interval_ms"
+    const val KEY_ACCURACY_THRESHOLD     = "accuracy_threshold"
+
+    /** Порог протухания recovery-сессии: heartbeat пишется каждые
+     *  [BUFFER_FLUSH_INTERVAL_MS], 2 минуты покрывают паузу START_STICKY-рестарта. */
+    const val RECOVERY_STALE_MS          = 2 * 60 * 1000L
 
     // ── Синхронизация GPS-точек с сервером ──────────────────────────────────────
 

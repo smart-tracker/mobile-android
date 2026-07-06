@@ -29,6 +29,20 @@ import com.example.smarttracker.presentation.menu.profile.ProfileEditViewModel
 import com.example.smarttracker.presentation.menu.profile.ProfileScreen
 import com.example.smarttracker.presentation.menu.profile.ProfileViewModel
 import com.example.smarttracker.presentation.workout.WorkoutHomeScreen
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+
+/**
+ * Маршруты auth-флоу: на них принудительный переход на Login при истечении
+ * сессии не выполняется (пользователь и так вне авторизованной зоны).
+ */
+private val AUTH_ROUTES = setOf(
+    Screen.Login.route,
+    Screen.Register.route,
+    Screen.PasswordRecovery.route,
+    Screen.TermsOfService.route,
+    Screen.PrivacyPolicy.route,
+)
 
 /** Compose NavHost: декларация всех маршрутов и переходов между экранами. */
 @Composable
@@ -36,7 +50,29 @@ fun AppNavGraph(
     navController: NavHostController = rememberNavController(),
     startDestination: String = Screen.Login.route,
     onLogout: () -> Unit = {},
+    sessionExpired: StateFlow<Boolean> = MutableStateFlow(false),
 ) {
+    // Глобальный обработчик истечения сессии: срабатывает с ЛЮБОГО экрана
+    // (TokenRefreshAuthenticator получил 4xx на /auth/refresh → оба токена мертвы).
+    // Раньше подписка жила только в WorkoutHomeScreen — 401 на ProfileEdit
+    // не разлогинивал, пока пользователь не вернётся на Home.
+    LaunchedEffect(navController) {
+        sessionExpired.collect { expired ->
+            if (!expired) return@collect
+            val current = navController.currentBackStackEntry?.destination?.route
+            // На auth-экранах не дёргаем навигацию: пользователь уже логинится,
+            // сброс его ввода принудительным переходом только навредит.
+            if (current !in AUTH_ROUTES) {
+                onLogout() // идемпотентно: токены уже стёрты signalSessionExpired,
+                           // но кэш профиля чистится именно здесь
+                navController.navigate(Screen.Login.route) {
+                    popUpTo(navController.graph.id) { inclusive = true }
+                    launchSingleTop = true
+                }
+            }
+        }
+    }
+
     NavHost(
         navController = navController,
         startDestination = startDestination,

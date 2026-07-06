@@ -6,8 +6,10 @@ import com.example.smarttracker.data.local.RoleConfigStorage
 import com.example.smarttracker.domain.model.Gender
 import com.example.smarttracker.domain.model.RegisterRequest
 import com.example.smarttracker.domain.model.UserPurpose
+import com.example.smarttracker.domain.repository.AllowedEmailDomainsRepository
 import com.example.smarttracker.domain.repository.AuthRepository
 import com.example.smarttracker.domain.usecase.RegisterUseCase
+import com.example.smarttracker.domain.validation.EmailValidator
 import com.example.smarttracker.utils.ApiErrorHandler
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -34,6 +36,7 @@ class RegisterViewModel @Inject constructor(
     private val registerUseCase: RegisterUseCase,
     private val authRepository: AuthRepository,
     private val roleConfigStorage: RoleConfigStorage,
+    private val allowedEmailDomainsRepository: AllowedEmailDomainsRepository,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(RegisterUiState())
@@ -43,6 +46,11 @@ class RegisterViewModel @Inject constructor(
     val events: SharedFlow<RegisterEvent> = _events.asSharedFlow()
 
     private var cooldownJob: Job? = null
+
+    // Список разрешённых доменов почты (149-ФЗ). Загружается в init;
+    // пока пуст (реализация станет сетевой) — локальная проверка пропускается,
+    // домен всё равно проверит RegisterUseCase перед запросом к серверу.
+    private var allowedEmailDomains: Set<String> = emptySet()
     
     // ── Проверка уникальности nickname ──────────────────────────────────────
     private val nicknameCheckDebounceFlow = MutableStateFlow<String>("")
@@ -57,6 +65,12 @@ class RegisterViewModel @Inject constructor(
     }
     
     init {
+        // 149-ФЗ — загрузить список разрешённых почтовых доменов для
+        // мгновенной валидации на Step 3 (без ожидания вызова UseCase)
+        viewModelScope.launch {
+            allowedEmailDomains = allowedEmailDomainsRepository.getAllowedDomains()
+        }
+
         // Инициализировать debounce для проверки nickname
         nicknameCheckJob = viewModelScope.launch {
             nicknameCheckDebounceFlow
@@ -283,9 +297,16 @@ class RegisterViewModel @Inject constructor(
             _state.update { it.copy(fieldError = "Некорректная дата рождения") }
             return
         }
+        // Формат — через доменный EmailValidator (раньше был android.util.Patterns:
+        // два разных regex в ViewModel и UseCase принимали разные множества строк).
+        // Проверка домена (149-ФЗ) пропускается, если список ещё не загружен —
+        // RegisterUseCase проверит домен повторно перед запросом к серверу.
         val emailError = when {
             s.email.isBlank() -> "Введите email"
-            !android.util.Patterns.EMAIL_ADDRESS.matcher(s.email).matches() -> "Некорректный формат email"
+            !EmailValidator.isValid(s.email) -> "Некорректный формат email"
+            allowedEmailDomains.isNotEmpty() &&
+                !EmailValidator.isAllowedDomain(s.email, allowedEmailDomains) ->
+                EmailValidator.RUSSIAN_EMAIL_REQUIRED_MESSAGE
             else -> null
         }
         if (emailError != null) {

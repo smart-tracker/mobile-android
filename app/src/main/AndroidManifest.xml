@@ -31,9 +31,14 @@
     <!-- Камера — для съёмки фото профиля -->
     <uses-permission android:name="android.permission.CAMERA" />
 
+    <!-- allowBackup=false: в облачный/ADB-бэкап иначе уезжает Room-база
+         с GPS-треками (история перемещений пользователя открытым текстом)
+         и EncryptedSharedPreferences (нечитаемы без Keystore-ключа, но
+         вызывают креш при восстановлении на другом устройстве).
+         Все значимые данные синхронизируются с сервером — бэкап не нужен. -->
     <application
         android:name=".SmartTrackerApp"
-        android:allowBackup="true"
+        android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:label="@string/app_name"

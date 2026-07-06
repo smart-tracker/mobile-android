@@ -49,12 +49,9 @@ fun WorkoutHomeScreen(
     val viewModel: WorkoutStartViewModel = hiltViewModel()
     val state by viewModel.state.collectAsStateWithLifecycle()
 
-    // Принудительный выход при истечении сессии (оба токена невалидны).
-    // Срабатывает когда TokenRefreshAuthenticator получает 401 на /auth/refresh.
-    val sessionExpired by viewModel.sessionExpired.collectAsStateWithLifecycle()
-    LaunchedEffect(sessionExpired) {
-        if (sessionExpired) onLogout()
-    }
+    // Принудительный выход при истечении сессии обрабатывается глобально
+    // в AppNavGraph (подписка на AppViewModel.sessionExpired) — работает
+    // с любого экрана, а не только с Home. Локальной подписки больше нет.
 
     // Закрываем оверлей при переходе с вкладки «Старт» на любую другую —
     // пользователь явно ушёл с экрана итогов, состояние сбрасывается на «можно начать».

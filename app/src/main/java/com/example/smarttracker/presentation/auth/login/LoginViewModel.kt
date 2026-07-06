@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.smarttracker.domain.repository.AuthRepository
 import com.example.smarttracker.domain.usecase.LoginUseCase
+import com.example.smarttracker.domain.validation.EmailValidator
 import com.example.smarttracker.utils.ApiErrorHandler
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -124,7 +125,10 @@ class LoginViewModel @Inject constructor(
             return "Введите email"
         }
 
-        if (!android.util.Patterns.EMAIL_ADDRESS.matcher(s.email).matches()) {
+        // Доменный EmailValidator вместо android.util.Patterns:
+        // Patterns.EMAIL_ADDRESS в JVM unit-тестах — null (isReturnDefaultValues
+        // отдаёт дефолты только для методов, не для статических полей) → NPE.
+        if (!EmailValidator.isValid(s.email)) {
             return "Некорректный формат email"
         }
 

@@ -29,6 +29,7 @@ class MainActivity : ComponentActivity() {
                 AppNavGraph(
                     startDestination = appViewModel.startRoute,
                     onLogout = appViewModel::logout,
+                    sessionExpired = appViewModel.sessionExpired,
                 )
             }
         }

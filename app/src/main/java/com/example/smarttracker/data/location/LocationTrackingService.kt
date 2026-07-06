@@ -273,7 +273,14 @@ class LocationTrackingService : Service() {
                         if (activeTracker != null) flushBufferLocked()
                         trainingId = newId  // переключаем id; новые точки пойдут под serverUUID
                     }
-                    recoveryPrefs.edit().putString(LocationConfig.KEY_ACTIVE_TRAINING, newId).apply()
+                    // KEY_IS_REGISTERED: этот Intent приходит ТОЛЬКО после успешного
+                    // startTraining → тренировка гарантированно есть на сервере.
+                    // При crash-recovery ViewModel по этому флагу выберет путь финиша
+                    // (прямой saveTraining vs офлайн-цепочка с регистрацией).
+                    recoveryPrefs.edit()
+                        .putString(LocationConfig.KEY_ACTIVE_TRAINING, newId)
+                        .putBoolean(LocationConfig.KEY_IS_REGISTERED, true)
+                        .apply()
                 }
             }
             return START_STICKY
@@ -330,6 +337,7 @@ class LocationTrackingService : Service() {
             // 6. Crash-recovery и finishSyncFlow
             recoveryPrefs.edit().putString(LocationConfig.KEY_ACTIVE_TRAINING, newId).apply()
             persistSessionState()
+            persistSessionProfile(intent, intervalMs)
             _finishSyncFlow.resetReplayCache()
 
             // 7. Показываем уведомление немедленно — это главная цель перехода
@@ -351,7 +359,12 @@ class LocationTrackingService : Service() {
             wakeLock = pm.newWakeLock(
                 PowerManager.PARTIAL_WAKE_LOCK,
                 "SmartTracker:LocationTracking",
-            ).also { it.acquire(LocationConfig.WAKELOCK_TIMEOUT_MS) }
+            ).also {
+                // Без ref-counting повторный acquire в flush-таймере продлевает
+                // таймаут вместо инкремента счётчика (тренировки дольше 2 часов).
+                it.setReferenceCounted(false)
+                it.acquire(LocationConfig.WAKELOCK_TIMEOUT_MS)
+            }
 
             // 9. Запускаем новый трекер, таймеры и sync-цикл
             startLocationUpdates(intervalMs)
@@ -409,6 +422,19 @@ class LocationTrackingService : Service() {
                     if (sessionStartedAt > 0L) {
                         pausedAccumulatedMs = System.currentTimeMillis() - sessionStartedAt
                     }
+                    // Персистим gap-индекс паузы: при crash-recovery ViewModel восстановит
+                    // pauseGapIndices — без них дистанция после рестарта посчитала бы
+                    // «телепорт» через паузу как реальное движение.
+                    if (!isDiscovery) {
+                        val existing = recoveryPrefs.getString(
+                            LocationConfig.KEY_PAUSE_GAP_INDICES, ""
+                        ).orEmpty()
+                        val updated = if (existing.isBlank()) "$recordedPointCount"
+                                      else "$existing,$recordedPointCount"
+                        recoveryPrefs.edit()
+                            .putString(LocationConfig.KEY_PAUSE_GAP_INDICES, updated)
+                            .apply()
+                    }
                 }
                 isRecording = newRecording
 
@@ -437,13 +463,28 @@ class LocationTrackingService : Service() {
             return START_NOT_STICKY
         }
 
+        // Основная ветка может прийти на ЖИВОЙ экземпляр (Android переиспользует сервис:
+        // например, discovery-старт из ViewModel при уже работающем восстановленном сервисе).
+        // Без остановки старый трекер продолжил бы колбэки параллельно с новым —
+        // двойные onLocationReceived → дубли точек и утечка трекера.
+        activeTracker?.stopTracking()
+        activeTracker = null
+        hintJob?.cancel()
+        flushTimerJob?.cancel()
+        syncJob?.cancel()
+
         trainingId  = id
         isDiscovery = intent?.getBooleanExtra(EXTRA_IS_DISCOVERY, false) ?: false
+        // START_STICKY-рестарт (intent == null): параметры трекинга восстанавливаются
+        // из recovery-префов — иначе велотренировка продолжилась бы с беговым
+        // интервалом/порогом точности.
         accuracyThreshold = intent?.getFloatExtra(
             EXTRA_ACCURACY_THRESHOLD, LocationConfig.MAX_ACCURACY_RUNNING
-        ) ?: LocationConfig.MAX_ACCURACY_RUNNING
+        ) ?: recoveryPrefs.getFloat(
+            LocationConfig.KEY_ACCURACY_THRESHOLD, LocationConfig.MAX_ACCURACY_RUNNING
+        )
         val intervalMs = intent?.getLongExtra(EXTRA_INTERVAL_MS, LocationConfig.INTERVAL_MS_RUNNING)
-            ?: LocationConfig.INTERVAL_MS_RUNNING
+            ?: recoveryPrefs.getLong(LocationConfig.KEY_INTERVAL_MS, LocationConfig.INTERVAL_MS_RUNNING)
 
         // Сбрасываем кеш replay finishSyncFlow: новая сессия — старый сигнал завершения
         // предыдущей тренировки не должен быть принят ViewModel текущей тренировки.
@@ -458,6 +499,8 @@ class LocationTrackingService : Service() {
                 pausedAccumulatedMs = 0L
                 lastSpeedMps        = null
                 recordedPointCount  = 0
+                isRecording         = true
+                persistSessionProfile(intent, intervalMs)
             } else {
                 sessionStartedAt = recoveryPrefs.getLong(
                     LocationConfig.KEY_SESSION_STARTED_AT, System.currentTimeMillis()
@@ -468,6 +511,10 @@ class LocationTrackingService : Service() {
                 recordedPointCount = recoveryPrefs.getInt(
                     LocationConfig.KEY_RECORDED_POINT_COUNT, 0
                 )
+                // Тренировка могла быть убита на паузе — не возобновляем запись сами.
+                // Без восстановления флага рестарт молча продолжал запись, а chronometer
+                // включал паузу в elapsed (sessionStartedAt оставался временем старого resume).
+                isRecording = recoveryPrefs.getBoolean(LocationConfig.KEY_IS_RECORDING, true)
             }
             recoveryPrefs.edit().putString(LocationConfig.KEY_ACTIVE_TRAINING, trainingId).apply()
             persistSessionState()
@@ -491,7 +538,12 @@ class LocationTrackingService : Service() {
             wakeLock = pm.newWakeLock(
                 PowerManager.PARTIAL_WAKE_LOCK,
                 "SmartTracker:LocationTracking",
-            ).also { it.acquire(LocationConfig.WAKELOCK_TIMEOUT_MS) }
+            ).also {
+                // Без ref-counting повторный acquire в flush-таймере продлевает
+                // таймаут вместо инкремента счётчика (тренировки дольше 2 часов).
+                it.setReferenceCounted(false)
+                it.acquire(LocationConfig.WAKELOCK_TIMEOUT_MS)
+            }
         }
 
         Log.d(TAG, "onStartCommand: trainingId=$trainingId, interval=${intervalMs}ms")
@@ -502,13 +554,30 @@ class LocationTrackingService : Service() {
         if (!isDiscovery) startHintTimer()
 
         // ── Инициализация расчёта калорий (MET-метод) ────────────────────────────
-        // Значения профиля передаются из WorkoutStartViewModel через Intent-экстры.
+        // Обычный старт: значения профиля приходят Intent-экстрами из ViewModel.
+        // START_STICKY-рестарт (intent == null): восстанавливаем из recovery-префов —
+        // иначе calories = null до конца тренировки после OOM-kill.
         // Если weight или height отсутствуют — calories будет null для всех точек.
-        val typeActivId = intent?.getIntExtra(EXTRA_TYPE_ACTIV_ID, -1) ?: -1
-        val weightKg    = if (intent?.hasExtra(EXTRA_WEIGHT_KG) == true) intent.getFloatExtra(EXTRA_WEIGHT_KG, 0f) else null
-        val heightCm    = if (intent?.hasExtra(EXTRA_HEIGHT_CM) == true) intent.getFloatExtra(EXTRA_HEIGHT_CM, 0f) else null
-        val ageYears    = intent?.getIntExtra(EXTRA_AGE_YEARS, 0) ?: 0
-        val isMale      = intent?.getBooleanExtra(EXTRA_IS_MALE, true) ?: true
+        val typeActivId: Int
+        val weightKg: Float?
+        val heightCm: Float?
+        val ageYears: Int
+        val isMale: Boolean
+        if (intent != null) {
+            typeActivId = intent.getIntExtra(EXTRA_TYPE_ACTIV_ID, -1)
+            weightKg    = if (intent.hasExtra(EXTRA_WEIGHT_KG)) intent.getFloatExtra(EXTRA_WEIGHT_KG, 0f) else null
+            heightCm    = if (intent.hasExtra(EXTRA_HEIGHT_CM)) intent.getFloatExtra(EXTRA_HEIGHT_CM, 0f) else null
+            ageYears    = intent.getIntExtra(EXTRA_AGE_YEARS, 0)
+            isMale      = intent.getBooleanExtra(EXTRA_IS_MALE, true)
+        } else {
+            typeActivId = recoveryPrefs.getInt(LocationConfig.KEY_TYPE_ACTIV_ID, -1)
+            weightKg    = if (recoveryPrefs.contains(LocationConfig.KEY_WEIGHT_KG))
+                              recoveryPrefs.getFloat(LocationConfig.KEY_WEIGHT_KG, 0f) else null
+            heightCm    = if (recoveryPrefs.contains(LocationConfig.KEY_HEIGHT_CM))
+                              recoveryPrefs.getFloat(LocationConfig.KEY_HEIGHT_CM, 0f) else null
+            ageYears    = recoveryPrefs.getInt(LocationConfig.KEY_AGE_YEARS, 0)
+            isMale      = recoveryPrefs.getBoolean(LocationConfig.KEY_IS_MALE, true)
+        }
 
         sessionWeightKg  = weightKg
         sessionAgeYears  = ageYears
@@ -551,6 +620,17 @@ class LocationTrackingService : Service() {
             while (isActive) {
                 delay(LocationConfig.BUFFER_FLUSH_INTERVAL_MS)
                 flushBuffer()
+                if (!isDiscovery && !isShuttingDown) {
+                    // Heartbeat даже при пустом буфере (пауза): flushBufferLocked
+                    // персистит только при фактической записи точек, а ViewModel
+                    // по KEY_LAST_PERSIST_AT отличает живую сессию от протухшей.
+                    persistSessionState()
+                    // Продление WakeLock: одиночный acquire(2ч) истекал на тренировках
+                    // длиннее — на API 26–28 CPU затроттливался при выключенном экране.
+                    // setReferenceCounted(false) → повторный acquire сбрасывает таймаут,
+                    // при краше сервиса лок всё равно отпустится максимум через 2 часа.
+                    wakeLock?.acquire(LocationConfig.WAKELOCK_TIMEOUT_MS)
+                }
             }
         }
     }
@@ -907,14 +987,11 @@ class LocationTrackingService : Service() {
         lastAcceptedLocation = null
         smoothingWindow.clear()
 
-        // Очищаем crash-recovery — тренировка завершена штатно
+        // Очищаем crash-recovery целиком — тренировка завершена штатно.
+        // clear() вместо перечисления ключей: покрывает и профиль калорий,
+        // и gap-индексы, и heartbeat — забытый ключ не протечёт в следующую сессию.
         if (::recoveryPrefs.isInitialized) {
-            recoveryPrefs.edit()
-                .remove(LocationConfig.KEY_ACTIVE_TRAINING)
-                .remove(LocationConfig.KEY_SESSION_STARTED_AT)
-                .remove(LocationConfig.KEY_PAUSED_ACCUMULATED_MS)
-                .remove(LocationConfig.KEY_RECORDED_POINT_COUNT)
-                .apply()
+            recoveryPrefs.edit().clear().apply()
         }
 
         wakeLock?.let { if (it.isHeld) it.release() }
@@ -1037,7 +1114,42 @@ class LocationTrackingService : Service() {
             .putLong(LocationConfig.KEY_SESSION_STARTED_AT, sessionStartedAt)
             .putLong(LocationConfig.KEY_PAUSED_ACCUMULATED_MS, pausedAccumulatedMs)
             .putInt(LocationConfig.KEY_RECORDED_POINT_COUNT, recordedPointCount)
+            .putBoolean(LocationConfig.KEY_IS_RECORDING, isRecording)
+            // Heartbeat: ViewModel по нему отличает живую сессию (сервис работает
+            // или вот-вот перезапустится START_STICKY) от протухшей (force-stop,
+            // рестарт не придёт) — см. readRecoverableSession.
+            .putLong(LocationConfig.KEY_LAST_PERSIST_AT, System.currentTimeMillis())
             .apply()
+    }
+
+    /**
+     * Персистит профиль калорий и параметры трекинга при старте сессии.
+     * Восстанавливаются при START_STICKY-рестарте (intent == null): без них рестарт
+     * терял CF/MET (calories=null) и откатывал интервал/точность на профиль бега.
+     * Заодно сбрасывает gap-индексы и флаг регистрации предыдущей сессии.
+     */
+    private fun persistSessionProfile(intent: Intent, intervalMs: Long) {
+        if (!::recoveryPrefs.isInitialized) return
+        val editor = recoveryPrefs.edit()
+            .putInt(LocationConfig.KEY_TYPE_ACTIV_ID, intent.getIntExtra(EXTRA_TYPE_ACTIV_ID, -1))
+            .putInt(LocationConfig.KEY_AGE_YEARS, intent.getIntExtra(EXTRA_AGE_YEARS, 0))
+            .putBoolean(LocationConfig.KEY_IS_MALE, intent.getBooleanExtra(EXTRA_IS_MALE, true))
+            .putLong(LocationConfig.KEY_INTERVAL_MS, intervalMs)
+            .putFloat(LocationConfig.KEY_ACCURACY_THRESHOLD, accuracyThreshold)
+            .putLong(LocationConfig.KEY_TRAINING_STARTED_AT, sessionStartedAt)
+            .putBoolean(LocationConfig.KEY_IS_REGISTERED, false)
+            .remove(LocationConfig.KEY_PAUSE_GAP_INDICES)
+        if (intent.hasExtra(EXTRA_WEIGHT_KG)) {
+            editor.putFloat(LocationConfig.KEY_WEIGHT_KG, intent.getFloatExtra(EXTRA_WEIGHT_KG, 0f))
+        } else {
+            editor.remove(LocationConfig.KEY_WEIGHT_KG)
+        }
+        if (intent.hasExtra(EXTRA_HEIGHT_CM)) {
+            editor.putFloat(LocationConfig.KEY_HEIGHT_CM, intent.getFloatExtra(EXTRA_HEIGHT_CM, 0f))
+        } else {
+            editor.remove(LocationConfig.KEY_HEIGHT_CM)
+        }
+        editor.apply()
     }
 
     companion object {
@@ -1145,6 +1257,73 @@ class LocationTrackingService : Service() {
             val intent = Intent(context, LocationTrackingService::class.java)
                 .putExtra(EXTRA_RECORDING, recording)
             context.startService(intent)
+        }
+
+        /**
+         * Снимок восстанавливаемой сессии тренировки из recovery-префов.
+         * Читается ViewModel при инициализации (см. [readRecoverableSession]).
+         */
+        data class RecoverableSession(
+            val trainingId: String,
+            val isRecording: Boolean,
+            /** Виртуальная база chronometer: elapsed = now − sessionStartedAt (при записи). */
+            val sessionStartedAt: Long,
+            /** Суммарный elapsed на момент паузы (актуален при isRecording == false). */
+            val pausedAccumulatedMs: Long,
+            /** Момент первого нажатия «Начать» — для даты на экране итогов. */
+            val trainingStartedAt: Long,
+            /** Gap-индексы пауз — без них дистанция посчитает телепорт через паузу. */
+            val pauseGapIndices: List<Int>,
+            /** type_activ_id выбранной активности; -1 если не был известен. */
+            val typeActivId: Int,
+            /** true = startTraining подтверждён сервером → финиш прямым saveTraining. */
+            val isRegisteredOnServer: Boolean,
+        )
+
+        /**
+         * Читает восстанавливаемую сессию тренировки после смерти процесса.
+         *
+         * Возвращает null (и подчищает префы), если сессии нет или она протухла:
+         * heartbeat ([LocationConfig.KEY_LAST_PERSIST_AT]) обновляется сервисом каждые
+         * ~5 сек; если он старше [LocationConfig.RECOVERY_STALE_MS] — сервис мёртв и
+         * START_STICKY-рестарт не пришёл (force-stop, перезагрузка). Восстанавливать
+         * «фантомную» сессию с пустым многочасовым таймером хуже, чем начать заново.
+         *
+         * Вызывается из WorkoutStartViewModel ДО запуска discovery-GPS: discovery-intent
+         * на живой восстановленный сервис перезаписал бы его trainingId и молча убил
+         * запись восстановленной тренировки.
+         */
+        fun readRecoverableSession(context: android.content.Context): RecoverableSession? {
+            val prefs = context.getSharedPreferences(
+                LocationConfig.PREFS_RECOVERY, android.content.Context.MODE_PRIVATE
+            )
+            val trainingId = prefs.getString(LocationConfig.KEY_ACTIVE_TRAINING, null)
+                ?: return null
+            val lastPersistAt = prefs.getLong(LocationConfig.KEY_LAST_PERSIST_AT, 0L)
+            if (System.currentTimeMillis() - lastPersistAt > LocationConfig.RECOVERY_STALE_MS) {
+                // Протухшая сессия: точки остаются в Room, открытая тренировка на сервере
+                // закроется через finishOrphanedAndRetryStart при следующем старте.
+                prefs.edit().clear().apply()
+                return null
+            }
+            val gaps = prefs.getString(LocationConfig.KEY_PAUSE_GAP_INDICES, "").orEmpty()
+                .split(',')
+                .mapNotNull { it.trim().toIntOrNull() }
+            return RecoverableSession(
+                trainingId           = trainingId,
+                isRecording          = prefs.getBoolean(LocationConfig.KEY_IS_RECORDING, true),
+                sessionStartedAt     = prefs.getLong(
+                    LocationConfig.KEY_SESSION_STARTED_AT, System.currentTimeMillis()
+                ),
+                pausedAccumulatedMs  = prefs.getLong(LocationConfig.KEY_PAUSED_ACCUMULATED_MS, 0L),
+                trainingStartedAt    = prefs.getLong(
+                    LocationConfig.KEY_TRAINING_STARTED_AT,
+                    prefs.getLong(LocationConfig.KEY_SESSION_STARTED_AT, System.currentTimeMillis()),
+                ),
+                pauseGapIndices      = gaps,
+                typeActivId          = prefs.getInt(LocationConfig.KEY_TYPE_ACTIV_ID, -1),
+                isRegisteredOnServer = prefs.getBoolean(LocationConfig.KEY_IS_REGISTERED, false),
+            )
         }
     }
 }

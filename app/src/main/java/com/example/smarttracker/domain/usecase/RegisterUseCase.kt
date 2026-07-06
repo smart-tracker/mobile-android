@@ -2,6 +2,7 @@ package com.example.smarttracker.domain.usecase
 
 import com.example.smarttracker.domain.model.RegisterRequest
 import com.example.smarttracker.domain.model.RegisterResult
+import com.example.smarttracker.domain.repository.AllowedEmailDomainsRepository
 import com.example.smarttracker.domain.repository.AuthRepository
 import com.example.smarttracker.domain.validation.EmailValidator
 import javax.inject.Inject
@@ -11,12 +12,14 @@ import javax.inject.Inject
  *
  * Ответственность:
  *   1. Валидация полей формы на клиенте
- *   2. Вызов репозитория если валидация прошла
+ *   2. Проверка домена почты по списку разрешённых (149-ФЗ)
+ *   3. Вызов репозитория если валидация прошла
  *
  * Не знает ничего про UI, Android, Retrofit или БД.
  */
 class RegisterUseCase @Inject constructor(
-    private val repository: AuthRepository
+    private val repository: AuthRepository,
+    private val allowedEmailDomains: AllowedEmailDomainsRepository,
 ) {
 
     /**
@@ -32,6 +35,19 @@ class RegisterUseCase @Inject constructor(
         val validationError = validate(request)
         if (validationError != null) {
             return Result.failure(IllegalArgumentException(validationError))
+        }
+
+        // — Проверка домена почты (149-ФЗ) ————————————————————————
+        // Обязательная точка контроля: через invoke проходит любая
+        // регистрация, независимо от того, проверил ли домен ViewModel.
+        // Вход и восстановление пароля НЕ ограничиваются — закон
+        // касается только новой регистрации.
+
+        val domains = allowedEmailDomains.getAllowedDomains()
+        if (!EmailValidator.isAllowedDomain(request.email, domains)) {
+            return Result.failure(
+                IllegalArgumentException(EmailValidator.RUSSIAN_EMAIL_REQUIRED_MESSAGE)
+            )
         }
 
         // — Запрос к серверу ——————————————————————————————————————

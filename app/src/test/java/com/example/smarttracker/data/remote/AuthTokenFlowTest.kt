@@ -1,7 +1,6 @@
 package com.example.smarttracker.data.remote
 
 import com.example.smarttracker.data.local.TokenStorage
-import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.mockwebserver.MockResponse
@@ -17,13 +16,14 @@ import org.mockito.kotlin.whenever
 /**
  * Тесты Auth Token Flow с MockWebServer.
  *
- * Проверяет поведение OkHttp-интерцептора из AuthModule:
- * - Добавляет "Authorization: Bearer <token>" к каждому запросу
+ * Проверяет РЕАЛЬНЫЙ интерцептор [buildAuthInterceptor] (тот же код,
+ * что использует AuthModule — раньше тест держал инлайн-копию логики,
+ * которая молча разъехалась бы с продакшеном при правке):
+ * - Добавляет "Authorization: Bearer <token>" к запросам на хост API
  * - Не добавляет заголовок при пустом токене
+ * - НЕ добавляет заголовок на чужой хост (токен не утекает на внешние
+ *   URL картинок, которые грузят Coil/IconCacheManager этим же клиентом)
  * - Токен читается из TokenStorage в момент каждого запроса (не кешируется)
- *
- * Конструируем тот же интерцептор, что и в di/AuthModule.kt,
- * чтобы тестировать реальную логику без Hilt.
  */
 class AuthTokenFlowTest {
 
@@ -34,23 +34,13 @@ class AuthTokenFlowTest {
     @Before
     fun setUp() {
         server       = MockWebServer()
+        server.start()
         tokenStorage = mock()
 
-        // Дублируем логику интерцептора из AuthModule.kt
-        val authInterceptor = Interceptor { chain ->
-            val token = tokenStorage.getAccessToken()
-            val request = if (!token.isNullOrBlank()) {
-                chain.request().newBuilder()
-                    .addHeader("Authorization", "Bearer $token")
-                    .build()
-            } else {
-                chain.request()
-            }
-            chain.proceed(request)
-        }
-
+        // Реальный интерцептор из data/remote/AuthInterceptor.kt.
+        // apiHost = хост MockWebServer — «свои» запросы идут именно туда.
         client = OkHttpClient.Builder()
-            .addInterceptor(authInterceptor)
+            .addInterceptor(buildAuthInterceptor(tokenStorage, server.url("/").host))
             .build()
     }
 
@@ -150,5 +140,60 @@ class AuthTokenFlowTest {
 
         val header = server.takeRequest().getHeader("Authorization")
         assertEquals("Bearer eyJhbGciOiJIUzI1NiJ9.test", header)
+    }
+
+    // ── Host-check: токен не утекает на чужой хост ────────────────────────────
+
+    @Test
+    fun `интерцептор не добавляет Authorization на чужой хост`() {
+        // Клиент с apiHost, отличным от хоста MockWebServer:
+        // запрос на сервер = «внешний CDN» с точки зрения интерцептора.
+        val foreignClient = OkHttpClient.Builder()
+            .addInterceptor(buildAuthInterceptor(tokenStorage, "api.example.com"))
+            .build()
+        server.enqueue(MockResponse().setResponseCode(200).setBody("{}"))
+        whenever(tokenStorage.getAccessToken()).thenReturn("secret-token")
+
+        foreignClient.newCall(Request.Builder().url(server.url("/icon.png")).build()).execute()
+
+        assertNull(
+            "Bearer-токен не должен уходить на хост, отличный от API",
+            server.takeRequest().getHeader("Authorization")
+        )
+    }
+
+    @Test
+    fun `интерцептор добавляет Authorization только при совпадении хоста`() {
+        // Совпадающий хост (обычный client из setUp) — заголовок есть;
+        // проверяем что host-check не сломал основной сценарий.
+        server.enqueue(MockResponse().setResponseCode(200).setBody("{}"))
+        whenever(tokenStorage.getAccessToken()).thenReturn("secret-token")
+
+        client.newCall(Request.Builder().url(server.url("/api")).build()).execute()
+
+        assertEquals("Bearer secret-token", server.takeRequest().getHeader("Authorization"))
+    }
+
+    // ── Отказоустойчивость: сбой хранилища не роняет запрос ──────────────────
+
+    @Test
+    fun `сбой хранилища токенов не роняет запрос — уходит без Authorization`() {
+        // EncryptedSharedPreferences может кинуть RuntimeException (AEADBadTagException,
+        // KeyStoreException). Не-IOException из интерцептора OkHttp 4 перебрасывает
+        // на dispatcher-потоке → краш процесса. Интерцептор обязан деградировать
+        // до запроса без заголовка (штатный 401), а не пробрасывать исключение.
+        server.enqueue(MockResponse().setResponseCode(200).setBody("{}"))
+        whenever(tokenStorage.getAccessToken())
+            .thenThrow(RuntimeException("Keystore corrupted"))
+
+        val response = client.newCall(
+            Request.Builder().url(server.url("/api")).build()
+        ).execute()
+
+        assertEquals(200, response.code)
+        assertNull(
+            "При сбое хранилища запрос должен уйти без Authorization",
+            server.takeRequest().getHeader("Authorization")
+        )
     }
 }

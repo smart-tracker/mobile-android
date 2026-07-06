@@ -40,6 +40,15 @@ class AppViewModel @Inject constructor(
     val startRoute: String =
         if (tokenStorage.hasTokens()) Screen.Home.route else Screen.Login.route
 
+    /**
+     * Глобальный сигнал истечения сессии (оба токена невалидны, refresh вернул 4xx).
+     * Наблюдается в AppNavGraph — принудительный переход на Login работает с ЛЮБОГО
+     * экрана (раньше подписка жила только в WorkoutHomeScreen: 401 на ProfileEdit
+     * не разлогинивал, пока пользователь не вернётся на Home).
+     */
+    val sessionExpired: kotlinx.coroutines.flow.StateFlow<Boolean> =
+        tokenStorage.sessionExpiredFlow
+
     init {
         // Перепланируем доставку offline-завершённых тренировок: цепочка могла
         // «умереть» пока слот активной тренировки на сервере был занят. KEEP внутри
