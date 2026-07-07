@@ -24,6 +24,7 @@ hmsLocation = "6.12.0.300"
 work        = "2.9.1"
 hiltWork    = "1.2.0"
 robolectric = "4.13"
+appmetrica  = "8.3.0"
 
 [libraries]
 # Google Material — тема для совместимости с enableEdgeToEdge() и Material3
@@ -84,6 +85,9 @@ maplibre-android = { group = "org.maplibre.gl", name = "android-sdk", version.re
 # GPS провайдеры — GMS (Google) и HMS (Huawei); оба в одном APK, выбор через RuntimeDetector
 gms-location = { group = "com.google.android.gms", name = "play-services-location", version.ref = "gmsLocation" }
 hms-location = { group = "com.huawei.hms", name = "location", version.ref = "hmsLocation" }
+
+# AppMetrica — крашрепортинг и аналитика (Яндекс, серверы в РФ — 152-ФЗ-совместимо)
+appmetrica-analytics = { group = "io.appmetrica.analytics", name = "analytics", version.ref = "appmetrica" }
 
 # WorkManager — фоновые задачи (офлайн-sync)
 androidx-work-runtime-ktx = { group = "androidx.work",    name = "work-runtime-ktx", version.ref = "work" }

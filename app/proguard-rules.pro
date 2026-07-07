@@ -29,6 +29,8 @@
 -dontwarn com.huawei.hms.commonkit.**
 -dontwarn com.huawei.android.**
 -dontwarn com.huawei.libcore.**
+# EMUI-класс в android.* namespace (есть только на Huawei-прошивках)
+-dontwarn android.telephony.HwTelephonyManager
 
 # Gson — TypeToken использует generic-сигнатуры через рефлексию.
 # Без keep R8 стирает параметры типов → десериализация List<T> возвращает

@@ -7,6 +7,8 @@ import coil.ImageLoader
 import coil.ImageLoaderFactory
 import coil.util.DebugLogger
 import dagger.hilt.android.HiltAndroidApp
+import io.appmetrica.analytics.AppMetrica
+import io.appmetrica.analytics.AppMetricaConfig
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import org.maplibre.android.MapLibre
@@ -48,6 +50,28 @@ class SmartTrackerApp : Application(), Configuration.Provider, ImageLoaderFactor
         // и не доверяет ряду CA (→ "Chain validation failed"). Подменяем на OkHttp,
         // который использует системный Android trust store — тот же, что работает для API.
         HttpRequestUtil.setOkHttpClient(okHttpClient)
+        initAppMetrica()
+    }
+
+    /**
+     * AppMetrica — крашрепортинг и аналитика (Яндекс, серверы в РФ).
+     *
+     * Ключ приходит из BuildConfig (gradle-property APPMETRICA_API_KEY, вне репозитория);
+     * пустой ключ = сборка без аналитики (локальная разработка, CI) — no-op.
+     *
+     * withLocationTracking(false) — ОБЯЗАТЕЛЬНО: GPS-треки тренировок — чувствительные
+     * ПДн, в аналитику Яндекса геопозиция уходить не должна (политика конфиденциальности
+     * обещает пользователю, что геоданные не передаются третьим лицам).
+     * Крашрепортинг включён по умолчанию (withCrashReporting(true) — дефолт SDK).
+     */
+    private fun initAppMetrica() {
+        val apiKey = BuildConfig.APPMETRICA_API_KEY
+        if (apiKey.isBlank()) return
+        val config = AppMetricaConfig.newConfigBuilder(apiKey)
+            .withLocationTracking(false)
+            .apply { if (BuildConfig.DEBUG) withLogs() }
+            .build()
+        AppMetrica.activate(this, config)
     }
 
     // Coil 2.x: ImageLoaderFactory.newImageLoader() — Application сам является Context

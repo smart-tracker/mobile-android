@@ -28,6 +28,17 @@ android {
         // Идентификатор приложения в сторах (RuStore/Play). com.example.* сторы
         // не принимают. После первой публикации менять НЕЛЬЗЯ.
         applicationId = "com.smarttracker.app"
+
+        // API-ключ AppMetrica. НЕ хранится в репозитории: задать в
+        // %USERPROFILE%\.gradle\gradle.properties (APPMETRICA_API_KEY=...)
+        // или через -PAPPMETRICA_API_KEY=... в CI. Ключ выдаёт кабинет
+        // appmetrica.yandex.ru после регистрации приложения (до релиза).
+        // Пустая строка → SmartTrackerApp пропускает инициализацию (no-op).
+        buildConfigField(
+            "String",
+            "APPMETRICA_API_KEY",
+            "\"${providers.gradleProperty("APPMETRICA_API_KEY").getOrElse("")}\"",
+        )
         minSdk = 26
         targetSdk = 35
         versionCode = 1
@@ -172,6 +183,9 @@ dependencies {
     // и использует оставшийся провайдер или AOSP-fallback.
     implementation(libs.gms.location)
     implementation(libs.hms.location)
+
+    // AppMetrica — крашрепортинг + аналитика (152-ФЗ-совместимая альтернатива Crashlytics)
+    implementation(libs.appmetrica.analytics)
 
     // WorkManager + Hilt-интеграция — фоновая доставка офлайн-операций
     implementation(libs.androidx.work.runtime.ktx)

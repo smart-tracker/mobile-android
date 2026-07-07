@@ -30,11 +30,13 @@ API Docs: https://runtastic.gottland.ru/docs
 - **Перед релизом:** ✅ минификация + proguard-правила, ✅ подписание (wiring;
   keystore генерирует владелец по `keystore.properties.example`),
   ✅ 152-ФЗ-пакет на клиенте (политика по структуре 152-ФЗ в LegalScreens,
-  гео-согласие перед GPS-разрешением, удаление аккаунта проверено).
+  гео-согласие перед GPS-разрешением, удаление аккаунта проверено),
+  ✅ AppMetrica-крашрепортинг (wiring; ключ задаёт владелец).
   Осталось: реквизиты оператора ПДн + юр-проверка текстов (плейсхолдеры
-  в LegalScreens.kt), хостинг политики (BR-15), убрать debug_code на бэке
-  (BR-1), ревизия публичности CONTEXT.md, smoke-test release-APK
-  на устройстве (логин → тренировка → финиш → история).
+  в LegalScreens.kt), хостинг политики (BR-15), регистрация приложения
+  в кабинете AppMetrica + ключ, убрать debug_code на бэке (BR-1),
+  ревизия публичности CONTEXT.md, smoke-test release-APK на устройстве
+  (логин → тренировка → финиш → история).
 
 ---
 
@@ -102,6 +104,10 @@ API Docs: https://runtastic.gottland.ru/docs
   (вне git, шаблон `keystore.properties.example`); файла нет → неподписанный APK.
 - ⚠️ После изменения proguard-правил — smoke-test release-сборки на устройстве:
   логин → тренировка → финиш → история (R8 ломает Gson/Retrofit-рефлексию молча).
+- AppMetrica (крашрепортинг): ключ — gradle-property `APPMETRICA_API_KEY`
+  (`%USERPROFILE%\.gradle\gradle.properties`, вне репо); пустой ключ → no-op.
+  `withLocationTracking(false)` обязателен — геоданные в аналитику не уходят
+  (обещание политики конфиденциальности).
 - minSdk=26, compileSdk=35, targetSdk=35, jvmTarget="17"
 - Gradle: 8.13 (wrapper), AGP: 8.13.2, Kotlin: 1.9.24, Compose Compiler Extension: 1.5.14
 - Все версии библиотек — только через `gradle/libs.versions.toml`
@@ -120,6 +126,7 @@ API Docs: https://runtastic.gottland.ru/docs
 | WorkManager | 2.9.1 |
 | GMS Location | 21.3.0 |
 | HMS Location | 6.12.0.300 |
+| AppMetrica | 8.3.0 |
 | Coroutines | 1.8.1 |
 | Security Crypto | 1.1.0-alpha06 |
 | DataStore Prefs | 1.1.1 |
