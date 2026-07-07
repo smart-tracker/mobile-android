@@ -61,6 +61,12 @@
     <string name="notif_action_pause">Пауза</string>
     <string name="notif_action_resume">Продолжить</string>
 
+    <!-- Пояснение об обработке геоданных перед системным запросом разрешения (152-ФЗ) -->
+    <string name="geo_consent_dialog_title">Доступ к геолокации</string>
+    <string name="geo_consent_dialog_message">Для записи маршрута тренировки приложению нужен доступ к геолокации.\n\nGPS-трек записывается только во время тренировки, запущенной вами вручную, и обрабатывается по Политике конфиденциальности. Удалить все данные можно, удалив аккаунт в редактировании профиля.</string>
+    <string name="geo_consent_dialog_confirm">Продолжить</string>
+    <string name="geo_consent_dialog_dismiss">Не сейчас</string>
+
     <!-- Оптимизация батареи (Doze whitelist) -->
     <string name="battery_opt_dialog_title">Точная запись тренировок</string>
     <string name="battery_opt_dialog_message">Чтобы GPS-точки сохранялись при выключенном экране, разрешите приложению работать без оптимизации батареи. Без этого Android может прерывать запись через 5 минут после блокировки экрана.</string>

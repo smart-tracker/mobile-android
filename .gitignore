@@ -22,6 +22,11 @@
 build/
 local.properties
 
+# Подписание release — секреты вне репозитория (см. keystore.properties.example)
+keystore.properties
+*.jks
+*.keystore
+
 # Log files
 *.log
 

@@ -88,7 +88,14 @@ class SyncGpsPointsWorkerTest {
 
         val result = buildWorker().doWork()
 
-        assertEquals(ListenableWorker.Result.success(), result)
+        // Воркер кладёт resolved trainingId в output data — SaveTrainingWorker
+        // читает его из своего inputData (см. KEY_RESOLVED_TRAINING_ID).
+        assertEquals(
+            ListenableWorker.Result.success(
+                workDataOf(SyncGpsPointsWorker.KEY_RESOLVED_TRAINING_ID to TRAINING_ID)
+            ),
+            result,
+        )
         verify(workoutRepository, never()).uploadGpsPoints(any(), any(), any())
     }
 
@@ -106,7 +113,12 @@ class SyncGpsPointsWorkerTest {
 
         val result = buildWorker().doWork()
 
-        assertEquals(ListenableWorker.Result.success(), result)
+        assertEquals(
+            ListenableWorker.Result.success(
+                workDataOf(SyncGpsPointsWorker.KEY_RESOLVED_TRAINING_ID to TRAINING_ID)
+            ),
+            result,
+        )
         // Должен назначить batchId перед загрузкой
         verify(locationRepository).assignBatchId(any(), any())
         // После успешной загрузки пометить батч отправленным
@@ -160,8 +172,14 @@ class SyncGpsPointsWorkerTest {
     fun `doWork - MAX_ATTEMPTS достигнут возвращает success чтобы разблокировать цепочку`() = runTest {
         val result = buildWorker(runAttemptCount = 5).doWork()
 
-        // success (не failure) — чтобы SaveTrainingWorker мог запуститься
-        assertEquals(ListenableWorker.Result.success(), result)
+        // success (не failure) — чтобы SaveTrainingWorker мог запуститься.
+        // trainingId прокидывается в output data даже при исчерпании попыток.
+        assertEquals(
+            ListenableWorker.Result.success(
+                workDataOf(SyncGpsPointsWorker.KEY_RESOLVED_TRAINING_ID to TRAINING_ID)
+            ),
+            result,
+        )
         verify(locationRepository, never()).getUnsentPoints(any())
     }
 

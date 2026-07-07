@@ -24,12 +24,17 @@ API Docs: https://runtastic.gottland.ru/docs
 - **Задачи для бэкенда — только в `BACK_REQ.md`** (канонический список,
   формат BR-N: что/зачем/статус Android/приёмка). В CLAUDE.md и CONTEXT.md —
   лишь ссылки на BR-номера, без дублирования содержания.
-- **Тесты обязательны** для новой бизнес-логики; известные дыры покрытия
-  (RegisterViewModel, ProfileViewModel, WorkoutStartViewModel) — тех-долг
-  к закрытию до релиза.
-- **Перед релизом:** включить минификацию + proguard-правила, подписание,
-  убрать debug_code на бэке, ревизия публичности CONTEXT.md
-  (содержит инфраструктурные детали сервера).
+- **Тесты обязательны** для новой бизнес-логики; ✅ дыры покрытия закрыты:
+  RegisterViewModelTest, ProfileViewModelTest, WorkoutStartViewModelTest
+  (recovery-контракт, нюанс 28).
+- **Перед релизом:** ✅ минификация + proguard-правила, ✅ подписание (wiring;
+  keystore генерирует владелец по `keystore.properties.example`),
+  ✅ 152-ФЗ-пакет на клиенте (политика по структуре 152-ФЗ в LegalScreens,
+  гео-согласие перед GPS-разрешением, удаление аккаунта проверено).
+  Осталось: реквизиты оператора ПДн + юр-проверка текстов (плейсхолдеры
+  в LegalScreens.kt), хостинг политики (BR-15), убрать debug_code на бэке
+  (BR-1), ревизия публичности CONTEXT.md, smoke-test release-APK
+  на устройстве (логин → тренировка → финиш → история).
 
 ---
 
@@ -89,6 +94,14 @@ API Docs: https://runtastic.gottland.ru/docs
 ---
 
 ## Конфигурация
+- `applicationId = com.smarttracker.app` (сторы не принимают `com.example.*`;
+  после публикации менять НЕЛЬЗЯ). `namespace` остался `com.example.smarttracker` —
+  Kotlin-пакеты не переименовывались, в сторы namespace не уходит.
+- Release: R8 включён (`isMinifyEnabled + isShrinkResources`), правила — `app/proguard-rules.pro`
+  (`Log.v/d/i` вырезаются из байткода). Подписание — из `keystore.properties`
+  (вне git, шаблон `keystore.properties.example`); файла нет → неподписанный APK.
+- ⚠️ После изменения proguard-правил — smoke-test release-сборки на устройстве:
+  логин → тренировка → финиш → история (R8 ломает Gson/Retrofit-рефлексию молча).
 - minSdk=26, compileSdk=35, targetSdk=35, jvmTarget="17"
 - Gradle: 8.13 (wrapper), AGP: 8.13.2, Kotlin: 1.9.24, Compose Compiler Extension: 1.5.14
 - Все версии библиотек — только через `gradle/libs.versions.toml`
@@ -426,6 +439,12 @@ com.example.smarttracker/
     хранилище (удаляет файл + master-key, цена — перелогин); (3) интерцептор и
     authenticator дополнительно страхуются try/catch. Тесты:
     AuthTokenFlowTest + TokenRefreshAuthenticatorTest (кейсы «storage бросает»).
+
+30. **Gradle-сборка в worktree** — в свежем worktree сборка падает: `.gitignore`
+    исключает `*.jar` и `local.properties`, поэтому нет `gradle/wrapper/gradle-wrapper.jar`
+    (`ClassNotFoundException: GradleWrapperMain`) и SDK-пути. Скопировать оба из основного
+    чекаута `C:\Users\novsm\Documents\GitHub\mobile-android\`. `JAVA_HOME` в шелле не задан —
+    ставить `$env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"` перед gradlew.
 
 ---
 

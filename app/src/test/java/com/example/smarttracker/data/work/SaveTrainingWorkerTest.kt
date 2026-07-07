@@ -98,8 +98,10 @@ class SaveTrainingWorkerTest {
 
     @Test
     fun `doWork - пустая очередь возвращает success без вызова saveTraining`() = runTest {
-        // getById возвращает null → запись не найдена
+        // getById возвращает null → запись не найдена → воркер делает fallback
+        // на getAll() (кейс stale localUUID после re-key) — тоже пусто
         whenever(pendingFinishDao.getById("uuid-1")).thenReturn(null)
+        whenever(pendingFinishDao.getAll()).thenReturn(emptyList())
 
         val result = buildWorker(trainingId = "uuid-1").doWork()
 

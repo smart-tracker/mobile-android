@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -5,12 +7,27 @@ plugins {
     alias(libs.plugins.hilt)
 }
 
+// Подписание release-сборки. Секреты (пароли, keystore) НЕ хранятся в репозитории:
+// файл keystore.properties лежит рядом с корнем проекта и добавлен в .gitignore.
+// Шаблон и инструкция генерации keystore — keystore.properties.example.
+// Если файла нет (CI, чужая машина) — release собирается неподписанным.
+val keystorePropertiesFile = rootProject.file("keystore.properties")
+val keystoreProperties = Properties().apply {
+    if (keystorePropertiesFile.exists()) {
+        keystorePropertiesFile.inputStream().use { load(it) }
+    }
+}
+
 android {
+    // namespace — внутренний package для R/BuildConfig, в сторы не попадает.
+    // Оставлен com.example.smarttracker, чтобы не переименовывать все Kotlin-пакеты.
     namespace = "com.example.smarttracker"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.example.smarttracker"
+        // Идентификатор приложения в сторах (RuStore/Play). com.example.* сторы
+        // не принимают. После первой публикации менять НЕЛЬЗЯ.
+        applicationId = "com.smarttracker.app"
         minSdk = 26
         targetSdk = 35
         versionCode = 1
@@ -23,17 +40,35 @@ android {
 
     }
 
+    signingConfigs {
+        if (keystorePropertiesFile.exists()) {
+            create("release") {
+                storeFile = rootProject.file(keystoreProperties["storeFile"] as String)
+                storePassword = keystoreProperties["storePassword"] as String
+                keyAlias = keystoreProperties["keyAlias"] as String
+                keyPassword = keystoreProperties["keyPassword"] as String
+            }
+        }
+    }
+
     buildTypes {
         debug {
             buildConfigField("String", "BASE_URL", "\"https://runtastic.gottland.ru/\"")
         }
         release {
-            isMinifyEnabled = false
+            // R8: минификация + обфускация. Правила — proguard-rules.pro.
+            // После любого изменения правил обязателен smoke-test release-сборки
+            // на устройстве: логин → тренировка → финиш → история (R8 ломает
+            // рефлексию Gson/Retrofit молча, без ошибок компиляции).
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
             buildConfigField("String", "BASE_URL", "\"https://runtastic.gottland.ru/\"")
+            // null если keystore.properties отсутствует → неподписанный APK
+            signingConfig = signingConfigs.findByName("release")
         }
     }
 

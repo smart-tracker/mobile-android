@@ -21,7 +21,11 @@ import com.example.smarttracker.R
 import com.example.smarttracker.data.system.BatteryOptimizationHelper
 
 /**
- * Трёхшаговый обработчик разрешений для трекинга тренировок.
+ * Обработчик разрешений для трекинга тренировок (шаги 0–3).
+ *
+ * **Шаг 0 (только если разрешений ещё нет):** пояснение об обработке геоданных
+ * (152-ФЗ: GPS-трек = персональные данные) — AlertDialog до первого системного
+ * запроса. «Продолжить» → шаг 1; отказ → [onDenied].
  *
  * **Шаг 1 (при первом запуске):** ACCESS_FINE_LOCATION + ACCESS_COARSE_LOCATION +
  * POST_NOTIFICATIONS (Android 13+).
@@ -56,6 +60,12 @@ fun LocationPermissionHandler(
     onPermissionsResult: (Boolean) -> Unit = {},
 ) {
     val context = LocalContext.current
+
+    // ── Шаг 0: пояснение об обработке геоданных (152-ФЗ) ────────────────────────
+    // Показывается ДО первого системного запроса разрешения: пользователь должен
+    // понимать, что GPS-трек = персональные данные, когда они записываются и как
+    // их удалить. Если разрешение уже выдано ранее — диалог не показывается.
+    var showGeoConsent by remember { mutableStateOf(false) }
 
     // ── Шаг 3: Doze whitelist (системный диалог + объясняющий AlertDialog) ──────
     var showBatteryOptExplain by remember { mutableStateOf(false) }
@@ -176,8 +186,38 @@ fun LocationPermissionHandler(
                 maybeRequestBatteryOpt()
             }
         } else {
-            step1Launcher.launch(step1Permissions)
+            // Разрешений нет — сначала пояснение об обработке геоданных (шаг 0),
+            // системный запрос уйдёт только после «Продолжить».
+            showGeoConsent = true
         }
+    }
+
+    // ── Шаг 0: пояснение об обработке геоданных перед системным запросом ────────
+    if (showGeoConsent) {
+        AlertDialog(
+            onDismissRequest = {
+                showGeoConsent = false
+                onDenied()
+            },
+            title = { Text(stringResource(R.string.geo_consent_dialog_title)) },
+            text  = { Text(stringResource(R.string.geo_consent_dialog_message)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    showGeoConsent = false
+                    step1Launcher.launch(step1Permissions)
+                }) {
+                    Text(stringResource(R.string.geo_consent_dialog_confirm))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showGeoConsent = false
+                    onDenied()
+                }) {
+                    Text(stringResource(R.string.geo_consent_dialog_dismiss))
+                }
+            },
+        )
     }
 
     // ── Объясняющий диалог перед системным запросом Doze whitelist ──────────────
