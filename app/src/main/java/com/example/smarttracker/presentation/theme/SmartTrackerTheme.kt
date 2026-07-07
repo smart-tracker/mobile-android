@@ -26,6 +26,10 @@ val geologicaFontFamilyItalic = FontFamily(
 // App Colors (reusable across screens)
 val ColorPrimary = androidx.compose.ui.graphics.Color(0xFF0A1928)  // Dark navy
 val ColorSecondary = androidx.compose.ui.graphics.Color(0xFF4DACA7) // Mint/teal accent
+// Тёмный шаг того же мятного оттенка — для тонких линий графиков на белом фоне.
+// ColorSecondary на белом даёт контраст 2.7:1 (< 3:1 WCAG для нетекстовой графики),
+// этот шаг — 4.0:1. Крупные заливки и бары остаются на ColorSecondary.
+val ColorChartLine = androidx.compose.ui.graphics.Color(0xFF2E8C86)
 val ColorPlaceholder = androidx.compose.ui.graphics.Color(0xFF525760)
 val ColorLink = androidx.compose.ui.graphics.Color(0xFF0066CC)
 val ColorBackground = androidx.compose.ui.graphics.Color.White

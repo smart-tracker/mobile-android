@@ -1,5 +1,6 @@
 package com.example.smarttracker.presentation.workout.summary
 
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -35,6 +36,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.input.pointer.pointerInput
@@ -127,13 +129,27 @@ fun SummaryHeader(
 
 // ── Основной блок: активность + ряд карточек ────────────────────────────────
 
+/**
+ * @param detailsExpanded развёрнута ли панель деталей (сплиты/график) — чеврон
+ *   на ряду карточек поворачивается на 90°.
+ * @param onToggleDetails тап по чеврону; null → чеврон декоративный (данных для
+ *   деталей нет — история без временных меток и без альтиметрии).
+ */
 @Composable
-fun SummaryBody(state: WorkoutSummaryUiState) {
+fun SummaryBody(
+    state: WorkoutSummaryUiState,
+    detailsExpanded: Boolean = false,
+    onToggleDetails: (() -> Unit)? = null,
+) {
     Column {
         Spacer(modifier = Modifier.height(18.dp))
         ActivityHeader(state = state)
         Spacer(modifier = Modifier.height(20.dp))
-        StatsRow(state = state)
+        StatsRow(
+            state = state,
+            detailsExpanded = detailsExpanded,
+            onToggleDetails = onToggleDetails,
+        )
         Spacer(modifier = Modifier.height(14.dp))
     }
 }
@@ -184,7 +200,11 @@ private fun ActivityHeader(state: WorkoutSummaryUiState) {
 }
 
 @Composable
-private fun StatsRow(state: WorkoutSummaryUiState) {
+private fun StatsRow(
+    state: WorkoutSummaryUiState,
+    detailsExpanded: Boolean = false,
+    onToggleDetails: (() -> Unit)? = null,
+) {
     // Внешний Box — чтобы наложить стрелку поверх правой границы третьей карточки.
     // Все горизонтальные отступы (внешние и между карточками) одинаковы — 14dp.
     Box(modifier = Modifier.fillMaxWidth()) {
@@ -218,19 +238,35 @@ private fun StatsRow(state: WorkoutSummaryUiState) {
         // align(CenterEnd) ставит правый край Box на parent_width;
         // offset(x = -3) сдвигает на (14 - 24/2 - 1) = ~3dp влево, чтобы центр круга
         // лёг на линию границы карточки (parent_width - 14).
+        // Тап разворачивает панель деталей (сплиты/график) поверх зоны карты;
+        // при null-колбэке (деталей нет) чеврон остаётся декоративным.
+        val arrowAngle by animateFloatAsState(
+            targetValue = if (detailsExpanded) 90f else 0f,
+            label = "details-arrow",
+        )
         Box(
             modifier = Modifier
                 .align(Alignment.CenterEnd)
                 .offset(x = (-3).dp)
                 .size(24.dp)
+                .clip(CircleShape)
                 .background(Color.White, CircleShape)
-                .border(width = 1.dp, color = ColorPrimary, shape = CircleShape),
+                .border(width = 1.dp, color = ColorPrimary, shape = CircleShape)
+                .then(
+                    if (onToggleDetails != null) {
+                        Modifier.clickable(onClick = onToggleDetails)
+                    } else {
+                        Modifier
+                    }
+                ),
             contentAlignment = Alignment.Center,
         ) {
             Image(
                 painter = painterResource(R.drawable.ic_arrow),
-                contentDescription = null,
-                modifier = Modifier.size(20.dp),
+                contentDescription = if (onToggleDetails != null) "Детали тренировки" else null,
+                modifier = Modifier
+                    .size(20.dp)
+                    .rotate(arrowAngle),
             )
         }
     }

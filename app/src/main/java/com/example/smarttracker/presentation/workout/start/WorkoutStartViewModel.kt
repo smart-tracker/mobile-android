@@ -20,6 +20,7 @@ import com.example.smarttracker.domain.repository.AuthRepository
 import com.example.smarttracker.domain.repository.LocationRepository
 import com.example.smarttracker.domain.repository.WorkoutRepository
 import com.example.smarttracker.domain.usecase.CalculateTrainingStatsUseCase
+import com.example.smarttracker.presentation.workout.summary.SplitsBuilder
 import com.example.smarttracker.presentation.workout.summary.SummaryOrigin
 import com.example.smarttracker.presentation.workout.summary.WorkoutSummaryFormatters
 import com.example.smarttracker.presentation.workout.summary.WorkoutSummaryUiState
@@ -728,6 +729,7 @@ class WorkoutStartViewModel @Inject constructor(
                                 else
                                     System.currentTimeMillis()
         val type = state.selectedType
+        val summaryCumData = buildCumulativeData(state.trackPoints, state.pauseGapIndices)
         val snapshot = WorkoutSummaryUiState(
             origin           = SummaryOrigin.FINISH,
             dateDisplay      = WorkoutSummaryFormatters.formatDate(summaryStartTs),
@@ -740,7 +742,9 @@ class WorkoutStartViewModel @Inject constructor(
             durationDisplay  = WorkoutSummaryFormatters.formatDuration(summaryDurationMs),
             elevationDisplay = WorkoutSummaryFormatters.formatElevation(summaryElevationM),
             trackPoints      = state.trackPoints,
-            cumulativeData   = buildCumulativeData(state.trackPoints, state.pauseGapIndices),
+            cumulativeData   = summaryCumData,
+            splits           = SplitsBuilder.buildSplits(summaryCumData),
+            pauseGapIndices  = state.pauseGapIndices,
             isLoading        = false,
         )
 
@@ -1001,6 +1005,10 @@ class WorkoutStartViewModel @Inject constructor(
                 elevationDisplay = WorkoutSummaryFormatters.formatElevation(elevationM),
                 trackPoints      = points,
                 cumulativeData   = cumData,
+                // Сплиты появятся, когда бэк начнёт отдавать реальные временные
+                // метки трека (BR-5) — buildSplits сам гейтит по правдоподобию
+                // elapsed (синтетические timestampUtc = index дают elapsed в мс).
+                splits           = SplitsBuilder.buildSplits(cumData),
             )
             // Защита от гонки: если оверлей закрыли или уже переключили на другую
             // тренировку, пока шла загрузка, не перетираем актуальный snapshot.

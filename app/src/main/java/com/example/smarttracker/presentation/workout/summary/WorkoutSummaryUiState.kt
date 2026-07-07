@@ -64,6 +64,11 @@ enum class SummaryOrigin { FINISH, HISTORY }
  * @property elevationDisplay набор высоты "12.3 м"
  * @property trackPoints      GPS-точки тренировки для отрисовки трека на карте
  * @property cumulativeData   предвычисленные накопленные значения для scrubbing
+ * @property splits           километровые сплиты для секции «Детали» (пусто, если
+ *                            нет настоящих временных меток — история до BR-5)
+ * @property pauseGapIndices  индексы первых точек после каждого resume — график
+ *                            рвёт линию на этих парах (телепорт, не движение).
+ *                            Для истории всегда пуст (сервер пауз не отдаёт).
  * @property isLoading        true пока загружаются данные (для будущего экрана истории)
  */
 data class WorkoutSummaryUiState(
@@ -80,5 +85,7 @@ data class WorkoutSummaryUiState(
     val elevationDisplay: String = "0.0 м",
     val trackPoints: List<LocationPoint> = emptyList(),
     val cumulativeData: CumulativeTrackData = CumulativeTrackData(),
+    val splits: List<SplitUi> = emptyList(),
+    val pauseGapIndices: List<Int> = emptyList(),
     val isLoading: Boolean = false,
 )

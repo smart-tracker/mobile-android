@@ -90,7 +90,9 @@ import com.example.smarttracker.presentation.workout.permission.LocationPermissi
 import com.example.smarttracker.presentation.workout.summary.ScrubDisplayStats
 import com.example.smarttracker.presentation.workout.summary.StatsOverlayCard
 import com.example.smarttracker.presentation.workout.summary.SummaryBody
+import com.example.smarttracker.presentation.workout.summary.SummaryDetailsPanel
 import com.example.smarttracker.presentation.workout.summary.SummaryHeader
+import com.example.smarttracker.presentation.workout.summary.summaryHasDetails
 import com.example.smarttracker.presentation.workout.summary.SummaryOrigin
 import com.example.smarttracker.presentation.workout.summary.TrainingProgressBar
 import com.example.smarttracker.presentation.workout.summary.WorkoutSummaryFormatters
@@ -213,11 +215,23 @@ fun WorkoutStartScreen(
 
     val scrubPoint = scrubIndex?.let { summary?.trackPoints?.getOrNull(it) }
 
+    // ── Панель деталей (сплиты/график) ──────────────────────────────────────
+    // Разворачивается чевроном на StatsRow и рисуется поверх зоны карты —
+    // сама карта остаётся в композиции (пересоздание MapView ломает MapLibre).
+    // remember(summary): при открытии другой тренировки панель сворачивается.
+    var detailsExpanded by remember(summary) { mutableStateOf(false) }
+    val hasDetails = summary != null && summaryHasDetails(summary)
+
     // ── Системная кнопка Back ────────────────────────────────────────────────
     // В полноэкранном режиме карты — сворачиваем к обычному оверлею.
+    // При развёрнутых деталях — сворачиваем панель.
     // В обычном оверлее — закрываем оверлей и возвращаем экран в исходное состояние.
     BackHandler(enabled = overlayVisible) {
-        if (isFullscreen) onToggleFullscreenMap() else onCloseSummary()
+        when {
+            isFullscreen -> onToggleFullscreenMap()
+            detailsExpanded -> detailsExpanded = false
+            else -> onCloseSummary()
+        }
     }
 
     Column(
@@ -301,7 +315,15 @@ fun WorkoutStartScreen(
                 }
                 // Summary body — placeholder пока оверлея нет (фиксирует высоту).
                 Box(modifier = Modifier.alpha(summaryAlpha)) {
-                    SummaryBody(state = summary ?: WorkoutSummaryUiState())
+                    SummaryBody(
+                        state = summary ?: WorkoutSummaryUiState(),
+                        detailsExpanded = detailsExpanded,
+                        onToggleDetails = if (hasDetails) {
+                            { detailsExpanded = !detailsExpanded }
+                        } else {
+                            null
+                        },
+                    )
                 }
             }
         }
@@ -363,12 +385,30 @@ fun WorkoutStartScreen(
             // Прозрачный слой для перехвата клика в режиме превью оверлея.
             // MapView внутри AndroidView поглощает тапы, поэтому Modifier.clickable
             // на самой карте не работает. Накладываем Box сверху.
-            if (overlayVisible && !isFullscreen) {
+            // При развёрнутых деталях перехват отключён — тап должен оставаться
+            // в панели, а не разворачивать карту под ней.
+            if (overlayVisible && !isFullscreen && !detailsExpanded) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
                         .clickable(onClick = onToggleFullscreenMap)
                 )
+            }
+
+            // ── Панель деталей: сплиты + график поверх зоны карты ────────────
+            // Карта не убирается из композиции (MapLibre-краши при пересоздании),
+            // панель просто накрывает её непрозрачным фоном.
+            if (overlayVisible && !isFullscreen && detailsExpanded && summary != null) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(ColorBackground),
+                ) {
+                    SummaryDetailsPanel(
+                        state = summary,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
             }
 
             // ── Скрим-заглушка для API < 31 (blur недоступен) ───────────────
