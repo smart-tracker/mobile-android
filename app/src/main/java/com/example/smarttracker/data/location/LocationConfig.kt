@@ -138,6 +138,15 @@ object LocationConfig {
      *  ручная пауза остаётся до явной команды пользователя. */
     const val KEY_PAUSED_BY_AUTO         = "paused_by_auto"
 
+    // Crash-recovery: состояние голосовых подсказок. Без них рестарт начинал
+    // объявления с нуля (повторный «Километр 1») и врал в темпе круга.
+    /** Накопленная сервисом дистанция тренировки (м, float). */
+    const val KEY_ACCUM_DISTANCE_M       = "accum_distance_m"
+    /** Последний объявленный километр. */
+    const val KEY_LAST_ANNOUNCED_KM      = "last_announced_km"
+    /** Elapsed записи на момент последнего объявления (мс) — база темпа круга. */
+    const val KEY_LAST_MILESTONE_ELAPSED_MS = "last_milestone_elapsed_ms"
+
     /** Порог протухания recovery-сессии: heartbeat пишется каждые
      *  [BUFFER_FLUSH_INTERVAL_MS], 2 минуты покрывают паузу START_STICKY-рестарта. */
     const val RECOVERY_STALE_MS          = 2 * 60 * 1000L
