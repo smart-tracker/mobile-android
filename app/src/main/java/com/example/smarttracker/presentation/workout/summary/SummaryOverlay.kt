@@ -67,12 +67,17 @@ import com.example.smarttracker.presentation.workout.activityIconRes
 // ── Шапка ─────────────────────────────────────────────────────────────────────
 
 /**
- * Шапка SummaryOverlay: дата по центру, опциональная иконка корзины справа.
+ * Шапка SummaryOverlay: дата по центру, справа — иконка «поделиться» и
+ * опциональная иконка корзины.
  *
  * Иконка корзины показывается только при [showDelete] = true (передаётся вызывающим
  * для оверлея, открытого из истории — [SummaryOrigin.HISTORY]).
- * AlertDialog подтверждения держится внутри этого composable — вызывающему достаточно
- * передать колбэк [onDeleteClick]; подтверждение «Удалить»/«Отмена» рисуется здесь.
+ * Оба диалога (подтверждение удаления и выбор варианта шаринга) держатся внутри
+ * этого composable — вызывающему достаточно передать колбэки.
+ *
+ * Шаринг: диалог «С картой / Только статистика» — вариант без карты не
+ * раскрывает район тренировок (приватность геоданных). [onShareWithMap] = null →
+ * иконка шаринга скрыта (нет данных для картинки).
  *
  * Стрелка «назад» убрана — закрытие оверлея делается системной кнопкой Back
  * или переключением вкладки в нижнем баре [WorkoutHomeScreen].
@@ -82,8 +87,12 @@ fun SummaryHeader(
     dateDisplay: String,
     showDelete: Boolean = false,
     onDeleteClick: () -> Unit = {},
+    onShareWithMap: (() -> Unit)? = null,
+    onShareStatsOnly: (() -> Unit)? = null,
 ) {
     var showConfirmDialog by remember { mutableStateOf(false) }
+    var showShareDialog by remember { mutableStateOf(false) }
+    val shareAvailable = onShareWithMap != null && onShareStatsOnly != null
 
     Box(
         modifier = Modifier
@@ -95,17 +104,33 @@ fun SummaryHeader(
             text = dateDisplay,
             style = WorkoutTextStyles.screenHeaderDate,
         )
-        if (showDelete) {
-            Image(
-                painter = painterResource(R.drawable.ic_delete),
-                contentDescription = "Удалить тренировку",
-                colorFilter = ColorFilter.tint(ColorPrimary),
-                modifier = Modifier
-                    .align(Alignment.CenterEnd)
-                    .padding(end = 14.dp)
-                    .size(24.dp)
-                    .clickable { showConfirmDialog = true },
-            )
+        Row(
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .padding(end = 14.dp),
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (shareAvailable) {
+                Image(
+                    painter = painterResource(R.drawable.ic_share),
+                    contentDescription = "Поделиться тренировкой",
+                    colorFilter = ColorFilter.tint(ColorPrimary),
+                    modifier = Modifier
+                        .size(24.dp)
+                        .clickable { showShareDialog = true },
+                )
+            }
+            if (showDelete) {
+                Image(
+                    painter = painterResource(R.drawable.ic_delete),
+                    contentDescription = "Удалить тренировку",
+                    colorFilter = ColorFilter.tint(ColorPrimary),
+                    modifier = Modifier
+                        .size(24.dp)
+                        .clickable { showConfirmDialog = true },
+                )
+            }
         }
     }
 
@@ -122,6 +147,26 @@ fun SummaryHeader(
             },
             dismissButton = {
                 TextButton(onClick = { showConfirmDialog = false }) { Text("Отмена") }
+            },
+        )
+    }
+
+    if (showShareDialog) {
+        AlertDialog(
+            onDismissRequest = { showShareDialog = false },
+            title = { Text("Поделиться тренировкой") },
+            text = { Text("Вариант «Только статистика» показывает форму маршрута без карты — место тренировки не раскрывается.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showShareDialog = false
+                    onShareWithMap?.invoke()
+                }) { Text("С картой") }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showShareDialog = false
+                    onShareStatsOnly?.invoke()
+                }) { Text("Только статистика") }
             },
         )
     }

@@ -87,9 +87,13 @@ import com.example.smarttracker.presentation.theme.ColorSecondary
 import com.example.smarttracker.presentation.theme.WorkoutTextStyles
 import com.example.smarttracker.presentation.workout.activityIconRes
 import com.example.smarttracker.presentation.workout.permission.LocationPermissionHandler
+import androidx.compose.runtime.rememberCoroutineScope
 import com.example.smarttracker.presentation.workout.summary.ScrubDisplayStats
+import com.example.smarttracker.presentation.workout.summary.ShareImageComposer
 import com.example.smarttracker.presentation.workout.summary.StatsOverlayCard
 import com.example.smarttracker.presentation.workout.summary.SummaryBody
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import com.example.smarttracker.presentation.workout.summary.SummaryDetailsPanel
 import com.example.smarttracker.presentation.workout.summary.SummaryHeader
 import com.example.smarttracker.presentation.workout.summary.summaryHasDetails
@@ -232,6 +236,21 @@ fun WorkoutStartScreen(
     var detailsExpanded by remember(summary) { mutableStateOf(false) }
     val hasDetails = summary != null && summaryHasDetails(summary)
 
+    // ── Шаринг тренировки картинкой ─────────────────────────────────────────
+    // «С картой»: инкремент счётчика → MapViewComposable делает snapshot →
+    // onSnapshot дорисовывает плашку и открывает share sheet.
+    // «Только статистика»: карточка с силуэтом трека собирается сразу.
+    // Сборка Bitmap и запись PNG — на IO (блокирующие операции).
+    val shareScope = rememberCoroutineScope()
+    var snapshotTick by remember { mutableIntStateOf(0) }
+    fun shareStatsOf(s: WorkoutSummaryUiState) = ShareImageComposer.ShareStats(
+        activityName = s.activityName,
+        dateDisplay = s.dateDisplay,
+        distanceDisplay = s.distanceDisplay,
+        durationDisplay = s.durationDisplay,
+        paceDisplay = s.paceDisplay,
+    )
+
     // ── Системная кнопка Back ────────────────────────────────────────────────
     // В полноэкранном режиме карты — сворачиваем к обычному оверлею.
     // При развёрнутых деталях — сворачиваем панель.
@@ -270,6 +289,15 @@ fun WorkoutStartScreen(
                     // не предлагает удаление (юзер только что закончил тренировку).
                     showDelete = summary.origin == SummaryOrigin.HISTORY,
                     onDeleteClick = onDeleteHistoryTraining,
+                    onShareWithMap = { snapshotTick++ },
+                    onShareStatsOnly = {
+                        shareScope.launch(Dispatchers.IO) {
+                            val bitmap = ShareImageComposer.composeTrackCard(
+                                ctx, summary.trackPoints, shareStatsOf(summary)
+                            )
+                            ShareImageComposer.shareBitmap(ctx, bitmap)
+                        }
+                    },
                 )
             } else {
                 ActiveHeader(dateDisplay = state.currentDate)
@@ -390,6 +418,20 @@ fun WorkoutStartScreen(
                 // Recenter по тапу на GPS-бейдж — счётчик инкрементируется
                 // в onClick ниже, карта реагирует через LaunchedEffect(recenterTrigger).
                 recenterTrigger = recenterTick,
+                // Снимок карты для шаринга: счётчик инкрементируется в диалоге
+                // SummaryHeader («С картой»), Bitmap приходит сюда.
+                snapshotRequest = snapshotTick,
+                onSnapshot = { mapBitmap ->
+                    val s = state.summaryOverlay
+                    if (s != null) {
+                        shareScope.launch(Dispatchers.IO) {
+                            val bitmap = ShareImageComposer.composeWithMap(
+                                ctx, mapBitmap, shareStatsOf(s)
+                            )
+                            ShareImageComposer.shareBitmap(ctx, bitmap)
+                        }
+                    }
+                },
             )
 
             // Прозрачный слой для перехвата клика в режиме превью оверлея.

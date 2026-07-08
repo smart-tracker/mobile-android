@@ -122,6 +122,12 @@ fun MapViewComposable(
     // [LaunchedEffect] анимирует камеру к актуальной позиции и восстанавливает
     // CameraMode.TRACKING. Начальное значение 0 = пропустить первый compose.
     recenterTrigger: Int = 0,
+    // Счётчик-триггер снимка карты (шаринг тренировки): тот же паттерн, что
+    // recenterTrigger. Инкремент → MapLibreMap.snapshot() → Bitmap в onSnapshot.
+    // Снимок содержит только MapView (трек, маркеры) — Compose-оверлеи поверх
+    // в кадр не попадают.
+    snapshotRequest: Int = 0,
+    onSnapshot: ((android.graphics.Bitmap) -> Unit)? = null,
 ) {
     // Когда тайлы недоступны — показываем текстовый fallback, карту не создаём
     if (mapTilesFailed) {
@@ -265,6 +271,15 @@ fun MapViewComposable(
     // Почему не moveCamera+TRACKING сразу: TRACKING прерывает animateCamera,
     // поэтому ставим mode в onFinish-колбэке. Если location не доступен —
     // тап no-op (GPS ещё не получен ни одного fix-а за всю сессию).
+    // ── Снимок карты для шаринга ─────────────────────────────────────────────
+    // snapshot() требует отрендеренной карты и вызывается на main thread;
+    // если карта ещё не готова (map == null) — запрос молча игнорируется,
+    // вызывающая сторона делает fallback на вариант «без карты».
+    LaunchedEffect(snapshotRequest) {
+        if (snapshotRequest == 0 || onSnapshot == null) return@LaunchedEffect
+        state.mapLibreMap?.snapshot { bitmap -> onSnapshot(bitmap) }
+    }
+
     LaunchedEffect(recenterTrigger) {
         if (recenterTrigger == 0) return@LaunchedEffect
         val map = state.mapLibreMap ?: return@LaunchedEffect
