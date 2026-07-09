@@ -593,6 +593,14 @@ with open(f'{git_dir}/COMMIT_MSG', 'wb') as f:
 > Задачи для бэкенда — в **BACK_REQ.md** (BR-1…BR-13). Здесь — только
 > Android-часть, которая разблокируется после выполнения BR-задачи.
 
+- **ВРЕМЕННО: debug-сборка на локальном API** (июль 2026) — `BASE_URL` debug =
+  `http://10.0.2.2:8000/` (эмулятор; для устройства —
+  `-PLOCAL_API_URL=http://<LAN-IP>:8000/`), cleartext-разрешение — в
+  `app/src/debug/res/xml/network_security_config.xml` (перекрывает main-версию
+  целиком). Тайловый сервер карты не затронут. **Откат:** вернуть prod-URL
+  в debug-блоке `app/build.gradle.kts` и удалить debug-оверлей
+  network_security_config. Release всегда на prod.
+
 - **После BR-5 (gps_track с `recorded_at`)** — обновить
   `GetTrainingDetailResponseDto`: убрать `JsonElement?`, вернуть
   `List<GpsTrackPointDto>?`, добавить `recorded_at` в `GpsTrackPointDto`,

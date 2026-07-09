@@ -4,7 +4,7 @@
 подробная документация по каждому файлу, каждому классу/интерфейсу и каждой функции.
 
 Документ сгенерирован автоматическим обходом всех Kotlin-файлов проекта (main, test, androidTest)
-по состоянию на 2026-07-08, коммит `8111f62`, ветка `claude/vigorous-ritchie-750fa1`.
+по состоянию на 2026-07-09, коммит `99081eb`, ветка `claude/smarttracker-local-server-86c555`.
 
 ---
 
@@ -142,8 +142,13 @@ Robolectric 4.13.
 `%USERPROFILE%\.gradle\gradle.properties` или `-P` в CI) → `BuildConfig.APPMETRICA_API_KEY`;
 пустое значение → AppMetrica не инициализируется.
 
-`BASE_URL` (`https://runtastic.gottland.ru/`) задаётся через `buildConfigField` в
-`app/build.gradle.kts` — одинаков для debug и release.
+`BASE_URL` задаётся через `buildConfigField` в `app/build.gradle.kts`, debug и release
+различаются. Release — prod `https://runtastic.gottland.ru/`. Debug — **ВРЕМЕННО**
+локальный API-сервер: по умолчанию `http://10.0.2.2:8000/` (эмулятор), для физического
+устройства — override gradle-property `-PLOCAL_API_URL=http://<LAN-IP>:8000/`.
+Cleartext для локальных хостов разрешён только в debug —
+`app/src/debug/res/xml/network_security_config.xml` (полностью перекрывает main-версию
+ресурса). TODO(local-api): вернуть prod-URL в debug и удалить debug-оверлей конфига.
 
 `settings.gradle.kts` подключает дополнительный Maven-репозиторий Huawei
 (`https://developer.huawei.com/repo/`) — обязателен для HMS Location SDK.
