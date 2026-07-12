@@ -4,7 +4,7 @@
 подробная документация по каждому файлу, каждому классу/интерфейсу и каждой функции.
 
 Документ сгенерирован автоматическим обходом всех Kotlin-файлов проекта (main, test, androidTest)
-по состоянию на 2026-07-12, коммит `eb95ebb`, ветка `claude/smarttracker-local-server-86c555`.
+по состоянию на 2026-07-12, коммит `0b86f46`, ветка `claude/smarttracker-local-server-86c555`.
 
 ---
 
@@ -1953,9 +1953,18 @@ ViewModel экрана «Настройки». UiState — сам `AppSettings` 
 
 #### `app/src/main/java/com/example/smarttracker/presentation/menu/settings/SettingsScreen.kt`
 Экран «Настройки» (Меню → Настройки): секция «Тренировка», изменения применяются сразу (без кнопки «Сохранить»). Паттерн экрана — как ProfileScreen: `Scaffold` + `CenterAlignedTopAppBar` + `SmartTrackerBottomBar` (вкладка MENU подсвечена, тап по другой вкладке = `onBack`).
-- `@Composable fun SettingsScreen(settings: AppSettings, onBack: () -> Unit, onAutopauseChanged, onVoiceCuesChanged, onVoiceCueIntervalChanged, onKeepScreenOnChanged)` — три `SwitchRow` («Автопауза», «Голосовые подсказки», «Не гасить экран») + `IntervalSelectorRow` (частота подсказок 1/2/5 км, виден только при включённых подсказках).
+- `@Composable fun SettingsScreen(settings: AppSettings, onBack: () -> Unit, onAutopauseChanged, onVoiceCuesChanged, onVoiceCueIntervalChanged, onKeepScreenOnChanged)` — три `SwitchRow` («Автопауза», «Голосовые подсказки», «Не гасить экран») + `IntervalSelectorRow` (частота подсказок 1/2/5 км) + `VolumeSliderRow` (громкость подсказок; оба видны только при включённых подсказках).
 - `@Composable private fun SwitchRow(title, subtitle, checked, onCheckedChange)` — заголовок + подпись + Material3 `Switch` в цветах темы.
+- `@Composable private fun VolumeSliderRow(volume: Float, onVolumeSelected: (Float) -> Unit)` — слайдер 0..1 + процент. Значение = доля системной громкости медиа; наружу уходит только по отпусканию (`onValueChangeFinished`).
 - `@Composable private fun IntervalSelectorRow(selectedKm: Int, onSelected: (Int) -> Unit)` — сегменты-пилюли из `AppSettings.ALLOWED_VOICE_INTERVALS`.
+- Особенность: слайдер «Громкость» управляет СИСТЕМНОЙ громкостью медиа (`AudioManager.setStreamVolume(STREAM_MUSIC)`), в DataStore ничего не пишет — одна ручка с кнопками громкости устройства, вторая независимая громкость запутывала бы. Пересинхронизация от кнопок громкости — по `ON_RESUME`. По отпусканию слайдера `VoiceCueSamplePlayer.play()` отыгрывает короткий шаблон подсказки на выставленном уровне; `setStreamVolume` обёрнут `runCatching` (SecurityException в режимах DND).
+
+#### `app/src/main/java/com/example/smarttracker/presentation/menu/settings/VoiceCueSamplePlayer.kt`
+Проигрыватель пробной фразы для слайдера громкости голосовых подсказок.
+- `class VoiceCueSamplePlayer(context: Context)` — отдельный TTS-экземпляр (сервисный TTS живёт только во время тренировки, нюанс 32). Создаётся в composition `SettingsScreen` (`remember`), освобождается в `onDispose`.
+  - `fun play(): Unit` — произносит `TtsPhraseFormatter.kilometerCue(1, 0)` («Километр 1.») с `QUEUE_FLUSH` (быстрые повторные выборы не копят очередь); громкость — текущая системная громкость медиа. До готовности движка запрос запоминается (`pendingPlay`) и отыгрывается в init-колбэке.
+  - `fun release(): Unit` — `stop()` + `shutdown()`, идемпотентна.
+- Деградация как у сервиса: движок не поднялся или нет русского голоса — лог и no-op.
 
 #### `app/src/main/java/com/example/smarttracker/presentation/menu/profile/ProfileUiState.kt`
 Состояние экрана просмотра профиля — все значения уже приведены к готовым для отображения строкам.

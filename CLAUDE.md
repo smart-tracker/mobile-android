@@ -242,7 +242,7 @@ com.example.smarttracker/
 │   │   ├── MenuScreen.kt
 │   │   ├── profile/  ProfileScreen, ProfileViewModel, ProfileUiState,
 │   │   │             ProfileEditScreen, ProfileEditViewModel, ProfileEditUiState
-│   │   └── settings/ SettingsScreen, SettingsViewModel
+│   │   └── settings/ SettingsScreen, SettingsViewModel, VoiceCueSamplePlayer
 │   └── workout/
 │       ├── WorkoutHomeScreen.kt        (Scaffold + нижний бар)
 │       ├── ActivityIcons.kt            (iconKey → drawable res)
@@ -506,8 +506,11 @@ com.example.smarttracker/
 Вкладка «Тренировки» — история тренировок, pending.
 
 **Настройки активны** — Меню → Настройки (`Screen.Settings`): автопауза
-(дефолт выкл), голосовые подсказки (дефолт вкл, частота 1/2/5 км),
+(дефолт выкл), голосовые подсказки (дефолт вкл, частота 1/2/5 км, громкость),
 «не гасить экран». Хранение — `SettingsStorage` (DataStore Preferences).
+Слайдер громкости подсказок — НЕ настройка приложения: он крутит системную
+громкость медиа (`STREAM_MUSIC`) напрямую, в DataStore не пишет; по отпусканию
+`VoiceCueSamplePlayer` отыгрывает короткий шаблон фразы на этом уровне.
 
 **`WorkoutRepositoryImpl` активирован** — загружает типы активностей из `GET /training/types_activity`.
 Иконки кэшируются в `filesDir/activity_icons/{id}.png` через `IconCacheManager`.
