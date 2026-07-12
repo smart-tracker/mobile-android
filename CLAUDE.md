@@ -485,6 +485,16 @@ com.example.smarttracker/
     timestampUtc = index) — после BR-5 включатся сами. Цвет линии графиков —
     `ColorChartLine` (не `ColorSecondary`: тот даёт 2.7:1 на белом, ниже WCAG 3:1).
 
+34. **MapLibre LocationComponent нельзя активировать без гео-разрешения** —
+    активация + enable без Fine/Coarse роняет процесс `SecurityException`-ом
+    ИЗНУТРИ MapLibre: `MapView.onStart` → `LocationComponent.onStart` →
+    `LocationManager.getLastKnownLocation`. Вызов идёт из внутреннего Handler-а
+    карты — внешние `runCatching` бессильны. Проявляется на свежей установке
+    (диалог разрешения и загрузка style идут параллельно, style побеждает).
+    Фикс: параметр `locationPermissionGranted` в `MapViewComposable` гейтит
+    активацию; поздняя активация в `update`-блоке когда разрешение выдали;
+    страховка `checkSelfPermission` внутри `activateLocationComponent`.
+
 ---
 
 ## Текущие ограничения и временные решения
