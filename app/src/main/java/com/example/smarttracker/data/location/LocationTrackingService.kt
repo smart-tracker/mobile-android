@@ -337,6 +337,9 @@ class LocationTrackingService : Service() {
     private fun speak(phrase: String) {
         if (!ttsReady || !voiceCuesEnabled) return
         requestAudioFocus()
+        // Громкость фраз = системная громкость медиа (STREAM_MUSIC): ей управляет
+        // слайдер «Громкость» в настройках и кнопки громкости устройства.
+        // KEY_PARAM_VOLUME не используем — вторая независимая ручка запутывает.
         tts?.speak(
             phrase,
             android.speech.tts.TextToSpeech.QUEUE_ADD,
