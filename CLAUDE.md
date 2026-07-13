@@ -520,6 +520,19 @@ com.example.smarttracker/
     сэмпл (>10с) в GPS-точку не пишется. (6) API 26–30: BLE-скану нужны
     гео-разрешение И включённые службы геопозиции.
 
+36. **Навигация с живой карты — гасить LocationComponent ДО navigate()** —
+    немедленный `navController.navigate(...)` с экрана с активной картой
+    (LocationComponent включён, идут GPS-фиксы) гонится с аниматорами
+    локации (accuracy radius/bearing): тик аниматора после инвалидации
+    Style роняет процесс `IllegalStateException("Calling getSourceAs when
+    a newer style is loading")` из Choreographer — внешний try/catch
+    бессилен (родня нюанса 34). Паттерн фикса: параметр
+    `suppressLocationDot` в `MapViewComposable` (NONE → disable →
+    cancelTransitions, как в ON_STOP) + отложенная навигация — флаг,
+    два `withFrameNanos`, потом navigate (см. `sensorsNavPending`
+    в WorkoutStartScreen, тап по HR-бейджу). Вкладки Menu→Settings
+    не задевает: там карта уже вне композиции.
+
 ---
 
 ## Текущие ограничения и временные решения

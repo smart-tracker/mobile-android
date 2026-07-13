@@ -120,6 +120,13 @@ fun MapViewComposable(
     onMapTilesFailed: () -> Unit,
     enableLocationDot: Boolean = true,
     locationPermissionGranted: Boolean = true,
+    // true → немедленно погасить LocationComponent (камера NONE + disable +
+    // cancelTransitions). Используется перед НАВИГАЦИЕЙ с живой карты:
+    // teardown MapView при уходе с экрана гонится с аниматорами локации
+    // (accuracy radius/bearing) — тик после инвалидации Style роняет процесс
+    // IllegalStateException("Calling getSourceAs when a newer style is loading").
+    // Экран сначала выставляет флаг, ждёт пару кадров, потом навигирует.
+    suppressLocationDot: Boolean = false,
     fitToTrackBoundsKey: Any? = null,
     scrubPoint: com.example.smarttracker.domain.model.LocationPoint? = null,
     // Drawable-ресурс иконки активности для маркера старта; null — маркер не показывается.
@@ -276,6 +283,20 @@ fun MapViewComposable(
             }
             state.mapLibreMap = null
             state.mapView = null
+        }
+    }
+
+    // ── Гашение LocationComponent перед навигацией с живой карты ────────────
+    // Порядок и семантика — как в ON_STOP выше: NONE → disable → cancelTransitions.
+    // Отдельные runCatching на каждый шаг: сбой одного не пропускает остальные
+    // (в ON_STOP оба вызова под одним runCatching — там компонент гарантированно
+    // активирован; здесь флаг может прийти до setStyle).
+    LaunchedEffect(suppressLocationDot) {
+        if (!suppressLocationDot) return@LaunchedEffect
+        state.mapLibreMap?.let { map ->
+            runCatching { map.locationComponent.cameraMode = CameraMode.NONE }
+            runCatching { map.locationComponent.isLocationComponentEnabled = false }
+            runCatching { map.cancelTransitions() }
         }
     }
 

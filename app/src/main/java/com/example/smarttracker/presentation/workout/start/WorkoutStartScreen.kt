@@ -53,12 +53,14 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.lifecycle.Lifecycle
@@ -261,6 +263,21 @@ fun WorkoutStartScreen(
 
     val scrubPoint = scrubIndex?.let { summary?.trackPoints?.getOrNull(it) }
 
+    // ── Отложенная навигация на экран «Датчики» (тап по HR-бейджу) ──────────
+    // Немедленный navigate() с живой карты гонится с аниматорами
+    // LocationComponent (accuracy radius/bearing): тик аниматора после
+    // инвалидации Style роняет процесс IllegalStateException-ом изнутри
+    // MapLibre (Choreographer — внешний try/catch бессилен, нюанс 34/33).
+    // Порядок: флаг suppressLocationDot гасит компонент в MapViewComposable →
+    // два кадра на завершение отмены аниматоров → навигация.
+    var sensorsNavPending by remember { mutableStateOf(false) }
+    LaunchedEffect(sensorsNavPending) {
+        if (!sensorsNavPending) return@LaunchedEffect
+        withFrameNanos {}
+        withFrameNanos {}
+        onOpenSensors()
+    }
+
     // ── Панель деталей (сплиты/график) ──────────────────────────────────────
     // Разворачивается чевроном на StatsRow и рисуется поверх зоны карты —
     // сама карта остаётся в композиции (пересоздание MapView ломает MapLibre).
@@ -437,6 +454,9 @@ fun WorkoutStartScreen(
                 // Без разрешения LocationComponent не активируется (краш на свежей
                 // установке); после выдачи разрешения активируется на лету.
                 locationPermissionGranted = locationPermissionGranted,
+                // Гашение LocationComponent перед навигацией на экран «Датчики»
+                // (см. sensorsNavPending выше — иначе гонка аниматоров со Style).
+                suppressLocationDot = sensorsNavPending,
                 // Триггер для one-shot fit-to-bounds: при появлении снимка итогов
                 // карта анимированно подгоняется под весь маршрут. Когда оверлей
                 // закрывается (summary становится null), fit не повторяется.
@@ -556,7 +576,9 @@ fun WorkoutStartScreen(
                         .padding(top = 48.dp, end = 8.dp)
                         // clip ПЕРЕД clickable — иначе ripple рисуется на прямоугольнике
                         .clip(RoundedCornerShape(size = 32.dp))
-                        .clickable { onOpenSensors() }
+                        // Навигация отложенная (sensorsNavPending): сначала гасится
+                        // LocationComponent, иначе краш MapLibre — см. блок выше.
+                        .clickable { sensorsNavPending = true }
                         .border(
                             width = 1.dp,
                             color = ColorPrimary,
