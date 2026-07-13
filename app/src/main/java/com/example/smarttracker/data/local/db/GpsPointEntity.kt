@@ -18,6 +18,9 @@ import java.util.UUID
  *
  * **Schema v3:**
  * - Добавлено поле [calories] (Double?) — расход ккал за интервал (MET-метод)
+ *
+ * **Schema v9:**
+ * - Добавлено поле [heartRate] (Int?) — пульс с внешнего BLE-датчика
  */
 @Entity(tableName = "gps_points")
 data class GpsPointEntity(
@@ -42,6 +45,8 @@ data class GpsPointEntity(
     val isSent: Boolean,
     /** Расход ккал за интервал от предыдущей точки до этой (MET-метод). null если профиль не заполнен. */
     val calories: Double? = null,
+    /** Пульс на момент записи точки (уд/мин, BLE-датчик). null если датчик не подключён. */
+    val heartRate: Int? = null,
 )
 
 /** Преобразование domain-модели → Room-сущность перед сохранением. */
@@ -61,6 +66,7 @@ fun LocationPoint.toEntity(): GpsPointEntity = GpsPointEntity(
     batchId     = batchId,
     isSent      = isSent,
     calories    = calories,
+    heartRate   = heartRate,
 )
 
 /** Преобразование Room-сущности → domain-модель после чтения. */
@@ -79,4 +85,5 @@ fun GpsPointEntity.toDomain(): LocationPoint = LocationPoint(
     batchId     = batchId,
     isSent      = isSent,
     calories    = calories,
+    heartRate   = heartRate,
 )

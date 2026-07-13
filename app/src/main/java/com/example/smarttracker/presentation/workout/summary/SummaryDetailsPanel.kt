@@ -28,7 +28,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import com.example.smarttracker.R
 import com.example.smarttracker.presentation.theme.ColorFieldFill
 import com.example.smarttracker.presentation.theme.ColorPrimary
 import com.example.smarttracker.presentation.theme.ColorSecondary
@@ -59,7 +61,8 @@ private enum class ChartTab { SPEED, ELEVATION }
 fun summaryHasDetails(state: WorkoutSummaryUiState): Boolean =
     state.splits.isNotEmpty() ||
         SplitsBuilder.hasRealTiming(state.cumulativeData) ||
-        elevationSeriesAvailable(state)
+        elevationSeriesAvailable(state) ||
+        state.avgHeartRateDisplay != null
 
 /** Высотный профиль доступен: ≥2 точки с ненулевой альтиметрией. */
 private fun elevationSeriesAvailable(state: WorkoutSummaryUiState): Boolean {
@@ -124,6 +127,25 @@ fun SummaryDetailsPanel(
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 14.dp, vertical = 10.dp),
     ) {
+        // ── Пульс (avg/max с BLE-датчика) ────────────────────────────────────
+        // null = в точках тренировки пульса нет (датчик не подключался;
+        // история — до BR-16) → секция целиком скрыта.
+        if (state.avgHeartRateDisplay != null) {
+            Text("Пульс", style = WorkoutTextStyles.screenHeaderDate)
+            Spacer(modifier = Modifier.height(6.dp))
+            HeartRateRow(
+                label = stringResource(R.string.summary_avg_heart_rate),
+                value = state.avgHeartRateDisplay,
+            )
+            state.maxHeartRateDisplay?.let {
+                HeartRateRow(
+                    label = stringResource(R.string.summary_max_heart_rate),
+                    value = it,
+                )
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+
         // ── Сплиты ───────────────────────────────────────────────────────────
         if (state.splits.isNotEmpty()) {
             Text("Сплиты", style = WorkoutTextStyles.screenHeaderDate)
@@ -158,6 +180,28 @@ fun SummaryDetailsPanel(
             )
             Spacer(modifier = Modifier.height(10.dp))
         }
+    }
+}
+
+// ── Пульс: строка «лейбл — значение» ─────────────────────────────────────────
+
+@Composable
+private fun HeartRateRow(label: String, value: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 3.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = label,
+            style = WorkoutTextStyles.timelineInfo,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            text = value,
+            style = WorkoutTextStyles.timelineLabelBold,
+        )
     }
 }
 

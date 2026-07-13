@@ -4,6 +4,9 @@ import android.app.Application
 import android.content.Context
 import androidx.lifecycle.viewModelScope
 import androidx.test.core.app.ApplicationProvider
+import com.example.smarttracker.data.hrm.HrmManager
+import com.example.smarttracker.data.hrm.model.HrmConnectionState
+import com.example.smarttracker.data.hrm.model.HrmSample
 import com.example.smarttracker.data.local.AppSettings
 import com.example.smarttracker.data.local.SettingsStorage
 import com.example.smarttracker.data.location.LocationConfig
@@ -20,6 +23,7 @@ import com.example.smarttracker.domain.usecase.CalculateTrainingStatsUseCase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
@@ -156,8 +160,14 @@ class WorkoutStartViewModelTest {
             .commit()
     }
 
+    // Флоу состояния пульсометра — поля, чтобы тесты могли двигать значения
+    // после создания ViewModel (мок HrmManager отдаёт их как StateFlow).
+    private val hrmConnectionState = MutableStateFlow(HrmConnectionState.DISCONNECTED)
+    private val hrmSample = MutableStateFlow<HrmSample?>(null)
+
     private fun createViewModel(
         types: List<WorkoutType> = listOf(runningType),
+        settings: AppSettings = AppSettings(),
     ): WorkoutStartViewModel {
         workoutRepository = mock {
             on { workoutTypesFlow() } doReturn flowOf(types)
@@ -172,7 +182,13 @@ class WorkoutStartViewModelTest {
         offlineMapManager = mock()
         offlineFinishScheduler = mock()
         val settingsStorage: SettingsStorage = mock {
-            on { settings } doReturn flowOf(AppSettings())
+            on { this.settings } doReturn flowOf(settings)
+        }
+        hrmConnectionState.value = HrmConnectionState.DISCONNECTED
+        hrmSample.value = null
+        val hrmManager: HrmManager = mock {
+            on { connectionState } doReturn hrmConnectionState
+            on { currentSample } doReturn hrmSample
         }
         return WorkoutStartViewModel(
             workoutRepository,
@@ -182,6 +198,7 @@ class WorkoutStartViewModelTest {
             authRepository,
             offlineFinishScheduler,
             settingsStorage,
+            hrmManager,
             context,
         ).also { lastVm = it }
     }
@@ -387,6 +404,104 @@ class WorkoutStartViewModelTest {
         assertEquals("Тип не должен меняться во время тренировки",
             runningType.id, vm.state.value.selectedType?.id)
     }
+
+    // ── Пульсометр (BLE HRM) ──────────────────────────────────────────────────
+
+    @Test
+    fun `hrmConfigured true при сохранённом адресе датчика`() = runVmTest {
+        // Один VM на тест: runVmTest гасит scope только последнего созданного
+        val vm = createViewModel(
+            settings = AppSettings(hrmDeviceAddress = "AA:BB:CC:DD:EE:FF", hrmDeviceName = "Polar H10"),
+        )
+        assertTrue("Сохранённый адрес → hrmConfigured", vm.state.value.hrmConfigured)
+    }
+
+    @Test
+    fun `hrmConfigured false без сохранённого датчика`() = runVmTest {
+        val vm = createViewModel()
+        assertFalse("Без адреса → hrmConfigured=false", vm.state.value.hrmConfigured)
+    }
+
+    @Test
+    fun `heartRateDisplay показывает bpm только при CONNECTED`() = runVmTest {
+        val vm = createViewModel()
+
+        // Сэмпл есть, но соединения нет — прочерк
+        hrmSample.value = HrmSample(bpm = 148, timestampMs = System.currentTimeMillis())
+        assertEquals("--", vm.state.value.heartRateDisplay)
+        assertFalse(vm.state.value.hrmConnected)
+
+        // Подключились — живой пульс
+        hrmConnectionState.value = HrmConnectionState.CONNECTED
+        assertEquals("148", vm.state.value.heartRateDisplay)
+        assertTrue(vm.state.value.hrmConnected)
+
+        // Обрыв (RECONNECTING) — снова прочерк
+        hrmConnectionState.value = HrmConnectionState.RECONNECTING
+        assertEquals("--", vm.state.value.heartRateDisplay)
+        assertFalse(vm.state.value.hrmConnected)
+    }
+
+    @Test
+    fun `showHistorySummary считает avg и max пульс по точкам с пульсом`() = runVmTest {
+        val vm = createViewModel()
+        val points = listOf(
+            historyPoint(0, heartRate = 120),
+            historyPoint(1, heartRate = null),   // обрыв датчика — не участвует
+            historyPoint(2, heartRate = 160),
+        )
+        workoutRepository.stub {
+            onBlocking { getTrainingDetail("hist-1") } doReturn Result.success(points)
+        }
+
+        vm.showHistorySummary(historyItem("hist-1"), "Бег")
+
+        val overlay = vm.state.value.summaryOverlay
+        assertNotNull(overlay)
+        assertEquals("140 уд/мин", overlay!!.avgHeartRateDisplay)
+        assertEquals("160 уд/мин", overlay.maxHeartRateDisplay)
+    }
+
+    @Test
+    fun `showHistorySummary без пульса в точках - поля null, секция скрыта`() = runVmTest {
+        val vm = createViewModel()
+        val points = listOf(historyPoint(0, heartRate = null), historyPoint(1, heartRate = null))
+        workoutRepository.stub {
+            onBlocking { getTrainingDetail("hist-2") } doReturn Result.success(points)
+        }
+
+        vm.showHistorySummary(historyItem("hist-2"), "Бег")
+
+        val overlay = vm.state.value.summaryOverlay
+        assertNotNull(overlay)
+        assertNull("История до BR-16 — пульса нет", overlay!!.avgHeartRateDisplay)
+        assertNull(overlay.maxHeartRateDisplay)
+    }
+
+    private fun historyPoint(index: Int, heartRate: Int?) =
+        com.example.smarttracker.domain.model.LocationPoint(
+            trainingId   = "hist",
+            timestampUtc = 1_700_000_000_000L + index * 5_000L,
+            elapsedNanos = index * 5_000_000_000L,
+            latitude     = 61.0 + index * 0.001,
+            longitude    = 34.0,
+            altitude     = null,
+            speed        = null,
+            accuracy     = null,
+            heartRate    = heartRate,
+        )
+
+    private fun historyItem(id: String) = com.example.smarttracker.domain.model.TrainingHistoryItem(
+        trainingId    = id,
+        typeActivId   = 1,
+        date          = java.time.LocalDate.of(2026, 7, 10),
+        timeStart     = "2026-07-10T10:00:00+00:00",
+        timeEnd       = "2026-07-10T10:30:00+00:00",
+        kilocalories  = null,
+        distanceM     = 5000.0,
+        avgSpeed      = null,
+        elevationGain = null,
+    )
 
     // ── Форматтеры (companion) ────────────────────────────────────────────────
 

@@ -75,4 +75,32 @@
     <string name="battery_opt_dialog_dismiss">Позже</string>
     <string name="battery_opt_banner_text">Запись может прерываться при выключенном экране</string>
     <string name="battery_opt_banner_action">Настроить</string>
+
+    <!-- Экран «Датчики» (BLE-пульсометры) -->
+    <string name="sensors_title">Датчики</string>
+    <string name="sensors_section_hrm">Пульсометр</string>
+    <string name="sensors_saved_device">Сохранённый датчик</string>
+    <string name="sensors_scan">Поиск датчиков</string>
+    <string name="sensors_scanning">Поиск…</string>
+    <string name="sensors_connect">Подключить</string>
+    <string name="sensors_forget">Забыть датчик</string>
+    <string name="sensors_status_connected">Подключён</string>
+    <string name="sensors_status_connecting">Подключение…</string>
+    <string name="sensors_status_reconnecting">Переподключение…</string>
+    <string name="sensors_status_disconnected">Не подключён</string>
+    <string name="sensors_bt_off">Bluetooth выключен</string>
+    <string name="sensors_empty_hint">Датчики не найдены. Убедитесь, что датчик включён, надет и находится рядом.</string>
+    <string name="sensors_permission_denied">Без разрешения Bluetooth поиск датчиков недоступен. Выдайте разрешение в настройках приложения.</string>
+    <string name="sensors_no_saved_device">Датчик не настроен. Запустите поиск и выберите пульсометр из списка.</string>
+    <string name="sensors_bpm_format">%1$d уд/мин</string>
+    <string name="sensors_unknown_device">Безымянный датчик</string>
+
+    <!-- Пульс на экране тренировки -->
+    <string name="workout_heart_rate">Пульс</string>
+    <string name="hrm_badge_connected">Пульсометр подключён</string>
+    <string name="hrm_badge_disconnected">Пульсометр не подключён</string>
+
+    <!-- Пульс в сводке тренировки -->
+    <string name="summary_avg_heart_rate">Средний пульс</string>
+    <string name="summary_max_heart_rate">Макс. пульс</string>
 </resources>

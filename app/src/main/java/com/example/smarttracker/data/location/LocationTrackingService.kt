@@ -1,5 +1,6 @@
 package com.example.smarttracker.data.location
 
+import android.Manifest
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -7,6 +8,7 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
 import android.content.SharedPreferences
+import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.location.Location
 import android.net.ConnectivityManager
@@ -15,7 +17,9 @@ import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import com.example.smarttracker.R
+import com.example.smarttracker.data.hrm.HrmManager
 import com.example.smarttracker.data.local.SettingsStorage
 import com.example.smarttracker.presentation.MainActivity
 import com.example.smarttracker.utils.formatHhMmSs
@@ -43,6 +47,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -100,6 +105,15 @@ class LocationTrackingService : Service() {
 
     @Inject
     lateinit var settingsStorage: SettingsStorage
+
+    /**
+     * Менеджер BLE-пульсометра (singleton — делится с экраном «Датчики»).
+     * Сервис лишь управляет им: автоподключение при старте тренировки
+     * ([connectHrmIfConfigured]), пульс в точки ([HrmManager.freshBpm]),
+     * разрыв в [onDestroy].
+     */
+    @Inject
+    lateinit var hrmManager: HrmManager
 
     // SupervisorJob: сбой одной корутины не отменяет остальные
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -495,7 +509,7 @@ class LocationTrackingService : Service() {
                 startForeground(
                     LocationConfig.NOTIFICATION_ID,
                     notification,
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION,
+                    foregroundServiceTypes(),
                 )
             } else {
                 startForeground(LocationConfig.NOTIFICATION_ID, notification)
@@ -519,6 +533,9 @@ class LocationTrackingService : Service() {
             startFlushTimer()
             startSyncLoop()
             startHintTimer()
+
+            // 9a. Автоподключение к сохранённому пульсометру
+            connectHrmIfConfigured()
 
             // 10. Инициализируем расчёт калорий
             val typeActivId = intent.getIntExtra(EXTRA_TYPE_ACTIV_ID, -1)
@@ -654,7 +671,7 @@ class LocationTrackingService : Service() {
                 startForeground(
                     LocationConfig.NOTIFICATION_ID,
                     notification,
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION,
+                    foregroundServiceTypes(),
                 )
             } else {
                 startForeground(LocationConfig.NOTIFICATION_ID, notification)
@@ -678,6 +695,11 @@ class LocationTrackingService : Service() {
         startFlushTimer()
         startSyncLoop()
         if (!isDiscovery) startHintTimer()
+
+        // Автоподключение к сохранённому пульсометру: обычный старт тренировки
+        // и START_STICKY-рестарт (intent == null). В discovery не подключаемся —
+        // пульс нужен только на записи.
+        if (!isDiscovery) connectHrmIfConfigured()
 
         // ── Инициализация расчёта калорий (MET-метод) ────────────────────────────
         // Обычный старт: значения профиля приходят Intent-экстрами из ViewModel.
@@ -735,6 +757,45 @@ class LocationTrackingService : Service() {
             onLocationReceived(trackLoc.toAndroidLocation())
         }
     }
+
+    /**
+     * Автоподключение к сохранённому пульсометру (адрес — в SettingsStorage).
+     * Без сохранённого датчика или без разрешения BLUETOOTH_CONNECT — no-op.
+     * Дальше HrmManager сам удерживает соединение (бесконечный реконнект).
+     */
+    private fun connectHrmIfConfigured() {
+        if (!hasBluetoothConnectPermission()) return
+        scope.launch {
+            val address = settingsStorage.settings.first().hrmDeviceAddress ?: return@launch
+            hrmManager.connect(address)
+        }
+    }
+
+    /**
+     * Битовая маска типов для startForeground (API 29+).
+     *
+     * connectedDevice добавляется ТОЛЬКО при выданном BLUETOOTH_CONNECT:
+     * на API 34+ startForeground с типом без выполненных prerequisites
+     * (нужного runtime-разрешения) кидает SecurityException — условие
+     * обязательно, не косметика.
+     */
+    private fun foregroundServiceTypes(): Int {
+        var types = ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
+        if (hasBluetoothConnectPermission()) {
+            types = types or ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
+        }
+        return types
+    }
+
+    /** API 31+: runtime BLUETOOTH_CONNECT; ниже — legacy BLUETOOTH выдан при установке. */
+    private fun hasBluetoothConnectPermission(): Boolean =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            ContextCompat.checkSelfPermission(
+                this, Manifest.permission.BLUETOOTH_CONNECT
+            ) == PackageManager.PERMISSION_GRANTED
+        } else {
+            true
+        }
 
     /**
      * Таймер периодического сброса буфера. Гарантирует запись даже если буфер
@@ -1004,7 +1065,10 @@ class LocationTrackingService : Service() {
         // Вычислить калории за интервал от предыдущей точки до этой.
         // prevCaloriePoint == null → первая точка сессии или первая после паузы → calories = null.
         val calories = computeCaloriesForPoint(rawPoint)
-        val point = rawPoint.copy(calories = calories)
+        // Пульс — последний свежий сэмпл с датчика; null если датчик не подключён
+        // или сэмпл протух (freshBpm не отдаёт устаревшее значение после обрыва).
+        val heartRate = if (isDiscovery) null else hrmManager.freshBpm()
+        val point = rawPoint.copy(calories = calories, heartRate = heartRate)
         Log.d(TAG, "point: calories=${point.calories}, speed=${point.speed}")
         // Обновляем опорную точку ПОСЛЕ copy, чтобы использовать уже финальный объект.
         prevCaloriePoint = point
@@ -1139,6 +1203,11 @@ class LocationTrackingService : Service() {
         tts?.shutdown()
         tts = null
         abandonAudioFocus()
+
+        // Пульсометр: разорвать соединение и остановить реконнекты — тренировка
+        // завершена, держать связь незачем (менеджер singleton, но соединение
+        // живёт только пока оно кому-то нужно).
+        hrmManager.disconnect()
 
         // Финальный сброс буфера + sync или очистка discovery-точек.
         // Захватываем значения полей до scope.launch: onStartCommand мог уже переключить

@@ -28,6 +28,24 @@
          через ~5-10 мин после выключения экрана. -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
+    <!-- Bluetooth LE — внешние пульсометры (GATT Heart Rate Service 0x180D).
+         API 26–30: legacy-пара BLUETOOTH/BLUETOOTH_ADMIN (install-time);
+         скану дополнительно нужна геолокация — она уже запрашивается для тренировок.
+         API 31+: runtime-пара BLUETOOTH_SCAN/BLUETOOTH_CONNECT.
+         neverForLocation: из результатов скана не выводится местоположение —
+         освобождает скан от привязки к гео-разрешению. -->
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
+    <uses-permission
+        android:name="android.permission.BLUETOOTH_SCAN"
+        android:usesPermissionFlags="neverForLocation"
+        tools:targetApi="s" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <!-- FGS-тип connectedDevice (API 34+): удержание BLE-соединения с пульсометром
+         в foreground-сервисе. Бит добавляется в startForeground условно —
+         только когда BLUETOOTH_CONNECT выдан и датчик сохранён. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+
     <!-- Камера — для съёмки фото профиля -->
     <uses-permission android:name="android.permission.CAMERA" />
 
@@ -64,7 +82,7 @@
              смахивает приложение из Recents (актуально для Samsung, Xiaomi и др.). -->
         <service
             android:name=".data.location.LocationTrackingService"
-            android:foregroundServiceType="location"
+            android:foregroundServiceType="location|connectedDevice"
             android:stopWithTask="false"
             android:exported="false" />
 

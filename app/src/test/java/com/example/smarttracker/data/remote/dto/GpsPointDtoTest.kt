@@ -77,4 +77,17 @@ class GpsPointDtoTest {
         assertNotNull(dto.recordedAt)
         assertTrue(dto.recordedAt.isNotBlank())
     }
+
+    @Test
+    fun `heartRate передаётся в dto`() {
+        val dto = samplePoint.copy(heartRate = 148).toGpsPointDto()
+        assertEquals(148, dto.heartRate)
+    }
+
+    @Test
+    fun `heartRate null остаётся null - точка без датчика`() {
+        // Gson не сериализует null-поля → старый контракт gps_points не меняется
+        val dto = samplePoint.toGpsPointDto()
+        assertEquals(null, dto.heartRate)
+    }
 }

@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
@@ -37,6 +38,8 @@ class SettingsStorageImpl @Inject constructor(
         val VOICE_CUES_ENABLED = booleanPreferencesKey("voice_cues_enabled")
         val VOICE_CUE_INTERVAL_KM = intPreferencesKey("voice_cue_interval_km")
         val KEEP_SCREEN_ON = booleanPreferencesKey("keep_screen_on")
+        val HRM_DEVICE_ADDRESS = stringPreferencesKey("hrm_device_address")
+        val HRM_DEVICE_NAME = stringPreferencesKey("hrm_device_name")
     }
 
     // Дефолты — единственный источник в конструкторе AppSettings: prefs без
@@ -61,6 +64,8 @@ class SettingsStorageImpl @Inject constructor(
                     if (it in AppSettings.ALLOWED_VOICE_INTERVALS) it else defaults.voiceCueIntervalKm
                 },
                 keepScreenOn = prefs[Keys.KEEP_SCREEN_ON] ?: defaults.keepScreenOn,
+                hrmDeviceAddress = prefs[Keys.HRM_DEVICE_ADDRESS],
+                hrmDeviceName = prefs[Keys.HRM_DEVICE_NAME],
             )
         }
 
@@ -83,6 +88,22 @@ class SettingsStorageImpl @Inject constructor(
 
     override suspend fun setKeepScreenOn(enabled: Boolean) {
         context.settingsDataStore.edit { it[Keys.KEEP_SCREEN_ON] = enabled }
+    }
+
+    override suspend fun setHrmDevice(address: String?, name: String?) {
+        context.settingsDataStore.edit { prefs ->
+            if (address == null) {
+                prefs.remove(Keys.HRM_DEVICE_ADDRESS)
+                prefs.remove(Keys.HRM_DEVICE_NAME)
+            } else {
+                prefs[Keys.HRM_DEVICE_ADDRESS] = address
+                if (name != null) {
+                    prefs[Keys.HRM_DEVICE_NAME] = name
+                } else {
+                    prefs.remove(Keys.HRM_DEVICE_NAME)
+                }
+            }
+        }
     }
 
     private companion object {

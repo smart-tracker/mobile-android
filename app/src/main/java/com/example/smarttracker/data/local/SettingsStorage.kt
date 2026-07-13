@@ -23,6 +23,14 @@ data class AppSettings(
     val voiceCuesEnabled: Boolean = true,
     val voiceCueIntervalKm: Int = 1,
     val keepScreenOn: Boolean = false,
+    /**
+     * MAC-адрес сохранённого BLE-пульсометра. null = датчик не настроен.
+     * Отдельного toggle «включить пульсометр» нет: адрес сохранён = включено,
+     * «Забыть датчик» = выключено.
+     */
+    val hrmDeviceAddress: String? = null,
+    /** Имя сохранённого пульсометра — только для отображения в UI. */
+    val hrmDeviceName: String? = null,
 ) {
     companion object {
         /** Допустимые интервалы голосовых подсказок, км. */
@@ -37,8 +45,10 @@ data class AppSettings(
  *
  * Потребители:
  *  - SettingsViewModel (экран настроек) — чтение + запись;
- *  - LocationTrackingService — чтение (автопауза, голосовые подсказки);
- *  - WorkoutStartViewModel — чтение (keepScreenOn).
+ *  - LocationTrackingService — чтение (автопауза, голосовые подсказки,
+ *    адрес пульсометра для автоподключения);
+ *  - WorkoutStartViewModel — чтение (keepScreenOn, наличие пульсометра);
+ *  - SensorsViewModel (экран «Датчики») — чтение + запись пульсометра.
  */
 interface SettingsStorage {
 
@@ -57,4 +67,10 @@ interface SettingsStorage {
     suspend fun setVoiceCueIntervalKm(intervalKm: Int)
 
     suspend fun setKeepScreenOn(enabled: Boolean)
+
+    /**
+     * Сохранить выбранный пульсометр. address = null стирает оба поля
+     * («Забыть датчик»). Имя без адреса не сохраняется.
+     */
+    suspend fun setHrmDevice(address: String?, name: String?)
 }

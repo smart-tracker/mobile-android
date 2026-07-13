@@ -36,9 +36,12 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
@@ -74,6 +77,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -244,6 +248,14 @@ fun WorkoutStartScreen(
                                    cd.distancesKm.getOrElse(scrubIndex) { 0f }),
             elevationDisplay = WorkoutSummaryFormatters.formatElevation(
                                    cd.elevationsM.getOrElse(scrubIndex) { 0f }),
+            // Пульс в точке scrub — из trackPoints напрямую (в cumulativeData
+            // серии пульса нет). Гейт по avgHeartRateDisplay: у тренировки без
+            // датчика строка пульса в карточке не показывается вовсе; при
+            // локальном пропуске сэмпла (обрыв) — "—".
+            heartRateDisplay = if (summary.avgHeartRateDisplay != null) {
+                summary.trackPoints.getOrNull(scrubIndex)?.heartRate
+                    ?.let { WorkoutSummaryFormatters.formatHeartRate(it) } ?: "—"
+            } else null,
         )
     } else null
 
@@ -532,6 +544,50 @@ fun WorkoutStartScreen(
                 }
             }
 
+            // ── HR-бейдж — под GPS-бейджем, только если пульсометр настроен ────
+            // Информационный (не кликается): цвет = состояние соединения,
+            // при подключении показывает живой пульс.
+            if (!overlayVisible && state.hrmConfigured) {
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(top = 48.dp, end = 8.dp)
+                        .clip(RoundedCornerShape(size = 32.dp))
+                        .border(
+                            width = 1.dp,
+                            color = ColorPrimary,
+                            shape = RoundedCornerShape(size = 32.dp),
+                        )
+                        .height(32.dp)
+                        .background(
+                            color = if (state.hrmConnected) ColorGpsActive else ColorGpsInactive,
+                            shape = RoundedCornerShape(size = 32.dp),
+                        )
+                        .padding(horizontal = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Favorite,
+                        contentDescription = if (state.hrmConnected) {
+                            stringResource(R.string.hrm_badge_connected)
+                        } else {
+                            stringResource(R.string.hrm_badge_disconnected)
+                        },
+                        tint = Color.White,
+                        modifier = Modifier.size(16.dp),
+                    )
+                    if (state.hrmConnected) {
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = state.heartRateDisplay,
+                            color = Color.White,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
+                }
+            }
+
             // ── Карточка мини-статистики поверх карты в полноэкранном режиме оверлея
             // Соответствует Figma 723:460 (FullScreenMap).
             if (overlayVisible && isFullscreen && summary != null) {
@@ -808,9 +864,18 @@ private fun ActiveBody(
             // valueMinWidth фиксирует ширину блока по самому длинному ожидаемому значению,
             // чтобы SpaceEvenly не прыгал при смене "0.99" → "1.00", "9" → "10" и т.д.
             // Набор высоты не показываем — отображается только на экране итогов.
-            StatItem(value = state.distanceDisplay, label = stringResource(R.string.workout_distance), valueMinWidth = 100.dp)
-            StatItem(value = state.avgSpeedDisplay, label = stringResource(R.string.workout_avg_speed), valueMinWidth = 140.dp)
-            StatItem(value = state.caloriesDisplay, label = stringResource(R.string.workout_calories), valueMinWidth = 110.dp)
+            // С настроенным пульсометром элементов четыре — ширины ужаты,
+            // чтобы ряд помещался на экранах 360dp.
+            if (state.hrmConfigured) {
+                StatItem(value = state.distanceDisplay, label = stringResource(R.string.workout_distance), valueMinWidth = 75.dp)
+                StatItem(value = state.avgSpeedDisplay, label = stringResource(R.string.workout_avg_speed), valueMinWidth = 115.dp)
+                StatItem(value = state.caloriesDisplay, label = stringResource(R.string.workout_calories), valueMinWidth = 80.dp)
+                StatItem(value = state.heartRateDisplay, label = stringResource(R.string.workout_heart_rate), valueMinWidth = 45.dp)
+            } else {
+                StatItem(value = state.distanceDisplay, label = stringResource(R.string.workout_distance), valueMinWidth = 100.dp)
+                StatItem(value = state.avgSpeedDisplay, label = stringResource(R.string.workout_avg_speed), valueMinWidth = 140.dp)
+                StatItem(value = state.caloriesDisplay, label = stringResource(R.string.workout_calories), valueMinWidth = 110.dp)
+            }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
