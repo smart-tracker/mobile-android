@@ -109,6 +109,8 @@ fun SensorsDialog(onClose: () -> Unit) {
                 onSavedDeviceClick = viewModel::onSavedDeviceClick,
                 onRemoveDeviceClick = viewModel::onRemoveDeviceClick,
                 onAddDeviceClick = viewModel::onAddDeviceClick,
+                onDismissBluetoothPrompt = viewModel::onDismissBluetoothPrompt,
+                onBluetoothEnabled = viewModel::onBluetoothEnabled,
                 // Высота ограничена — длинные списки скроллятся внутри
                 // карточки, а не растягивают её за экран
                 modifier = Modifier.heightIn(max = 440.dp),

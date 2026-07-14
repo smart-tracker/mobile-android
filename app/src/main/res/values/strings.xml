@@ -97,6 +97,9 @@
     <string name="sensors_found">Найденные</string>
     <string name="sensors_add">Добавить датчик</string>
     <string name="sensors_remove">Удалить датчик</string>
+    <string name="sensors_bt_enable_message">Включите Bluetooth для поиска и подключения датчиков.</string>
+    <string name="sensors_bt_enable_confirm">Включить</string>
+    <string name="sensors_bt_enable_cancel">Отмена</string>
 
     <!-- Пульс на экране тренировки -->
     <string name="workout_heart_rate">Пульс</string>

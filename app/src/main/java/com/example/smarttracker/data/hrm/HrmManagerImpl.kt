@@ -120,6 +120,8 @@ class HrmManagerImpl @Inject constructor(
 
     // --- команды ------------------------------------------------------------
 
+    override fun isBluetoothEnabled(): Boolean = bluetoothEnabledProvider()
+
     override fun startScan() {
         scope.launch {
             ensureBtReceiver()

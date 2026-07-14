@@ -257,6 +257,8 @@ fun AppNavGraph(
                 onSavedDeviceClick = viewModel::onSavedDeviceClick,
                 onRemoveDeviceClick = viewModel::onRemoveDeviceClick,
                 onAddDeviceClick = viewModel::onAddDeviceClick,
+                onDismissBluetoothPrompt = viewModel::onDismissBluetoothPrompt,
+                onBluetoothEnabled = viewModel::onBluetoothEnabled,
             )
         }
 

@@ -31,6 +31,8 @@ import javax.inject.Inject
  * @param isScanning         идёт сканирование
  * @param hasScanned         пользователь запускал скан — гейт секции
  *   «найденные» и подсказки «не найдено»
+ * @param promptEnableBluetooth показать окно «включите Bluetooth» —
+ *   выставляется при попытке скана / входе с выключенным адаптером
  * @param scanResults        сырые результаты скана: дедуп по адресу,
  *   сортировка по rssi (для UI фильтруются через [foundDevices])
  */
@@ -42,6 +44,7 @@ data class SensorsUiState(
     val currentBpm: Int? = null,
     val isScanning: Boolean = false,
     val hasScanned: Boolean = false,
+    val promptEnableBluetooth: Boolean = false,
     val scanResults: List<HrmScanResult> = emptyList(),
 ) {
     /**
@@ -148,6 +151,12 @@ class SensorsViewModel @Inject constructor(
 
     fun onPermissionsGranted() {
         _state.update { it.copy(permissionsGranted = true) }
+        // При входе с выключенным адаптером — сразу предложить включить,
+        // не пытаясь сканировать (скан вернул бы пустоту).
+        if (!hrmManager.isBluetoothEnabled()) {
+            _state.update { it.copy(promptEnableBluetooth = true) }
+            return
+        }
         maybeAutoScan()
     }
 
@@ -158,13 +167,32 @@ class SensorsViewModel @Inject constructor(
     /** Один скан на тап; повторный тап во время скана игнорируется. */
     fun onScanClick() {
         if (_state.value.isScanning) return
+        if (!hrmManager.isBluetoothEnabled()) {
+            _state.update { it.copy(promptEnableBluetooth = true) }
+            return
+        }
         startScan(SCAN_TIMEOUT_MS)
+    }
+
+    /** Пользователь закрыл окно «включите Bluetooth» без включения. */
+    fun onDismissBluetoothPrompt() {
+        _state.update { it.copy(promptEnableBluetooth = false) }
+    }
+
+    /**
+     * Bluetooth включён через системный диалог — убрать окно и продолжить
+     * то, ради чего оно показывалось (поиск датчиков).
+     */
+    fun onBluetoothEnabled() {
+        _state.update { it.copy(promptEnableBluetooth = false) }
+        onScanClick()
     }
 
     /**
      * Автопоиск при входе: сохранённых датчиков нет — сразу сканируем,
      * не заставляя пользователя жать кнопку. Вызывается из
-     * [onPermissionsGranted] (скан без разрешений невозможен).
+     * [onPermissionsGranted] (скан без разрешений/адаптера невозможен —
+     * оба гейта уже пройдены к этому месту).
      *
      * Список читается напрямую из хранилища (settings.first()), а не из
      * UiState: зеркалирующий collector мог ещё не отработать — по стейту

@@ -74,6 +74,8 @@ fun SensorsScreen(
     onSavedDeviceClick: (SavedHrmDevice) -> Unit,
     onRemoveDeviceClick: (SavedHrmDevice) -> Unit,
     onAddDeviceClick: (HrmScanResult) -> Unit,
+    onDismissBluetoothPrompt: () -> Unit,
+    onBluetoothEnabled: () -> Unit,
 ) {
     Scaffold(
         bottomBar = {
@@ -108,6 +110,8 @@ fun SensorsScreen(
             onSavedDeviceClick = onSavedDeviceClick,
             onRemoveDeviceClick = onRemoveDeviceClick,
             onAddDeviceClick = onAddDeviceClick,
+            onDismissBluetoothPrompt = onDismissBluetoothPrompt,
+            onBluetoothEnabled = onBluetoothEnabled,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding),
@@ -135,12 +139,22 @@ fun SensorsScreenContent(
     onSavedDeviceClick: (SavedHrmDevice) -> Unit,
     onRemoveDeviceClick: (SavedHrmDevice) -> Unit,
     onAddDeviceClick: (HrmScanResult) -> Unit,
+    onDismissBluetoothPrompt: () -> Unit,
+    onBluetoothEnabled: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     BluetoothPermissionHandler(
         onGranted = onPermissionsGranted,
         onDenied = onPermissionsDenied,
     )
+
+    // Bluetooth выключен (вход / тап «Поиск») — окно с предложением включить
+    if (state.promptEnableBluetooth) {
+        BluetoothEnablePrompt(
+            onEnabled = onBluetoothEnabled,
+            onDismiss = onDismissBluetoothPrompt,
+        )
+    }
 
     Column(
         modifier = modifier

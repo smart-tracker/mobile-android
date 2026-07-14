@@ -18,6 +18,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -28,6 +29,7 @@ import org.mockito.kotlin.never
 import org.mockito.kotlin.times
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.verifyBlocking
+import org.mockito.kotlin.whenever
 
 /**
  * Тесты [SensorsViewModel]: список сохранённых датчиков, накопление и
@@ -62,6 +64,7 @@ class SensorsViewModelTest {
             on { this.currentSample } doReturn currentSample
             on { this.isScanning } doReturn isScanning
             on { this.scanResults } doReturn scanResults
+            on { isBluetoothEnabled() } doReturn true
         }
         settingsStorage = mock {
             on { settings } doReturn settingsFlow
@@ -177,6 +180,51 @@ class SensorsViewModelTest {
 
         viewModel.onPermissionsGranted()
 
+        verify(hrmManager, never()).startScan()
+    }
+
+    @Test
+    fun `тап Поиск при выключенном Bluetooth - окно вместо скана`() = runTest {
+        whenever(hrmManager.isBluetoothEnabled()).thenReturn(false)
+
+        viewModel.onScanClick()
+
+        assertTrue(viewModel.state.value.promptEnableBluetooth)
+        verify(hrmManager, never()).startScan()
+    }
+
+    @Test
+    fun `вход при выключенном Bluetooth - окно вместо автопоиска`() = runTest {
+        whenever(hrmManager.isBluetoothEnabled()).thenReturn(false)
+
+        viewModel.onPermissionsGranted()
+
+        assertTrue(viewModel.state.value.promptEnableBluetooth)
+        verify(hrmManager, never()).startScan()
+    }
+
+    @Test
+    fun `после включения Bluetooth скан продолжается`() = runTest {
+        whenever(hrmManager.isBluetoothEnabled()).thenReturn(false)
+        viewModel.onScanClick()
+        assertTrue(viewModel.state.value.promptEnableBluetooth)
+
+        // Пользователь включил адаптер через системный диалог
+        whenever(hrmManager.isBluetoothEnabled()).thenReturn(true)
+        viewModel.onBluetoothEnabled()
+
+        assertFalse(viewModel.state.value.promptEnableBluetooth)
+        verify(hrmManager).startScan()
+    }
+
+    @Test
+    fun `закрытие окна Bluetooth сбрасывает флаг без скана`() = runTest {
+        whenever(hrmManager.isBluetoothEnabled()).thenReturn(false)
+        viewModel.onScanClick()
+
+        viewModel.onDismissBluetoothPrompt()
+
+        assertFalse(viewModel.state.value.promptEnableBluetooth)
         verify(hrmManager, never()).startScan()
     }
 
