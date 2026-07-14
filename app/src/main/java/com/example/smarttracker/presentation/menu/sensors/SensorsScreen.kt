@@ -32,7 +32,6 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
@@ -330,19 +329,22 @@ private fun ScanPillButton(
     enabled: Boolean,
     onClick: () -> Unit,
 ) {
+    // Рамка всегда сплошная (стабильный визуальный контур кнопки);
+    // недоступность (нет разрешений) гасит только содержимое, не рамку —
+    // иначе до выдачи разрешения кнопка выглядит как без границы.
+    val contentColor = if (enabled) ColorPrimary else ColorPrimary.copy(alpha = 0.4f)
     Row(
         modifier = Modifier
             .clip(RoundedCornerShape(16.dp))
             .border(width = 1.dp, color = ColorPrimary, shape = RoundedCornerShape(16.dp))
             .clickable(enabled = enabled && !isScanning, onClick = onClick)
-            .alpha(if (enabled) 1f else 0.4f)
             .padding(horizontal = 16.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (isScanning) {
             CircularProgressIndicator(
                 modifier = Modifier.size(12.dp),
-                color = ColorPrimary,
+                color = contentColor,
                 strokeWidth = 1.5.dp,
             )
             Spacer(modifier = Modifier.width(8.dp))
@@ -356,7 +358,7 @@ private fun ScanPillButton(
             fontFamily = geologicaFontFamily,
             fontWeight = FontWeight.Normal,
             fontSize = 13.sp,
-            color = ColorPrimary,
+            color = contentColor,
         )
     }
 }
