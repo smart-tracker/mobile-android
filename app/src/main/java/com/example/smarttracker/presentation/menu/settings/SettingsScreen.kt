@@ -190,9 +190,16 @@ fun SettingsScreen(
             SectionTitle("Датчики")
             NavigationRow(
                 title = "Пульсометр",
-                subtitle = settings.hrmDeviceName
-                    ?: settings.hrmDeviceAddress
-                    ?: "Не настроен",
+                subtitle = run {
+                    val active = settings.hrmDevices
+                        .find { it.address == settings.hrmActiveAddress }
+                    when {
+                        active != null -> active.name ?: active.address
+                        settings.hrmDevices.isNotEmpty() ->
+                            "Датчиков: ${settings.hrmDevices.size}"
+                        else -> "Не настроен"
+                    }
+                },
                 onClick = onOpenSensors,
             )
             Spacer(modifier = Modifier.height(24.dp))

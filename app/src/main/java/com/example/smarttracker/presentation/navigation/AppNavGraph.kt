@@ -254,9 +254,9 @@ fun AppNavGraph(
                 onPermissionsGranted = viewModel::onPermissionsGranted,
                 onPermissionsDenied = viewModel::onPermissionsDenied,
                 onScanClick = viewModel::onScanClick,
-                onDeviceClick = viewModel::onDeviceClick,
-                onConnectSavedClick = viewModel::onConnectSavedClick,
-                onForgetClick = viewModel::onForgetClick,
+                onSavedDeviceClick = viewModel::onSavedDeviceClick,
+                onRemoveDeviceClick = viewModel::onRemoveDeviceClick,
+                onAddDeviceClick = viewModel::onAddDeviceClick,
             )
         }
 

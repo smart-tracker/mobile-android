@@ -8,6 +8,7 @@ import com.example.smarttracker.data.hrm.HrmManager
 import com.example.smarttracker.data.hrm.model.HrmConnectionState
 import com.example.smarttracker.data.hrm.model.HrmSample
 import com.example.smarttracker.data.local.AppSettings
+import com.example.smarttracker.data.local.SavedHrmDevice
 import com.example.smarttracker.data.local.SettingsStorage
 import com.example.smarttracker.data.location.LocationConfig
 import com.example.smarttracker.data.location.LocationTrackingService
@@ -409,12 +410,15 @@ class WorkoutStartViewModelTest {
     // ── Пульсометр (BLE HRM) ──────────────────────────────────────────────────
 
     @Test
-    fun `hrmConfigured true при сохранённом адресе датчика`() = runVmTest {
+    fun `hrmConfigured true при сохранённом датчике`() = runVmTest {
         // Один VM на тест: runVmTest гасит scope только последнего созданного
         val vm = createViewModel(
-            settings = AppSettings(hrmDeviceAddress = "AA:BB:CC:DD:EE:FF", hrmDeviceName = "Polar H10"),
+            settings = AppSettings(
+                hrmDevices = listOf(SavedHrmDevice("AA:BB:CC:DD:EE:FF", "Polar H10")),
+                hrmActiveAddress = "AA:BB:CC:DD:EE:FF",
+            ),
         )
-        assertTrue("Сохранённый адрес → hrmConfigured", vm.state.value.hrmConfigured)
+        assertTrue("Непустой список датчиков → hrmConfigured", vm.state.value.hrmConfigured)
     }
 
     @Test
@@ -424,12 +428,29 @@ class WorkoutStartViewModelTest {
     }
 
     @Test
-    fun `сохранённый датчик автоподключается при входе на экран`() = runVmTest {
+    fun `активный датчик автоподключается при входе на экран`() = runVmTest {
         // Robolectric sdk=28 → ветка «ниже S»: legacy BLUETOOTH выдан при установке
         createViewModel(
-            settings = AppSettings(hrmDeviceAddress = "AA:BB:CC:DD:EE:FF", hrmDeviceName = "Polar H10"),
+            settings = AppSettings(
+                hrmDevices = listOf(
+                    SavedHrmDevice("11:22:33:44:55:66", "Magene H64"),
+                    SavedHrmDevice("AA:BB:CC:DD:EE:FF", "Polar H10"),
+                ),
+                hrmActiveAddress = "AA:BB:CC:DD:EE:FF",
+            ),
         )
         verify(hrmManager).connect("AA:BB:CC:DD:EE:FF")
+    }
+
+    @Test
+    fun `без активного - автоподключение к первому из списка`() = runVmTest {
+        createViewModel(
+            settings = AppSettings(
+                hrmDevices = listOf(SavedHrmDevice("11:22:33:44:55:66", "Magene H64")),
+                hrmActiveAddress = null,
+            ),
+        )
+        verify(hrmManager).connect("11:22:33:44:55:66")
     }
 
     @Test

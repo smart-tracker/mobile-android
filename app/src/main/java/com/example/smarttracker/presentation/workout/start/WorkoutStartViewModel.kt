@@ -275,11 +275,12 @@ class WorkoutStartViewModel @Inject constructor(
                 _state.update {
                     it.copy(
                         keepScreenOn = s.keepScreenOn,
-                        hrmConfigured = s.hrmDeviceAddress != null,
+                        hrmConfigured = s.hrmDevices.isNotEmpty(),
                     )
                 }
-                if (s.hrmDeviceAddress != null && hasBluetoothConnectPermission()) {
-                    hrmManager.connect(s.hrmDeviceAddress)
+                val address = s.autoConnectAddress()
+                if (address != null && hasBluetoothConnectPermission()) {
+                    hrmManager.connect(address)
                 }
             }
         }

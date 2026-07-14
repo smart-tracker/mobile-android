@@ -23,7 +23,7 @@ import com.example.smarttracker.R
 import com.example.smarttracker.presentation.common.AppTab
 import com.example.smarttracker.presentation.common.SmartTrackerBottomBar
 import com.example.smarttracker.presentation.menu.MenuScreen
-import com.example.smarttracker.presentation.menu.sensors.SensorsOverlay
+import com.example.smarttracker.presentation.menu.sensors.SensorsDialog
 import com.example.smarttracker.presentation.theme.ColorPrimary
 import com.example.smarttracker.presentation.theme.geologicaFontFamily
 import com.example.smarttracker.presentation.calendar.TrainingHistoryScreen
@@ -101,7 +101,7 @@ fun WorkoutHomeScreen(
                         onOpenSensors = { showSensorsOverlay = true },
                     )
                     if (showSensorsOverlay) {
-                        SensorsOverlay(onClose = { showSensorsOverlay = false })
+                        SensorsDialog(onClose = { showSensorsOverlay = false })
                     }
                 }
             }

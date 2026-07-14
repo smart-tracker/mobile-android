@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.smarttracker.data.hrm.HrmManager
 import com.example.smarttracker.data.hrm.model.HrmConnectionState
 import com.example.smarttracker.data.hrm.model.HrmScanResult
+import com.example.smarttracker.data.local.SavedHrmDevice
 import com.example.smarttracker.data.local.SettingsStorage
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -13,48 +14,59 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
- * Состояние экрана «Датчики».
+ * Состояние экрана/диалога «Датчики».
  *
  * @param permissionsGranted Bluetooth-разрешения выданы (гейт для скана)
- * @param savedDeviceAddress адрес сохранённого пульсометра (null = не настроен)
- * @param savedDeviceName    имя сохранённого пульсометра для отображения
+ * @param savedDevices       сохранённые пульсометры (список из настроек)
+ * @param activeAddress      адрес активного датчика (к нему автоконнект)
  * @param connectionState    текущее состояние соединения (общее с сервисом —
  *   HrmManager singleton)
  * @param currentBpm         живой пульс; null если не подключён/нет данных
  * @param isScanning         идёт сканирование
- * @param hasScanned         пользователь запускал скан на этом экране —
- *   гейт подсказки «датчики не найдены» (до первого скана она не к месту)
- * @param scanResults        найденные устройства: дедупликация по адресу,
- *   сортировка по силе сигнала (ближайший датчик — сверху)
+ * @param hasScanned         пользователь запускал скан — гейт секции
+ *   «найденные» и подсказки «не найдено»
+ * @param scanResults        сырые результаты скана: дедуп по адресу,
+ *   сортировка по rssi (для UI фильтруются через [foundDevices])
  */
 data class SensorsUiState(
     val permissionsGranted: Boolean = false,
-    val savedDeviceAddress: String? = null,
-    val savedDeviceName: String? = null,
+    val savedDevices: List<SavedHrmDevice> = emptyList(),
+    val activeAddress: String? = null,
     val connectionState: HrmConnectionState = HrmConnectionState.DISCONNECTED,
     val currentBpm: Int? = null,
     val isScanning: Boolean = false,
     val hasScanned: Boolean = false,
     val scanResults: List<HrmScanResult> = emptyList(),
-)
+) {
+    /**
+     * Найденные НОВЫЕ датчики: результаты скана без уже сохранённых.
+     * Добавленный через «+» датчик реактивно исчезает из «найденных»
+     * и появляется в списке сохранённых.
+     */
+    val foundDevices: List<HrmScanResult>
+        get() = scanResults.filterNot { result ->
+            savedDevices.any { it.address == result.address }
+        }
+}
 
 /**
- * ViewModel экрана «Датчики»: скан, подключение и сохранение BLE-пульсометра.
+ * ViewModel экрана/диалога «Датчики»: список сохранённых пульсометров,
+ * скан и добавление новых.
  *
  * Соединением владеет [HrmManager] (singleton) — при уходе с экрана оно
  * НЕ рвётся намеренно: пользователь подключил датчик → пошёл на экран
  * тренировки → сервис пишет пульс с уже живого соединения. Разрыв — только
- * явный («Забыть датчик») или в onDestroy сервиса. Скан при уходе с экрана
- * останавливается ([onCleared]) — он нужен только для списка.
+ * при удалении активного датчика или в onDestroy сервиса. Скан при уходе
+ * останавливается ([onCleared] / [onScanStopRequested]).
  *
- * Выбранное устройство сохраняется в DataStore ТОЛЬКО после первого
- * успешного CONNECTED: клик по чужому/недоступному устройству не должен
- * затирать рабочий сохранённый датчик.
+ * Семантика списка: активный датчик = последний выбранный пользователем
+ * (тап по строке или добавление через «+»); автоконнект идёт к нему.
  */
 @HiltViewModel
 class SensorsViewModel @Inject constructor(
@@ -64,11 +76,18 @@ class SensorsViewModel @Inject constructor(
 
     companion object {
         /**
-         * Автостоп скана. Один скан на тап + таймаут — защита от троттлинга
-         * Android (>4 сканов за 30 с молча возвращают пустоту) и от вечного
-         * жора батареи забытым сканом.
+         * Автостоп ручного скана. Один скан на тап + таймаут — защита от
+         * троттлинга Android (>4 сканов за 30 с молча возвращают пустоту)
+         * и от вечного жора батареи забытым сканом.
          */
         const val SCAN_TIMEOUT_MS = 30_000L
+
+        /**
+         * Таймаут автопоиска при входе без сохранённых датчиков — короче
+         * ручного: это фоновое удобство, а не явное действие пользователя.
+         * Не успел за 10 с → стоп, дальше пользователь ищет кнопкой.
+         */
+        const val AUTO_SCAN_TIMEOUT_MS = 10_000L
     }
 
     private val _state = MutableStateFlow(SensorsUiState())
@@ -76,13 +95,10 @@ class SensorsViewModel @Inject constructor(
 
     private var scanTimeoutJob: Job? = null
 
-    /** Устройство, ожидающее сохранения после первого CONNECTED. */
-    private var pendingSave: HrmScanResult? = null
-
     /** Снимок внешних источников (настройки + менеджер) для зеркалирования в UiState. */
     private data class ExternalState(
-        val address: String?,
-        val name: String?,
+        val devices: List<SavedHrmDevice>,
+        val activeAddress: String?,
         val connection: HrmConnectionState,
         val bpm: Int?,
         val scanning: Boolean,
@@ -98,8 +114,8 @@ class SensorsViewModel @Inject constructor(
                 hrmManager.isScanning,
             ) { settings, connection, sample, scanning ->
                 ExternalState(
-                    address = settings.hrmDeviceAddress,
-                    name = settings.hrmDeviceName,
+                    devices = settings.hrmDevices,
+                    activeAddress = settings.hrmActiveAddress,
                     connection = connection,
                     bpm = if (connection == HrmConnectionState.CONNECTED) sample?.bpm else null,
                     scanning = scanning,
@@ -107,8 +123,8 @@ class SensorsViewModel @Inject constructor(
             }.collect { external ->
                 _state.update {
                     it.copy(
-                        savedDeviceAddress = external.address,
-                        savedDeviceName = external.name,
+                        savedDevices = external.devices,
+                        activeAddress = external.activeAddress,
                         connectionState = external.connection,
                         currentBpm = external.bpm,
                         isScanning = external.scanning,
@@ -128,22 +144,11 @@ class SensorsViewModel @Inject constructor(
                 }
             }
         }
-
-        // Персист выбранного устройства после первого успешного подключения
-        viewModelScope.launch {
-            hrmManager.connectionState.collect { connection ->
-                if (connection == HrmConnectionState.CONNECTED) {
-                    pendingSave?.let { device ->
-                        pendingSave = null
-                        settingsStorage.setHrmDevice(device.address, device.name)
-                    }
-                }
-            }
-        }
     }
 
     fun onPermissionsGranted() {
         _state.update { it.copy(permissionsGranted = true) }
+        maybeAutoScan()
     }
 
     fun onPermissionsDenied() {
@@ -153,44 +158,78 @@ class SensorsViewModel @Inject constructor(
     /** Один скан на тап; повторный тап во время скана игнорируется. */
     fun onScanClick() {
         if (_state.value.isScanning) return
+        startScan(SCAN_TIMEOUT_MS)
+    }
+
+    /**
+     * Автопоиск при входе: сохранённых датчиков нет — сразу сканируем,
+     * не заставляя пользователя жать кнопку. Вызывается из
+     * [onPermissionsGranted] (скан без разрешений невозможен).
+     *
+     * Список читается напрямую из хранилища (settings.first()), а не из
+     * UiState: зеркалирующий collector мог ещё не отработать — по стейту
+     * автопоиск стартовал бы и при наличии сохранённых датчиков.
+     */
+    private fun maybeAutoScan() {
+        viewModelScope.launch {
+            if (settingsStorage.settings.first().hrmDevices.isNotEmpty()) return@launch
+            if (_state.value.isScanning) return@launch
+            startScan(AUTO_SCAN_TIMEOUT_MS)
+        }
+    }
+
+    private fun startScan(timeoutMs: Long) {
         _state.update { it.copy(scanResults = emptyList(), hasScanned = true) }
         hrmManager.startScan()
         scanTimeoutJob?.cancel()
         scanTimeoutJob = viewModelScope.launch {
-            delay(SCAN_TIMEOUT_MS)
+            delay(timeoutMs)
             hrmManager.stopScan()
         }
     }
 
-    /** Клик по найденному устройству: подключить, при успехе — сохранить. */
-    fun onDeviceClick(device: HrmScanResult) {
-        scanTimeoutJob?.cancel()
-        pendingSave = device
+    /**
+     * «+» на найденном датчике: сохранить в список (сразу активным —
+     * пользователь явно его выбрал) и подключиться. Persist немедленный,
+     * не после CONNECTED: датчик только что найден сканом, он включён.
+     */
+    fun onAddDeviceClick(device: HrmScanResult) {
+        viewModelScope.launch {
+            settingsStorage.addHrmDevice(device.address, device.name)
+        }
         hrmManager.connect(device.address)
     }
 
-    /** «Подключить» на карточке сохранённого датчика (проверка связи вне тренировки). */
-    fun onConnectSavedClick() {
-        val address = _state.value.savedDeviceAddress ?: return
-        hrmManager.connect(address)
+    /** Тап по строке сохранённого датчика: сделать активным и подключиться. */
+    fun onSavedDeviceClick(device: SavedHrmDevice) {
+        viewModelScope.launch {
+            settingsStorage.setActiveHrmDevice(device.address)
+        }
+        hrmManager.connect(device.address)
     }
 
     /**
-     * Явная остановка скана — для закрытия оверлея «Датчики».
-     * VM скоупится на backstack-entry Home и переживает закрытие оверлея,
+     * Корзина на строке датчика: удалить из списка. Если удаляется
+     * активный (к нему идёт/держится соединение) — разорвать.
+     */
+    fun onRemoveDeviceClick(device: SavedHrmDevice) {
+        if (device.address == _state.value.activeAddress) {
+            hrmManager.disconnect()
+        }
+        viewModelScope.launch {
+            settingsStorage.removeHrmDevice(device.address)
+        }
+    }
+
+    /**
+     * Явная остановка скана — для закрытия диалога «Датчики».
+     * VM скоупится на backstack-entry Home и переживает закрытие диалога,
      * onCleared не срабатывает — без явного вызова скан продолжал бы жечь
      * батарею под экраном тренировки.
      */
     fun onScanStopRequested() {
         scanTimeoutJob?.cancel()
         hrmManager.stopScan()
-    }
-
-    /** «Забыть датчик»: разорвать соединение и стереть из настроек. */
-    fun onForgetClick() {
-        pendingSave = null
-        hrmManager.disconnect()
-        viewModelScope.launch { settingsStorage.setHrmDevice(null, null) }
     }
 
     override fun onCleared() {

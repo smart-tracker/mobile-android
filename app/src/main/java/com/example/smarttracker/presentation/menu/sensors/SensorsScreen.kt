@@ -1,8 +1,11 @@
 package com.example.smarttracker.presentation.menu.sensors
 
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -10,19 +13,30 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -30,20 +44,21 @@ import androidx.compose.ui.unit.sp
 import com.example.smarttracker.R
 import com.example.smarttracker.data.hrm.model.HrmConnectionState
 import com.example.smarttracker.data.hrm.model.HrmScanResult
+import com.example.smarttracker.data.local.SavedHrmDevice
 import com.example.smarttracker.presentation.common.AppTab
-import com.example.smarttracker.presentation.common.PrimaryButton
 import com.example.smarttracker.presentation.common.SmartTrackerBottomBar
 import com.example.smarttracker.presentation.theme.ColorGpsActive
+import com.example.smarttracker.presentation.theme.ColorGpsInactive
 import com.example.smarttracker.presentation.theme.ColorPrimary
 import com.example.smarttracker.presentation.theme.geologicaFontFamily
 
 /**
- * Экран «Датчики» (Меню → Настройки → Датчики): подключение BLE-пульсометра.
+ * Экран «Датчики» (Меню → Настройки → Датчики): список BLE-пульсометров.
  *
- * Скелет — как [SettingsScreen]: Scaffold + CenterAlignedTopAppBar + нижний
+ * Скелет — как SettingsScreen: Scaffold + CenterAlignedTopAppBar + нижний
  * бар с вкладкой «Меню». Содержимое вынесено в [SensorsScreenContent] —
- * оно же используется оверлеем [SensorsOverlay] с экрана тренировки
- * (тап по HR-бейджу; навигация оттуда запрещена — нюанс 36).
+ * оно же используется компактным диалогом [SensorsDialog] с экрана
+ * тренировки (тап по HR-бейджу; навигация оттуда запрещена — нюанс 36).
  *
  * Разрешения Bluetooth запрашиваются при входе ([BluetoothPermissionHandler]);
  * при отказе поиск недоступен, показывается подсказка.
@@ -56,9 +71,9 @@ fun SensorsScreen(
     onPermissionsGranted: () -> Unit,
     onPermissionsDenied: () -> Unit,
     onScanClick: () -> Unit,
-    onDeviceClick: (HrmScanResult) -> Unit,
-    onConnectSavedClick: () -> Unit,
-    onForgetClick: () -> Unit,
+    onSavedDeviceClick: (SavedHrmDevice) -> Unit,
+    onRemoveDeviceClick: (SavedHrmDevice) -> Unit,
+    onAddDeviceClick: (HrmScanResult) -> Unit,
 ) {
     Scaffold(
         bottomBar = {
@@ -90,21 +105,26 @@ fun SensorsScreen(
             onPermissionsGranted = onPermissionsGranted,
             onPermissionsDenied = onPermissionsDenied,
             onScanClick = onScanClick,
-            onDeviceClick = onDeviceClick,
-            onConnectSavedClick = onConnectSavedClick,
-            onForgetClick = onForgetClick,
-            modifier = Modifier.padding(innerPadding),
+            onSavedDeviceClick = onSavedDeviceClick,
+            onRemoveDeviceClick = onRemoveDeviceClick,
+            onAddDeviceClick = onAddDeviceClick,
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding),
         )
     }
 }
 
 /**
- * Содержимое экрана «Датчики» без Scaffold-обвязки: запрос разрешений,
- * карточка сохранённого датчика, кнопка поиска, список найденных устройств.
+ * Содержимое «Датчиков» без обвязки — минималистичный список:
+ *  - сохранённые датчики: точка статуса + имя + BPM у подключённого +
+ *    корзина (удаление); тап по строке — переключение активного;
+ *  - компактная кнопка «Поиск» по центру;
+ *  - после скана — секция найденных НОВЫХ датчиков с «+» для добавления.
  *
- * Используется двумя хостами:
- *  - [SensorsScreen] — полноценный экран из Настроек (Scaffold + бары);
- *  - [SensorsOverlay] — оверлей поверх экрана тренировки (без навигации).
+ * Хосты: [SensorsScreen] (полный экран из Настроек) и [SensorsDialog]
+ * (компактный диалог с экрана тренировки). Размер задаёт хост через
+ * [modifier]; скролл — внутри.
  */
 @Composable
 fun SensorsScreenContent(
@@ -112,9 +132,9 @@ fun SensorsScreenContent(
     onPermissionsGranted: () -> Unit,
     onPermissionsDenied: () -> Unit,
     onScanClick: () -> Unit,
-    onDeviceClick: (HrmScanResult) -> Unit,
-    onConnectSavedClick: () -> Unit,
-    onForgetClick: () -> Unit,
+    onSavedDeviceClick: (SavedHrmDevice) -> Unit,
+    onRemoveDeviceClick: (SavedHrmDevice) -> Unit,
+    onAddDeviceClick: (HrmScanResult) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     BluetoothPermissionHandler(
@@ -124,172 +144,205 @@ fun SensorsScreenContent(
 
     Column(
         modifier = modifier
-            .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 16.dp),
     ) {
-        Spacer(modifier = Modifier.height(8.dp))
-        SectionTitle(stringResource(R.string.sensors_section_hrm))
+        Spacer(modifier = Modifier.height(4.dp))
 
-        if (state.savedDeviceAddress != null) {
-            SavedDeviceCard(
-                state = state,
-                onConnectClick = onConnectSavedClick,
-                onForgetClick = onForgetClick,
-            )
-        } else {
+        // ── Сохранённые датчики ──────────────────────────────────────────
+        if (state.savedDevices.isEmpty()) {
             HintText(stringResource(R.string.sensors_no_saved_device))
-        }
-
-        Spacer(modifier = Modifier.height(20.dp))
-
-        PrimaryButton(
-            text = if (state.isScanning) {
-                stringResource(R.string.sensors_scanning)
-            } else {
-                stringResource(R.string.sensors_scan)
-            },
-            onClick = onScanClick,
-            isEnabled = state.permissionsGranted && !state.isScanning,
-            isLoading = state.isScanning,
-        )
-
-        if (!state.permissionsGranted) {
-            Spacer(modifier = Modifier.height(8.dp))
-            HintText(stringResource(R.string.sensors_permission_denied))
+        } else {
+            state.savedDevices.forEach { device ->
+                SavedDeviceRow(
+                    device = device,
+                    state = state,
+                    onClick = { onSavedDeviceClick(device) },
+                    onRemoveClick = { onRemoveDeviceClick(device) },
+                )
+            }
         }
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        state.scanResults.forEach { device ->
-            ScanResultRow(device = device, onClick = { onDeviceClick(device) })
-        }
-        if (state.hasScanned && !state.isScanning && state.scanResults.isEmpty()) {
-            HintText(stringResource(R.string.sensors_empty_hint))
-        }
-
-        Spacer(modifier = Modifier.height(24.dp))
-    }
-}
-
-/**
- * Карточка сохранённого датчика: имя, статус соединения (живой пульс при
- * CONNECTED) и действия. «Подключить» видна только когда соединения нет
- * и оно не устанавливается прямо сейчас.
- */
-@Composable
-private fun SavedDeviceCard(
-    state: SensorsUiState,
-    onConnectClick: () -> Unit,
-    onForgetClick: () -> Unit,
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(1.dp, ColorPrimary.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
-            .padding(horizontal = 14.dp, vertical = 12.dp),
-    ) {
-        Text(
-            text = stringResource(R.string.sensors_saved_device),
-            fontFamily = geologicaFontFamily,
-            fontWeight = FontWeight.Light,
-            fontSize = 12.sp,
-            color = ColorPrimary.copy(alpha = 0.65f),
-        )
-        Text(
-            text = state.savedDeviceName ?: state.savedDeviceAddress.orEmpty(),
-            fontFamily = geologicaFontFamily,
-            fontWeight = FontWeight.Normal,
-            fontSize = 16.sp,
-            color = ColorPrimary,
-        )
-        Text(
-            text = connectionStatusText(state),
-            fontFamily = geologicaFontFamily,
-            fontWeight = FontWeight.Normal,
-            fontSize = 13.sp,
-            color = if (state.connectionState == HrmConnectionState.CONNECTED) {
-                ColorGpsActive
-            } else {
-                ColorPrimary.copy(alpha = 0.65f)
-            },
-        )
+        // ── Компактная кнопка поиска ─────────────────────────────────────
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End,
-            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center,
         ) {
-            val showConnect = state.connectionState == HrmConnectionState.DISCONNECTED ||
-                state.connectionState == HrmConnectionState.BLUETOOTH_OFF
-            if (showConnect) {
-                TextButton(onClick = onConnectClick) {
-                    Text(
-                        text = stringResource(R.string.sensors_connect),
-                        fontFamily = geologicaFontFamily,
-                        color = ColorPrimary,
-                    )
-                }
-            }
-            TextButton(onClick = onForgetClick) {
-                Text(
-                    text = stringResource(R.string.sensors_forget),
-                    fontFamily = geologicaFontFamily,
-                    color = ColorPrimary.copy(alpha = 0.65f),
-                )
-            }
-        }
-    }
-}
-
-/** Текст статуса соединения; при CONNECTED — вместе с живым пульсом. */
-@Composable
-private fun connectionStatusText(state: SensorsUiState): String = when (state.connectionState) {
-    HrmConnectionState.CONNECTED -> {
-        val status = stringResource(R.string.sensors_status_connected)
-        val bpm = state.currentBpm
-        if (bpm != null) "$status · " + stringResource(R.string.sensors_bpm_format, bpm) else status
-    }
-    HrmConnectionState.CONNECTING -> stringResource(R.string.sensors_status_connecting)
-    HrmConnectionState.RECONNECTING -> stringResource(R.string.sensors_status_reconnecting)
-    HrmConnectionState.BLUETOOTH_OFF -> stringResource(R.string.sensors_bt_off)
-    HrmConnectionState.DISCONNECTED -> stringResource(R.string.sensors_status_disconnected)
-}
-
-/** Строка найденного устройства: имя + сила сигнала. */
-@Composable
-private fun ScanResultRow(
-    device: HrmScanResult,
-    onClick: () -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = device.name ?: stringResource(R.string.sensors_unknown_device),
-                fontFamily = geologicaFontFamily,
-                fontWeight = FontWeight.Normal,
-                fontSize = 16.sp,
-                color = ColorPrimary,
+            ScanPillButton(
+                isScanning = state.isScanning,
+                enabled = state.permissionsGranted,
+                onClick = onScanClick,
             )
+        }
+        if (!state.permissionsGranted) {
+            Spacer(modifier = Modifier.height(6.dp))
+            HintText(stringResource(R.string.sensors_permission_denied))
+        }
+
+        // ── Найденные новые датчики (окно расширяется вниз) ──────────────
+        if (state.hasScanned) {
+            Spacer(modifier = Modifier.height(12.dp))
             Text(
-                text = device.address,
+                text = stringResource(R.string.sensors_found),
                 fontFamily = geologicaFontFamily,
                 fontWeight = FontWeight.Light,
                 fontSize = 12.sp,
                 color = ColorPrimary.copy(alpha = 0.65f),
             )
+            state.foundDevices.forEach { device ->
+                FoundDeviceRow(device = device, onAddClick = { onAddDeviceClick(device) })
+            }
+            if (!state.isScanning && state.foundDevices.isEmpty()) {
+                HintText(stringResource(R.string.sensors_empty_hint))
+            }
         }
+
+        Spacer(modifier = Modifier.height(12.dp))
+    }
+}
+
+/**
+ * Строка сохранённого датчика: точка статуса + имя + BPM (у подключённого
+ * активного) + корзина. Тап по строке — сделать активным и подключиться.
+ */
+@Composable
+private fun SavedDeviceRow(
+    device: SavedHrmDevice,
+    state: SensorsUiState,
+    onClick: () -> Unit,
+    onRemoveClick: () -> Unit,
+) {
+    val isActive = device.address == state.activeAddress
+    val dotColor = when {
+        isActive && state.connectionState == HrmConnectionState.CONNECTED -> ColorGpsActive
+        isActive && (state.connectionState == HrmConnectionState.CONNECTING ||
+            state.connectionState == HrmConnectionState.RECONNECTING) -> ColorAmber
+        isActive -> ColorGpsInactive
+        else -> ColorPrimary.copy(alpha = 0.25f)
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 4.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(10.dp)
+                .clip(CircleShape)
+                .background(dotColor),
+        )
+        Spacer(modifier = Modifier.width(10.dp))
+        Text(
+            text = device.name ?: device.address,
+            fontFamily = geologicaFontFamily,
+            fontWeight = if (isActive) FontWeight.Normal else FontWeight.Light,
+            fontSize = 15.sp,
+            color = ColorPrimary,
+            modifier = Modifier.weight(1f),
+        )
+        if (isActive && state.connectionState == HrmConnectionState.CONNECTED &&
+            state.currentBpm != null
+        ) {
+            Text(
+                text = stringResource(R.string.sensors_bpm_format, state.currentBpm),
+                fontFamily = geologicaFontFamily,
+                fontWeight = FontWeight.Light,
+                fontSize = 12.sp,
+                color = ColorPrimary.copy(alpha = 0.65f),
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+        }
+        IconButton(onClick = onRemoveClick, modifier = Modifier.size(32.dp)) {
+            Image(
+                painter = painterResource(R.drawable.ic_delete),
+                contentDescription = stringResource(R.string.sensors_remove),
+                colorFilter = ColorFilter.tint(ColorPrimary.copy(alpha = 0.65f)),
+                modifier = Modifier.size(18.dp),
+            )
+        }
+    }
+}
+
+/** Строка найденного нового датчика: имя + rssi + «+» для добавления. */
+@Composable
+private fun FoundDeviceRow(
+    device: HrmScanResult,
+    onAddClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 4.dp, vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = device.name ?: stringResource(R.string.sensors_unknown_device),
+            fontFamily = geologicaFontFamily,
+            fontWeight = FontWeight.Light,
+            fontSize = 15.sp,
+            color = ColorPrimary,
+            modifier = Modifier.weight(1f),
+        )
         Text(
             text = "${device.rssi} dBm",
             fontFamily = geologicaFontFamily,
             fontWeight = FontWeight.Light,
-            fontSize = 12.sp,
-            color = ColorPrimary.copy(alpha = 0.65f),
+            fontSize = 11.sp,
+            color = ColorPrimary.copy(alpha = 0.5f),
+        )
+        IconButton(onClick = onAddClick, modifier = Modifier.size(32.dp)) {
+            Icon(
+                imageVector = Icons.Filled.Add,
+                contentDescription = stringResource(R.string.sensors_add),
+                tint = ColorPrimary,
+                modifier = Modifier.size(20.dp),
+            )
+        }
+    }
+}
+
+/**
+ * Компактная pill-кнопка поиска (стиль сегментов IntervalSelectorRow):
+ * «Поиск» → при скане спиннер + «Поиск…», клики игнорируются.
+ */
+@Composable
+private fun ScanPillButton(
+    isScanning: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(16.dp))
+            .border(width = 1.dp, color = ColorPrimary, shape = RoundedCornerShape(16.dp))
+            .clickable(enabled = enabled && !isScanning, onClick = onClick)
+            .alpha(if (enabled) 1f else 0.4f)
+            .padding(horizontal = 16.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (isScanning) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(12.dp),
+                color = ColorPrimary,
+                strokeWidth = 1.5.dp,
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+        }
+        Text(
+            text = if (isScanning) {
+                stringResource(R.string.sensors_scanning)
+            } else {
+                stringResource(R.string.sensors_scan)
+            },
+            fontFamily = geologicaFontFamily,
+            fontWeight = FontWeight.Normal,
+            fontSize = 13.sp,
+            color = ColorPrimary,
         )
     }
 }
@@ -306,14 +359,5 @@ private fun HintText(text: String) {
     )
 }
 
-@Composable
-private fun SectionTitle(text: String) {
-    Text(
-        text = text,
-        fontFamily = geologicaFontFamily,
-        fontWeight = FontWeight.Bold,
-        fontSize = 16.sp,
-        color = ColorPrimary,
-        modifier = Modifier.padding(vertical = 8.dp),
-    )
-}
+/** Янтарный статус «подключается» — промежуточный между зелёным и красным. */
+private val ColorAmber = Color(0xFFFFB300)

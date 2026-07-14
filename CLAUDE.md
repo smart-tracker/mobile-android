@@ -248,9 +248,9 @@ com.example.smarttracker/
 │   │   ├── MenuScreen.kt
 │   │   ├── profile/  ProfileScreen, ProfileViewModel, ProfileUiState,
 │   │   │             ProfileEditScreen, ProfileEditViewModel, ProfileEditUiState
-│   │   ├── sensors/  SensorsScreen (+SensorsScreenContent), SensorsOverlay,
+│   │   ├── sensors/  SensorsScreen (+SensorsScreenContent), SensorsDialog,
 │   │   │             SensorsViewModel, BluetoothPermissionHandler
-│   │   │             (подключение BLE-пульсометра)
+│   │   │             (список BLE-пульсометров, компактный диалог с бейджа)
 │   │   └── settings/ SettingsScreen, SettingsViewModel, VoiceCueSamplePlayer
 │   └── workout/
 │       ├── WorkoutHomeScreen.kt        (Scaffold + нижний бар)
@@ -537,12 +537,12 @@ com.example.smarttracker/
     AnimatorSet на API 26+ — no-op, анимация дотикивает сама) — краш
     воспроизводился после каждой. Единственное надёжное решение —
     не разрушать карту: UI поверх экрана оверлеем в той же композиции.
-    Примеры: SummaryOverlay (итоги), SensorsOverlay (датчики с
-    HR-бейджа, хостится в WorkoutHomeScreen поверх WorkoutStartScreen).
-    Вкладки Menu→Settings навигируют безопасно: там карта уже вне
-    композиции. Параметр `suppressLocationDot` в MapViewComposable
-    оставлен как страховка (гасит компонент по флагу), но сам по себе
-    краш НЕ предотвращает.
+    Примеры: SummaryOverlay (итоги), SensorsDialog (датчики с
+    HR-бейджа — компактный диалог со скримом, хостится в
+    WorkoutHomeScreen поверх WorkoutStartScreen). Вкладки Menu→Settings
+    навигируют безопасно: там карта уже вне композиции. Параметр
+    `suppressLocationDot` в MapViewComposable оставлен как страховка
+    (гасит компонент по флагу), но сам по себе краш НЕ предотвращает.
 
 ---
 

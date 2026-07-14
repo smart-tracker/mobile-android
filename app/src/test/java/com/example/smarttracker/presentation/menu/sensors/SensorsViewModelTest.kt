@@ -5,6 +5,7 @@ import com.example.smarttracker.data.hrm.model.HrmConnectionState
 import com.example.smarttracker.data.hrm.model.HrmSample
 import com.example.smarttracker.data.hrm.model.HrmScanResult
 import com.example.smarttracker.data.local.AppSettings
+import com.example.smarttracker.data.local.SavedHrmDevice
 import com.example.smarttracker.data.local.SettingsStorage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -29,9 +30,9 @@ import org.mockito.kotlin.verify
 import org.mockito.kotlin.verifyBlocking
 
 /**
- * Тесты [SensorsViewModel]: накопление результатов скана (дедуп/сортировка),
- * сохранение датчика только после успешного подключения, «Забыть датчик»,
- * автостоп скана по таймауту.
+ * Тесты [SensorsViewModel]: список сохранённых датчиков, накопление и
+ * фильтрация результатов скана, добавление через «+», переключение
+ * активного, удаление корзиной, автостоп скана.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class SensorsViewModelTest {
@@ -45,6 +46,9 @@ class SensorsViewModelTest {
     private lateinit var hrmManager: HrmManager
     private lateinit var settingsStorage: SettingsStorage
     private lateinit var viewModel: SensorsViewModel
+
+    private val polar = SavedHrmDevice("AA:BB:CC:DD:EE:FF", "Polar H10")
+    private val magene = SavedHrmDevice("11:22:33:44:55:66", "Magene H64")
 
     @Before
     fun setUp() {
@@ -85,26 +89,61 @@ class SensorsViewModelTest {
     }
 
     @Test
-    fun `клик по устройству - connect, сохранение только после CONNECTED`() = runTest {
-        val device = HrmScanResult("AA:BB", "Polar H10", -50)
-        viewModel.onDeviceClick(device)
+    fun `найденные фильтруются от уже сохранённых`() = runTest {
+        settingsFlow.value = AppSettings(
+            hrmDevices = listOf(polar),
+            hrmActiveAddress = polar.address,
+        )
+        scanResults.tryEmit(HrmScanResult(polar.address, "Polar H10", -50))
+        scanResults.tryEmit(HrmScanResult("CC:DD", "Coospo", -60))
 
-        verify(hrmManager).connect("AA:BB")
-        // До подключения ничего не сохраняем — клик по чужому датчику
-        // не должен затирать рабочий сохранённый
-        verifyBlocking(settingsStorage, never()) { setHrmDevice("AA:BB", "Polar H10") }
-
-        connectionState.value = HrmConnectionState.CONNECTED
-
-        verifyBlocking(settingsStorage) { setHrmDevice("AA:BB", "Polar H10") }
+        val found = viewModel.state.value.foundDevices
+        assertEquals("Сохранённый Polar не должен попадать в найденные", 1, found.size)
+        assertEquals("CC:DD", found.first().address)
     }
 
     @Test
-    fun `забыть датчик - disconnect и очистка настроек`() = runTest {
-        viewModel.onForgetClick()
+    fun `плюс - добавляет в настройки и подключается`() = runTest {
+        val device = HrmScanResult("CC:DD", "Coospo", -60)
+
+        viewModel.onAddDeviceClick(device)
+
+        verifyBlocking(settingsStorage) { addHrmDevice("CC:DD", "Coospo") }
+        verify(hrmManager).connect("CC:DD")
+    }
+
+    @Test
+    fun `тап по сохранённому - переключение активного и подключение`() = runTest {
+        viewModel.onSavedDeviceClick(magene)
+
+        verifyBlocking(settingsStorage) { setActiveHrmDevice(magene.address) }
+        verify(hrmManager).connect(magene.address)
+    }
+
+    @Test
+    fun `корзина на активном - удаление с разрывом соединения`() = runTest {
+        settingsFlow.value = AppSettings(
+            hrmDevices = listOf(polar, magene),
+            hrmActiveAddress = polar.address,
+        )
+
+        viewModel.onRemoveDeviceClick(polar)
 
         verify(hrmManager).disconnect()
-        verifyBlocking(settingsStorage) { setHrmDevice(null, null) }
+        verifyBlocking(settingsStorage) { removeHrmDevice(polar.address) }
+    }
+
+    @Test
+    fun `корзина на неактивном - удаление без разрыва`() = runTest {
+        settingsFlow.value = AppSettings(
+            hrmDevices = listOf(polar, magene),
+            hrmActiveAddress = polar.address,
+        )
+
+        viewModel.onRemoveDeviceClick(magene)
+
+        verify(hrmManager, never()).disconnect()
+        verifyBlocking(settingsStorage) { removeHrmDevice(magene.address) }
     }
 
     @Test
@@ -115,6 +154,30 @@ class SensorsViewModelTest {
         advanceTimeBy(SensorsViewModel.SCAN_TIMEOUT_MS + 1)
 
         verify(hrmManager).stopScan()
+    }
+
+    @Test
+    fun `автопоиск при входе без сохранённых датчиков`() = runTest {
+        // Пустой список (дефолт) + выданы разрешения → скан стартует сам
+        viewModel.onPermissionsGranted()
+
+        verify(hrmManager).startScan()
+
+        // И останавливается по короткому авто-таймауту
+        advanceTimeBy(SensorsViewModel.AUTO_SCAN_TIMEOUT_MS + 1)
+        verify(hrmManager).stopScan()
+    }
+
+    @Test
+    fun `автопоиск НЕ стартует при наличии сохранённых датчиков`() = runTest {
+        settingsFlow.value = AppSettings(
+            hrmDevices = listOf(polar),
+            hrmActiveAddress = polar.address,
+        )
+
+        viewModel.onPermissionsGranted()
+
+        verify(hrmManager, never()).startScan()
     }
 
     @Test
@@ -147,14 +210,14 @@ class SensorsViewModelTest {
     }
 
     @Test
-    fun `state отражает сохранённый датчик из настроек`() = runTest {
+    fun `state отражает список и активный адрес из настроек`() = runTest {
         settingsFlow.value = AppSettings(
-            hrmDeviceAddress = "AA:BB:CC",
-            hrmDeviceName = "Magene H64",
+            hrmDevices = listOf(polar, magene),
+            hrmActiveAddress = magene.address,
         )
 
-        assertEquals("AA:BB:CC", viewModel.state.value.savedDeviceAddress)
-        assertEquals("Magene H64", viewModel.state.value.savedDeviceName)
+        assertEquals(listOf(polar, magene), viewModel.state.value.savedDevices)
+        assertEquals(magene.address, viewModel.state.value.activeAddress)
         assertTrue(viewModel.state.value.scanResults.isEmpty())
     }
 }

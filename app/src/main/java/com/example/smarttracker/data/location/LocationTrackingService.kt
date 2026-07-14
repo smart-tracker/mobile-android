@@ -759,14 +759,15 @@ class LocationTrackingService : Service() {
     }
 
     /**
-     * Автоподключение к сохранённому пульсометру (адрес — в SettingsStorage).
-     * Без сохранённого датчика или без разрешения BLUETOOTH_CONNECT — no-op.
-     * Дальше HrmManager сам удерживает соединение (бесконечный реконнект).
+     * Автоподключение к сохранённому пульсометру (активный из списка
+     * в SettingsStorage; см. AppSettings.autoConnectAddress). Без датчиков
+     * или без разрешения BLUETOOTH_CONNECT — no-op. Дальше HrmManager сам
+     * удерживает соединение (бесконечный реконнект).
      */
     private fun connectHrmIfConfigured() {
         if (!hasBluetoothConnectPermission()) return
         scope.launch {
-            val address = settingsStorage.settings.first().hrmDeviceAddress ?: return@launch
+            val address = settingsStorage.settings.first().autoConnectAddress() ?: return@launch
             hrmManager.connect(address)
         }
     }

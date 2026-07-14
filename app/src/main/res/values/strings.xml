@@ -80,7 +80,7 @@
     <string name="sensors_title">Датчики</string>
     <string name="sensors_section_hrm">Пульсометр</string>
     <string name="sensors_saved_device">Сохранённый датчик</string>
-    <string name="sensors_scan">Поиск датчиков</string>
+    <string name="sensors_scan">Найти</string>
     <string name="sensors_scanning">Поиск…</string>
     <string name="sensors_connect">Подключить</string>
     <string name="sensors_forget">Забыть датчик</string>
@@ -94,6 +94,9 @@
     <string name="sensors_no_saved_device">Датчик не настроен. Запустите поиск и выберите пульсометр из списка.</string>
     <string name="sensors_bpm_format">%1$d уд/мин</string>
     <string name="sensors_unknown_device">Безымянный датчик</string>
+    <string name="sensors_found">Найденные</string>
+    <string name="sensors_add">Добавить датчик</string>
+    <string name="sensors_remove">Удалить датчик</string>
 
     <!-- Пульс на экране тренировки -->
     <string name="workout_heart_rate">Пульс</string>
