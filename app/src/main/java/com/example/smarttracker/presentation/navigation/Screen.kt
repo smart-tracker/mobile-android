@@ -17,4 +17,5 @@ sealed class Screen(val route: String) {
     data object Profile     : Screen("profile")      // Available for all roles
     data object ProfileEdit : Screen("profile_edit") // Available for all roles
     data object Settings    : Screen("settings")     // Available for all roles
+    data object Sensors     : Screen("sensors")      // Настройки → Датчики (BLE-пульсометр)
 }

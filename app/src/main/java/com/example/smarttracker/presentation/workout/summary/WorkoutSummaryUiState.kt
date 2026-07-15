@@ -69,6 +69,10 @@ enum class SummaryOrigin { FINISH, HISTORY }
  * @property pauseGapIndices  индексы первых точек после каждого resume — график
  *                            рвёт линию на этих парах (телепорт, не движение).
  *                            Для истории всегда пуст (сервер пауз не отдаёт).
+ * @property avgHeartRateDisplay средний пульс "148 уд/мин"; null = в точках нет
+ *                            пульса (датчик не подключался; история до BR-16) —
+ *                            строка в панели деталей скрывается
+ * @property maxHeartRateDisplay максимальный пульс "172 уд/мин"; null аналогично
  * @property isLoading        true пока загружаются данные (для будущего экрана истории)
  */
 data class WorkoutSummaryUiState(
@@ -87,5 +91,7 @@ data class WorkoutSummaryUiState(
     val cumulativeData: CumulativeTrackData = CumulativeTrackData(),
     val splits: List<SplitUi> = emptyList(),
     val pauseGapIndices: List<Int> = emptyList(),
+    val avgHeartRateDisplay: String? = null,
+    val maxHeartRateDisplay: String? = null,
     val isLoading: Boolean = false,
 )

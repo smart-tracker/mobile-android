@@ -14,6 +14,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  * **version = 5:** добавлена таблица [PendingFinishEntity] — очередь офлайн-завершений тренировок.
  * **version = 8:** добавлены таблицы [METActivityEntity] и [MetZoneEntity] — кэш MET-коэффициентов
  *   с TTL 24 часа; предзагружаются в фоне при обновлении списка типов активностей.
+ * **version = 9:** добавлено поле [GpsPointEntity.heartRate] (Int?) — пульс с внешнего BLE-датчика.
  * Используется [fallbackToDestructiveMigration] — данные тренировок хранятся только на устройстве,
  * а не являются критичными для пользователя (production-миграция будет добавлена в Этапе 5).
  *
@@ -28,7 +29,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         METActivityEntity::class,
         MetZoneEntity::class,
     ],
-    version = 8,
+    version = 9,
     exportSchema = false
 )
 abstract class SmartTrackerDatabase : RoomDatabase() {
@@ -85,6 +86,16 @@ abstract class SmartTrackerDatabase : RoomDatabase() {
                 db.execSQL(
                     "CREATE INDEX index_met_zones_typeActivId ON met_zones (typeActivId)"
                 )
+            }
+        }
+
+        /**
+         * v8→v9: добавлено поле heartRate (Int?) в gps_points — пульс
+         * с внешнего BLE-пульсометра на момент записи точки.
+         */
+        val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE gps_points ADD COLUMN heartRate INTEGER")
             }
         }
     }

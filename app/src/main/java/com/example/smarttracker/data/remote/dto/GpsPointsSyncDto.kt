@@ -21,6 +21,9 @@ import java.time.format.DateTimeFormatter
  * @param calories расход калорий за интервал до этой точки (ккал), nullable.
  *   Рассчитывается на стороне Android методом MET; null если профиль пользователя
  *   (вес/рост/возраст) ещё не заполнен.
+ * @param heartRate пульс на момент записи точки (уд/мин, BLE-датчик), nullable.
+ *   Gson не сериализует null — точки без пульса уходят без поля, старый контракт
+ *   не меняется. Серверная поддержка — BR-16 (до неё поле игнорируется бэкендом).
  */
 data class GpsPointDto(
     @SerializedName("recorded_at")
@@ -31,6 +34,8 @@ data class GpsPointDto(
     val altitude: Double? = null,
     val speed: Float? = null,
     val calories: Double? = null,
+    @SerializedName("heart_rate")
+    val heartRate: Int? = null,
 )
 
 /**
@@ -76,4 +81,5 @@ fun LocationPoint.toGpsPointDto(): GpsPointDto = GpsPointDto(
     altitude   = altitude,
     speed      = speed,
     calories   = calories,
+    heartRate  = heartRate,
 )

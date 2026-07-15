@@ -1,10 +1,16 @@
 package com.example.smarttracker.presentation.workout.start
 
+import android.Manifest
 import android.util.Log
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.smarttracker.data.hrm.HrmManager
+import com.example.smarttracker.data.hrm.model.HrmConnectionState
 import com.example.smarttracker.data.local.SettingsStorage
 import com.example.smarttracker.data.location.LocationConfig
 import com.example.smarttracker.data.location.LocationTrackingService
@@ -35,6 +41,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
@@ -54,6 +61,7 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 import java.util.UUID
 import javax.inject.Inject
+import kotlin.math.roundToInt
 import androidx.core.content.edit
 
 /**
@@ -75,6 +83,7 @@ class WorkoutStartViewModel @Inject constructor(
     private val authRepository: AuthRepository,
     private val offlineFinishScheduler: OfflineFinishScheduler,
     private val settingsStorage: SettingsStorage,
+    private val hrmManager: HrmManager,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
 
@@ -154,6 +163,15 @@ class WorkoutStartViewModel @Inject constructor(
          * Флаг окна ставит WorkoutStartScreen только при активной записи.
          */
         val keepScreenOn: Boolean = false,
+        /**
+         * Пульсометр настроен (адрес сохранён в настройках). Гейт HR-бейджа
+         * и StatItem «Пульс»: без датчика ряд статов остаётся из трёх элементов.
+         */
+        val hrmConfigured: Boolean = false,
+        /** Соединение с пульсометром активно (для цвета бейджа). */
+        val hrmConnected: Boolean = false,
+        /** Живой пульс для StatItem: "148" или "--" когда данных нет. */
+        val heartRateDisplay: String = "--",
         /** Множество iconKey избранных типов активностей, хранится в SharedPreferences */
         val favoriteIds: Set<String> = emptySet(),
         /** Поисковый запрос в шторке выбора активности */
@@ -245,9 +263,38 @@ class WorkoutStartViewModel @Inject constructor(
         observeServiceRecordingState()
         // Настройка «не гасить экран»: пробрасывается в UiState, сам флаг окна
         // ставит WorkoutStartScreen (view.keepScreenOn) только при isTracking.
+        // Здесь же — наличие настроенного пульсометра (гейт HR-элементов UI)
+        // и его автоподключение: сохранённый датчик подключается сразу при
+        // входе на экран, не дожидаясь старта тренировки. connect идемпотентен
+        // (тот же адрес + CONNECTED = no-op) — повторные эмиссии настроек
+        // безопасны, а смена датчика в Настройках даёт реконнект на новый
+        // адрес. Без разрешения BLUETOOTH_CONNECT — молча скип (запрос
+        // разрешения живёт на экране «Датчики»).
         viewModelScope.launch {
             settingsStorage.settings.collect { s ->
-                _state.update { it.copy(keepScreenOn = s.keepScreenOn) }
+                _state.update {
+                    it.copy(
+                        keepScreenOn = s.keepScreenOn,
+                        hrmConfigured = s.hrmDevices.isNotEmpty(),
+                    )
+                }
+                val address = s.autoConnectAddress()
+                if (address != null && hasBluetoothConnectPermission()) {
+                    hrmManager.connect(address)
+                }
+            }
+        }
+        // Живой пульс — напрямую из HrmManager (StateFlow, ~1 сэмпл/с), не через
+        // Room: GPS-точки редкие и на паузе не пишутся, а пульс должен тикать.
+        viewModelScope.launch {
+            combine(
+                hrmManager.connectionState,
+                hrmManager.currentSample,
+            ) { connection, sample ->
+                val connected = connection == HrmConnectionState.CONNECTED
+                connected to (if (connected && sample != null) "${sample.bpm}" else "--")
+            }.collect { (connected, display) ->
+                _state.update { it.copy(hrmConnected = connected, heartRateDisplay = display) }
             }
         }
         val favIds = loadFavoriteIds()
@@ -744,6 +791,9 @@ class WorkoutStartViewModel @Inject constructor(
                                     System.currentTimeMillis()
         val type = state.selectedType
         val summaryCumData = buildCumulativeData(state.trackPoints, state.pauseGapIndices)
+        // Пульс с BLE-датчика: null-точки (датчик не подключён/обрыв) не участвуют;
+        // ни одной точки с пульсом → поля null → секция в панели деталей скрыта.
+        val heartRates = state.trackPoints.mapNotNull { it.heartRate }
         val snapshot = WorkoutSummaryUiState(
             origin           = SummaryOrigin.FINISH,
             dateDisplay      = WorkoutSummaryFormatters.formatDate(summaryStartTs),
@@ -759,6 +809,10 @@ class WorkoutStartViewModel @Inject constructor(
             cumulativeData   = summaryCumData,
             splits           = SplitsBuilder.buildSplits(summaryCumData),
             pauseGapIndices  = state.pauseGapIndices,
+            avgHeartRateDisplay = heartRates.takeIf { it.isNotEmpty() }
+                ?.let { WorkoutSummaryFormatters.formatHeartRate(it.average().roundToInt()) },
+            maxHeartRateDisplay = heartRates.maxOrNull()
+                ?.let { WorkoutSummaryFormatters.formatHeartRate(it) },
             isLoading        = false,
         )
 
@@ -1005,6 +1059,9 @@ class WorkoutStartViewModel @Inject constructor(
             // или null от сервера.
             val elevationM = (item.elevationGain ?: calculateElevationGain(points)).toFloat()
             val cumData    = buildCumulativeData(points, emptyList())
+            // Пульс: сервер начнёт отдавать heart_rate в треке после BR-16 —
+            // до этого список пуст и поля остаются null (секция скрыта).
+            val heartRates = points.mapNotNull { it.heartRate }
             val snapshot = WorkoutSummaryUiState(
                 origin           = SummaryOrigin.HISTORY,
                 trainingId       = item.trainingId,
@@ -1023,6 +1080,10 @@ class WorkoutStartViewModel @Inject constructor(
                 // метки трека (BR-5) — buildSplits сам гейтит по правдоподобию
                 // elapsed (синтетические timestampUtc = index дают elapsed в мс).
                 splits           = SplitsBuilder.buildSplits(cumData),
+                avgHeartRateDisplay = heartRates.takeIf { it.isNotEmpty() }
+                    ?.let { WorkoutSummaryFormatters.formatHeartRate(it.average().roundToInt()) },
+                maxHeartRateDisplay = heartRates.maxOrNull()
+                    ?.let { WorkoutSummaryFormatters.formatHeartRate(it) },
             )
             // Защита от гонки: если оверлей закрыли или уже переключили на другую
             // тренировку, пока шла загрузка, не перетираем актуальный snapshot.
@@ -1460,6 +1521,20 @@ class WorkoutStartViewModel @Inject constructor(
         val intent = Intent(context, LocationTrackingService::class.java)
         context.stopService(intent)
     }
+
+    /**
+     * API 31+: runtime BLUETOOTH_CONNECT; ниже — legacy BLUETOOTH выдан при
+     * установке. Дублирует хелпер LocationTrackingService — оба потребителя
+     * автоподключения проверяют разрешение сами.
+     */
+    private fun hasBluetoothConnectPermission(): Boolean =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            ContextCompat.checkSelfPermission(
+                context, Manifest.permission.BLUETOOTH_CONNECT
+            ) == PackageManager.PERMISSION_GRANTED
+        } else {
+            true
+        }
 
     companion object {
         private const val TAG = "WorkoutStartViewModel"

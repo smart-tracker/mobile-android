@@ -71,6 +71,7 @@ fun SettingsScreen(
     onVoiceCuesChanged: (Boolean) -> Unit,
     onVoiceCueIntervalChanged: (Int) -> Unit,
     onKeepScreenOnChanged: (Boolean) -> Unit,
+    onOpenSensors: () -> Unit,
 ) {
     // Пробный отыгрыш фразы при выборе громкости. Живёт в composition:
     // TTS-движок освобождается при уходе с экрана.
@@ -185,6 +186,22 @@ fun SettingsScreen(
                 checked = settings.keepScreenOn,
                 onCheckedChange = onKeepScreenOnChanged,
             )
+
+            SectionTitle("Датчики")
+            NavigationRow(
+                title = "Пульсометр",
+                subtitle = run {
+                    val active = settings.hrmDevices
+                        .find { it.address == settings.hrmActiveAddress }
+                    when {
+                        active != null -> active.name ?: active.address
+                        settings.hrmDevices.isNotEmpty() ->
+                            "Датчиков: ${settings.hrmDevices.size}"
+                        else -> "Не настроен"
+                    }
+                },
+                onClick = onOpenSensors,
+            )
             Spacer(modifier = Modifier.height(24.dp))
         }
     }
@@ -200,6 +217,49 @@ private fun SectionTitle(text: String) {
         color = ColorPrimary,
         modifier = Modifier.padding(vertical = 8.dp),
     )
+}
+
+/**
+ * Навигационный ряд (переход на вложенный экран): заголовок + текущее
+ * значение подзаголовком, стрелка «→» справа. Стиль — как [SwitchRow].
+ */
+@Composable
+private fun NavigationRow(
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                fontFamily = geologicaFontFamily,
+                fontWeight = FontWeight.Normal,
+                fontSize = 16.sp,
+                color = ColorPrimary,
+            )
+            Text(
+                text = subtitle,
+                fontFamily = geologicaFontFamily,
+                fontWeight = FontWeight.Light,
+                fontSize = 12.sp,
+                color = ColorPrimary.copy(alpha = 0.65f),
+            )
+        }
+        Text(
+            text = "→",
+            fontFamily = geologicaFontFamily,
+            fontWeight = FontWeight.Normal,
+            fontSize = 18.sp,
+            color = ColorPrimary,
+        )
+    }
 }
 
 @Composable

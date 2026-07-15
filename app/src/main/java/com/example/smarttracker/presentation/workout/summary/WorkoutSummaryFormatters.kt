@@ -72,4 +72,7 @@ object WorkoutSummaryFormatters {
         val paceMsPerKm = (1_000_000f / speedMs).toLong()
         return formatPace(1f, paceMsPerKm)
     }
+
+    /** Пульс "148 уд/мин" (BLE-пульсометр, avg/max в панели деталей итогов). */
+    fun formatHeartRate(bpm: Int): String = "$bpm уд/мин"
 }

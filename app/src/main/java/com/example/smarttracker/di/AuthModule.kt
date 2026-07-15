@@ -3,6 +3,8 @@ package com.example.smarttracker.di
 import android.content.Context
 import androidx.room.Room
 import com.example.smarttracker.BuildConfig
+import com.example.smarttracker.data.hrm.HrmManager
+import com.example.smarttracker.data.hrm.HrmManagerImpl
 import com.example.smarttracker.data.local.RoleConfigStorage
 import com.example.smarttracker.data.local.RoleConfigStorageImpl
 import com.example.smarttracker.data.local.SettingsStorage
@@ -103,6 +105,12 @@ abstract class AuthModule {
         impl: AllowedEmailDomainsRepositoryImpl
     ): AllowedEmailDomainsRepository
 
+    @Binds
+    @Singleton
+    // Внешний BLE-пульсометр: singleton владеет GATT-соединением,
+    // его делят экран «Датчики» и LocationTrackingService.
+    abstract fun bindHrmManager(impl: HrmManagerImpl): HrmManager
+
     companion object {
 
         /**
@@ -178,6 +186,7 @@ abstract class AuthModule {
                 SmartTrackerDatabase.MIGRATION_5_6,
                 SmartTrackerDatabase.MIGRATION_6_7,
                 SmartTrackerDatabase.MIGRATION_7_8,
+                SmartTrackerDatabase.MIGRATION_8_9,
             )
             // Деструктивная миграция допустима пока данные тренировок не критичны
             // (production-миграция — в Этапе 5).

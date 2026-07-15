@@ -23,12 +23,42 @@ data class AppSettings(
     val voiceCuesEnabled: Boolean = true,
     val voiceCueIntervalKm: Int = 1,
     val keepScreenOn: Boolean = false,
+    /**
+     * Сохранённые BLE-пульсометры. Пустой список = датчики не настроены
+     * (гейт HR-бейджа и StatItem «Пульс»). Отдельного toggle нет:
+     * список непуст = включено.
+     */
+    val hrmDevices: List<SavedHrmDevice> = emptyList(),
+    /**
+     * Адрес активного датчика — последний выбранный пользователем
+     * (тап по строке списка / добавление через «+»). К нему идёт
+     * автоподключение. null при пустом списке или после удаления активного.
+     */
+    val hrmActiveAddress: String? = null,
 ) {
+    /**
+     * Адрес для автоподключения: активный, а если он не выставлен
+     * (например, активный удалили) — первый из сохранённых.
+     */
+    fun autoConnectAddress(): String? =
+        hrmActiveAddress ?: hrmDevices.firstOrNull()?.address
+
     companion object {
         /** Допустимые интервалы голосовых подсказок, км. */
         val ALLOWED_VOICE_INTERVALS = listOf(1, 2, 5)
     }
 }
+
+/**
+ * Сохранённый BLE-пульсометр.
+ *
+ * @param address MAC-адрес (ключ уникальности в списке и цель подключения)
+ * @param name    имя устройства для отображения; null если датчик его не вещал
+ */
+data class SavedHrmDevice(
+    val address: String,
+    val name: String?,
+)
 
 /**
  * Контракт хранилища настроек. Реализация — [SettingsStorageImpl] на
@@ -37,8 +67,10 @@ data class AppSettings(
  *
  * Потребители:
  *  - SettingsViewModel (экран настроек) — чтение + запись;
- *  - LocationTrackingService — чтение (автопауза, голосовые подсказки);
- *  - WorkoutStartViewModel — чтение (keepScreenOn).
+ *  - LocationTrackingService — чтение (автопауза, голосовые подсказки,
+ *    адрес пульсометра для автоподключения);
+ *  - WorkoutStartViewModel — чтение (keepScreenOn, наличие пульсометра);
+ *  - SensorsViewModel (экран «Датчики») — чтение + запись пульсометра.
  */
 interface SettingsStorage {
 
@@ -57,4 +89,21 @@ interface SettingsStorage {
     suspend fun setVoiceCueIntervalKm(intervalKm: Int)
 
     suspend fun setKeepScreenOn(enabled: Boolean)
+
+    /**
+     * Добавить пульсометр в список (или обновить имя существующего)
+     * и сделать его активным — добавление всегда означает «пользователь
+     * выбрал этот датчик».
+     */
+    suspend fun addHrmDevice(address: String, name: String?)
+
+    /**
+     * Удалить пульсометр из списка. Если удаляемый был активным —
+     * активный сбрасывается (автоконнект уйдёт на первый оставшийся,
+     * см. [AppSettings.autoConnectAddress]).
+     */
+    suspend fun removeHrmDevice(address: String)
+
+    /** Переключить активный датчик (тап по строке списка). */
+    suspend fun setActiveHrmDevice(address: String)
 }

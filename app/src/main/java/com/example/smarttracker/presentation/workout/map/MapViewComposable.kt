@@ -120,6 +120,13 @@ fun MapViewComposable(
     onMapTilesFailed: () -> Unit,
     enableLocationDot: Boolean = true,
     locationPermissionGranted: Boolean = true,
+    // true → немедленно погасить LocationComponent (камера NONE + disable +
+    // cancelTransitions). Используется перед НАВИГАЦИЕЙ с живой карты:
+    // teardown MapView при уходе с экрана гонится с аниматорами локации
+    // (accuracy radius/bearing) — тик после инвалидации Style роняет процесс
+    // IllegalStateException("Calling getSourceAs when a newer style is loading").
+    // Экран сначала выставляет флаг, ждёт пару кадров, потом навигирует.
+    suppressLocationDot: Boolean = false,
     fitToTrackBoundsKey: Any? = null,
     scrubPoint: com.example.smarttracker.domain.model.LocationPoint? = null,
     // Drawable-ресурс иконки активности для маркера старта; null — маркер не показывается.
@@ -191,6 +198,9 @@ fun MapViewComposable(
     // диалог разрешения и загрузка карты идут параллельно) — замыкания должны
     // видеть актуальное значение.
     val latestLocationPermission   = rememberUpdatedState(locationPermissionGranted)
+    // Гашение перед навигацией должно быть видно и в ON_START-замыкании —
+    // иначе рестарт lifecycle мид-навигации перевключит компонент.
+    val latestSuppressLocationDot  = rememberUpdatedState(suppressLocationDot)
 
     val lifecycleOwner = LocalLifecycleOwner.current
 
@@ -221,7 +231,8 @@ fun MapViewComposable(
                     if (enableLocationDot && latestLocationPermission.value) {
                         runCatching {
                             state.mapLibreMap?.locationComponent?.isLocationComponentEnabled =
-                                (latestFitToTrackBoundsKey.value == null)
+                                (latestFitToTrackBoundsKey.value == null &&
+                                    !latestSuppressLocationDot.value)
                         }
                     }
                 }
@@ -276,6 +287,20 @@ fun MapViewComposable(
             }
             state.mapLibreMap = null
             state.mapView = null
+        }
+    }
+
+    // ── Гашение LocationComponent перед навигацией с живой карты ────────────
+    // Порядок и семантика — как в ON_STOP выше: NONE → disable → cancelTransitions.
+    // Отдельные runCatching на каждый шаг: сбой одного не пропускает остальные
+    // (в ON_STOP оба вызова под одним runCatching — там компонент гарантированно
+    // активирован; здесь флаг может прийти до setStyle).
+    LaunchedEffect(suppressLocationDot) {
+        if (!suppressLocationDot) return@LaunchedEffect
+        state.mapLibreMap?.let { map ->
+            runCatching { map.locationComponent.cameraMode = CameraMode.NONE }
+            runCatching { map.locationComponent.isLocationComponentEnabled = false }
+            runCatching { map.cancelTransitions() }
         }
     }
 
@@ -633,9 +658,14 @@ fun MapViewComposable(
                 // уже активирован (запускается один раз в setStyle), но отображение
                 // точки излишне — пользователь смотрит завершённый трек, а не
                 // текущую позицию.
+                // !suppressLocationDot ОБЯЗАТЕЛЕН: update-блок выполняется на каждой
+                // рекомпозиции — без учёта флага он перевключал бы компонент сразу
+                // после гашения перед навигацией, и аниматоры доживали до разрушения
+                // карты (краш из нюанса 36).
                 if (enableLocationDot && locationPermissionGranted) {
                     runCatching {
-                        map.locationComponent.isLocationComponentEnabled = (fitToTrackBoundsKey == null)
+                        map.locationComponent.isLocationComponentEnabled =
+                            (fitToTrackBoundsKey == null && !suppressLocationDot)
                     }
                 }
 

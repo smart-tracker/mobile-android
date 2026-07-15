@@ -28,6 +28,8 @@ import com.example.smarttracker.presentation.menu.profile.ProfileEditScreen
 import com.example.smarttracker.presentation.menu.profile.ProfileEditViewModel
 import com.example.smarttracker.presentation.menu.profile.ProfileScreen
 import com.example.smarttracker.presentation.menu.profile.ProfileViewModel
+import com.example.smarttracker.presentation.menu.sensors.SensorsScreen
+import com.example.smarttracker.presentation.menu.sensors.SensorsViewModel
 import com.example.smarttracker.presentation.menu.settings.SettingsScreen
 import com.example.smarttracker.presentation.menu.settings.SettingsViewModel
 import com.example.smarttracker.presentation.workout.WorkoutHomeScreen
@@ -238,6 +240,25 @@ fun AppNavGraph(
                 onVoiceCuesChanged = viewModel::onVoiceCuesChanged,
                 onVoiceCueIntervalChanged = viewModel::onVoiceCueIntervalChanged,
                 onKeepScreenOnChanged = viewModel::onKeepScreenOnChanged,
+                onOpenSensors = { navController.navigate(Screen.Sensors.route) },
+            )
+        }
+
+        composable(Screen.Sensors.route) {
+            val viewModel: SensorsViewModel = hiltViewModel()
+            val state by viewModel.state.collectAsStateWithLifecycle()
+
+            SensorsScreen(
+                state = state,
+                onBack = { navController.popBackStack() },
+                onPermissionsGranted = viewModel::onPermissionsGranted,
+                onPermissionsDenied = viewModel::onPermissionsDenied,
+                onScanClick = viewModel::onScanClick,
+                onSavedDeviceClick = viewModel::onSavedDeviceClick,
+                onRemoveDeviceClick = viewModel::onRemoveDeviceClick,
+                onAddDeviceClick = viewModel::onAddDeviceClick,
+                onDismissBluetoothPrompt = viewModel::onDismissBluetoothPrompt,
+                onBluetoothEnabled = viewModel::onBluetoothEnabled,
             )
         }
 

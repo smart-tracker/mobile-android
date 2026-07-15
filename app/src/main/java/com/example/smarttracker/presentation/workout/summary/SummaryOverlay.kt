@@ -24,8 +24,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -60,8 +63,9 @@ import com.example.smarttracker.presentation.workout.activityIconRes
  * Публичные точки входа:
  *  - [SummaryHeader]   — шапка со статической датой по центру (без кнопки «назад»);
  *  - [SummaryBody]     — иконка активности + название + темп + три карточки статистики;
- *  - [StatsOverlayCard] — компактная карточка из 4 строк статистики поверх карты в
- *    полноэкранном режиме (Figma 723:460).
+ *  - [StatsOverlayCard] — компактная карточка статистики (4 строки; 5-я — пульс,
+ *    когда у тренировки есть данные пульса) поверх карты в полноэкранном
+ *    режиме (Figma 723:460).
  */
 
 // ── Шапка ─────────────────────────────────────────────────────────────────────
@@ -269,7 +273,7 @@ private fun StatsRow(
             StatCard(
                 iconRes = R.drawable.ic_time,
                 value = state.durationDisplay,
-                label = "Продолжительность",
+                label = "Время",
                 modifier = Modifier.weight(1f),
             )
             StatCard(
@@ -361,12 +365,16 @@ private fun StatCard(
  * @property elapsedDisplay  прошедшее время "HH:MM:SS" с начала тренировки до scrub
  * @property distanceDisplay дистанция "1.23 км" от старта до scrub
  * @property elevationDisplay набор высоты "12.3 м" от старта до scrub
+ * @property heartRateDisplay пульс "148 уд/мин" в точке scrub; "—" если в этой
+ *   точке сэмпла нет (обрыв датчика); null = у тренировки пульса нет вовсе
+ *   (датчик не подключался, история до BR-16) — строка в карточке скрыта
  */
 data class ScrubDisplayStats(
     val speedDisplay:     String,
     val elapsedDisplay:   String,
     val distanceDisplay:  String,
     val elevationDisplay: String,
+    val heartRateDisplay: String? = null,
 )
 
 @Composable
@@ -379,10 +387,14 @@ fun StatsOverlayCard(
     val spd  = scrubStats?.speedDisplay     ?: state.paceDisplay
     val dist = scrubStats?.distanceDisplay  ?: state.distanceDisplay
     val elev = scrubStats?.elevationDisplay ?: state.elevationDisplay
+    // Пульс: при scrubbing — значение в точке трека, без скраба — средний
+    // за тренировку. null (у тренировки нет данных пульса) → строка не
+    // рисуется, карточка остаётся четырёхстрочной.
+    val hr   = if (scrubStats != null) scrubStats.heartRateDisplay else state.avgHeartRateDisplay
     Column(
         modifier = modifier
             .width(133.dp)
-            .height(100.dp)
+            .height(if (hr != null) 122.dp else 100.dp)
             .background(Color.White, shape = RoundedCornerShape(10.dp))
             .border(width = 1.dp, color = ColorPrimary, shape = RoundedCornerShape(10.dp))
             .padding(horizontal = 8.dp, vertical = 6.dp),
@@ -392,6 +404,28 @@ fun StatsOverlayCard(
         StatsOverlayRow(iconRes = R.drawable.ic_speed,           value = spd)
         StatsOverlayRow(iconRes = R.drawable.ic_passed_distance, value = dist)
         StatsOverlayRow(iconRes = R.drawable.ic_elevation,       value = elev)
+        if (hr != null) StatsOverlayHeartRow(value = hr)
+    }
+}
+
+/**
+ * Строка пульса в [StatsOverlayCard]: у проекта нет drawable-иконки сердца,
+ * используется векторная Icons.Filled.Favorite (как в HR-бейдже экрана тренировки).
+ */
+@Composable
+private fun StatsOverlayHeartRow(value: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(
+            imageVector = Icons.Filled.Favorite,
+            contentDescription = null,
+            tint = ColorPrimary,
+            modifier = Modifier.size(20.dp),
+        )
+        Spacer(modifier = Modifier.width(4.dp))
+        Text(
+            text = value,
+            style = WorkoutTextStyles.statsOverlayValue,
+        )
     }
 }
 

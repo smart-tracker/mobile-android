@@ -23,6 +23,7 @@ import com.example.smarttracker.R
 import com.example.smarttracker.presentation.common.AppTab
 import com.example.smarttracker.presentation.common.SmartTrackerBottomBar
 import com.example.smarttracker.presentation.menu.MenuScreen
+import com.example.smarttracker.presentation.menu.sensors.SensorsDialog
 import com.example.smarttracker.presentation.theme.ColorPrimary
 import com.example.smarttracker.presentation.theme.geologicaFontFamily
 import com.example.smarttracker.presentation.calendar.TrainingHistoryScreen
@@ -45,6 +46,12 @@ fun WorkoutHomeScreen(
 ) {
     var currentTab by remember { mutableStateOf(WorkoutTab.START) }
 
+    // Оверлей «Датчики» поверх экрана тренировки (тап по HR-бейджу).
+    // НЕ навигация: navigate() с живой карты разрушает MapView и роняет
+    // процесс гонкой аниматоров MapLibre (нюанс 36). Карта остаётся
+    // в композиции ПОД оверлеем.
+    var showSensorsOverlay by remember { mutableStateOf(false) }
+
     // ViewModel живёт на всём времени Home — оверлей итогов переживает переключения
     // вкладок, а закрытие оверлея при смене вкладки делается ниже через side-effect.
     val viewModel: WorkoutStartViewModel = hiltViewModel()
@@ -54,10 +61,13 @@ fun WorkoutHomeScreen(
     // в AppNavGraph (подписка на AppViewModel.sessionExpired) — работает
     // с любого экрана, а не только с Home. Локальной подписки больше нет.
 
-    // Закрываем оверлей при переходе с вкладки «Старт» на любую другую —
-    // пользователь явно ушёл с экрана итогов, состояние сбрасывается на «можно начать».
+    // Закрываем оверлеи при переходе с вкладки «Старт» на любую другую —
+    // пользователь явно ушёл с экрана итогов/датчиков.
     LaunchedEffect(currentTab) {
-        if (currentTab != WorkoutTab.START) viewModel.onCloseSummaryOverlay()
+        if (currentTab != WorkoutTab.START) {
+            viewModel.onCloseSummaryOverlay()
+            showSensorsOverlay = false
+        }
     }
 
     Scaffold(
@@ -71,21 +81,29 @@ fun WorkoutHomeScreen(
     ) { padding ->
         when (currentTab) {
             WorkoutTab.START -> {
-                WorkoutStartScreen(
-                    state = state,
-                    padding = padding,
-                    onStartClick = viewModel::onStartWorkoutClick,
-                    onTypeSelected = viewModel::onQuickTypeSelected,
-                    onSheetTypeSelected = viewModel::onSheetTypeSelected,
-                    onPauseClick = viewModel::onPauseClick,
-                    onFinishClick = viewModel::onFinishClick,
-                    onMapTilesFailed = viewModel::onMapTilesFailed,
-                    onToggleFavorite = viewModel::onToggleFavorite,
-                    onSearchQueryChange = viewModel::onSearchQueryChange,
-                    onCloseSummary = viewModel::onCloseSummaryOverlay,
-                    onToggleFullscreenMap = viewModel::onToggleFullscreenMap,
-                    onDeleteHistoryTraining = viewModel::onDeleteHistoryTraining,
-                )
+                // Box: оверлей «Датчики» рисуется ПОВЕРХ экрана тренировки,
+                // WorkoutStartScreen (и его MapView) остаётся в композиции.
+                Box {
+                    WorkoutStartScreen(
+                        state = state,
+                        padding = padding,
+                        onStartClick = viewModel::onStartWorkoutClick,
+                        onTypeSelected = viewModel::onQuickTypeSelected,
+                        onSheetTypeSelected = viewModel::onSheetTypeSelected,
+                        onPauseClick = viewModel::onPauseClick,
+                        onFinishClick = viewModel::onFinishClick,
+                        onMapTilesFailed = viewModel::onMapTilesFailed,
+                        onToggleFavorite = viewModel::onToggleFavorite,
+                        onSearchQueryChange = viewModel::onSearchQueryChange,
+                        onCloseSummary = viewModel::onCloseSummaryOverlay,
+                        onToggleFullscreenMap = viewModel::onToggleFullscreenMap,
+                        onDeleteHistoryTraining = viewModel::onDeleteHistoryTraining,
+                        onOpenSensors = { showSensorsOverlay = true },
+                    )
+                    if (showSensorsOverlay) {
+                        SensorsDialog(onClose = { showSensorsOverlay = false })
+                    }
+                }
             }
             WorkoutTab.WORKOUTS -> TrainingHistoryScreen(
                     padding = padding,

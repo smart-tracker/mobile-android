@@ -36,9 +36,12 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
@@ -50,6 +53,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -139,6 +143,7 @@ fun WorkoutStartScreen(
     onCloseSummary: () -> Unit,
     onToggleFullscreenMap: () -> Unit,
     onDeleteHistoryTraining: () -> Unit,
+    onOpenSensors: () -> Unit = {},
 ) {
     // ── Статус Doze whitelist (для баннера) ──────────────────────────────────────
     // batteryOptimized = true → приложение в whitelist → баннер скрыт.
@@ -244,6 +249,14 @@ fun WorkoutStartScreen(
                                    cd.distancesKm.getOrElse(scrubIndex) { 0f }),
             elevationDisplay = WorkoutSummaryFormatters.formatElevation(
                                    cd.elevationsM.getOrElse(scrubIndex) { 0f }),
+            // Пульс в точке scrub — из trackPoints напрямую (в cumulativeData
+            // серии пульса нет). Гейт по avgHeartRateDisplay: у тренировки без
+            // датчика строка пульса в карточке не показывается вовсе; при
+            // локальном пропуске сэмпла (обрыв) — "—".
+            heartRateDisplay = if (summary.avgHeartRateDisplay != null) {
+                summary.trackPoints.getOrNull(scrubIndex)?.heartRate
+                    ?.let { WorkoutSummaryFormatters.formatHeartRate(it) } ?: "—"
+            } else null,
         )
     } else null
 
@@ -532,6 +545,46 @@ fun WorkoutStartScreen(
                 }
             }
 
+            // ── HR-бейдж — под GPS-бейджем, только если пульсометр настроен ────
+            // Статусный: зелёный = датчик подключён, красный = нет. Значение
+            // пульса здесь НЕ показывается — оно уже есть в ряду статистики
+            // (StatItem «Пульс»). Тап открывает ОВЕРЛЕЙ «Датчики» поверх экрана
+            // (SensorsOverlay в WorkoutHomeScreen) — быстрый путь к
+            // переподключению; навигация с живой карты запрещена (нюанс 36).
+            if (!overlayVisible && state.hrmConfigured) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(top = 48.dp, end = 8.dp)
+                        // clip ПЕРЕД clickable — иначе ripple рисуется на прямоугольнике
+                        .clip(RoundedCornerShape(size = 32.dp))
+                        .clickable { onOpenSensors() }
+                        .border(
+                            width = 1.dp,
+                            color = ColorPrimary,
+                            shape = RoundedCornerShape(size = 32.dp),
+                        )
+                        .width(32.dp)
+                        .height(32.dp)
+                        .background(
+                            color = if (state.hrmConnected) ColorGpsActive else ColorGpsInactive,
+                            shape = RoundedCornerShape(size = 32.dp),
+                        ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Favorite,
+                        contentDescription = if (state.hrmConnected) {
+                            stringResource(R.string.hrm_badge_connected)
+                        } else {
+                            stringResource(R.string.hrm_badge_disconnected)
+                        },
+                        tint = Color.White,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+            }
+
             // ── Карточка мини-статистики поверх карты в полноэкранном режиме оверлея
             // Соответствует Figma 723:460 (FullScreenMap).
             if (overlayVisible && isFullscreen && summary != null) {
@@ -808,9 +861,18 @@ private fun ActiveBody(
             // valueMinWidth фиксирует ширину блока по самому длинному ожидаемому значению,
             // чтобы SpaceEvenly не прыгал при смене "0.99" → "1.00", "9" → "10" и т.д.
             // Набор высоты не показываем — отображается только на экране итогов.
-            StatItem(value = state.distanceDisplay, label = stringResource(R.string.workout_distance), valueMinWidth = 100.dp)
-            StatItem(value = state.avgSpeedDisplay, label = stringResource(R.string.workout_avg_speed), valueMinWidth = 140.dp)
-            StatItem(value = state.caloriesDisplay, label = stringResource(R.string.workout_calories), valueMinWidth = 110.dp)
+            // С настроенным пульсометром элементов четыре — ширины ужаты,
+            // чтобы ряд помещался на экранах 360dp.
+            if (state.hrmConfigured) {
+                StatItem(value = state.distanceDisplay, label = stringResource(R.string.workout_distance), valueMinWidth = 75.dp)
+                StatItem(value = state.avgSpeedDisplay, label = stringResource(R.string.workout_avg_speed), valueMinWidth = 115.dp)
+                StatItem(value = state.caloriesDisplay, label = stringResource(R.string.workout_calories), valueMinWidth = 80.dp)
+                StatItem(value = state.heartRateDisplay, label = stringResource(R.string.workout_heart_rate), valueMinWidth = 45.dp)
+            } else {
+                StatItem(value = state.distanceDisplay, label = stringResource(R.string.workout_distance), valueMinWidth = 100.dp)
+                StatItem(value = state.avgSpeedDisplay, label = stringResource(R.string.workout_avg_speed), valueMinWidth = 140.dp)
+                StatItem(value = state.caloriesDisplay, label = stringResource(R.string.workout_calories), valueMinWidth = 110.dp)
+            }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
