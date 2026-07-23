@@ -2,14 +2,20 @@ package com.example.smarttracker.presentation.calendar
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.tooling.preview.Preview
 import com.example.smarttracker.presentation.theme.SmartTrackerTheme
 import androidx.compose.ui.Alignment
@@ -23,34 +29,63 @@ import java.time.DayOfWeek
 import java.time.LocalDate
 
 /**
- * Недельный вид истории тренировок.
- * Один нод = один день недели (7 нодов, Пн–Вс).
- * Дни без тренировок: только нод и метка даты (без карточки).
- * Тап по карточке → [onDaySelected] (переход в Day view).
+ * Недельный вид истории — бесконечный скролл по неделям (сверху текущая, вниз до
+ * первой тренировки). Каждая неделя: [PeriodHeader] (диапазон дат) + 7 строк-дней
+ * (Пн–Вс; день без тренировок — только нод и метка даты).
+ * Тап по карточке дня → [onDaySelected] (переход в Day view).
  */
 @Composable
 internal fun WeekTimelineView(
     state: TrainingHistoryUiState,
     onDaySelected: (LocalDate) -> Unit,
+    onVisiblePeriodChanged: (LocalDate) -> Unit = {},
 ) {
-    val weekStart = state.selectedDate.with(DayOfWeek.MONDAY)
-    val weekDays = (0..6).map { weekStart.plusDays(it.toLong()) }
     val today = LocalDate.now()
+    val currentWeekStart = today.with(DayOfWeek.MONDAY)
+    val firstDate = state.items.minOfOrNull { it.date } ?: today
+    val count = periodCount(HistoryViewMode.WEEK, firstDate, today)
+    val itemsByDate = remember(state.items) { state.items.groupBy { it.date } }
+    val listState = rememberLazyListState()
 
-    // SpaceEvenly: 7 строк равномерно на всю доступную высоту.
-    // Если на маленьком экране строки не влезают — LazyColumn скроллится.
+    LaunchedEffect(state.selectedDate) {
+        val idx = periodIndexOf(HistoryViewMode.WEEK, state.selectedDate, today)
+            .coerceIn(0, count - 1)
+        listState.scrollToItem(idx)
+    }
+
+    // Верхняя видимая неделя → дата в шапке экрана (обычный порядок: firstVisible = верх).
+    val topWeek by remember(count) {
+        derivedStateOf {
+            periodStartAt(HistoryViewMode.WEEK, today, listState.firstVisibleItemIndex.coerceIn(0, count - 1))
+        }
+    }
+    LaunchedEffect(topWeek) { onVisiblePeriodChanged(topWeek) }
+
     LazyColumn(
+        state = listState,
         modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.SpaceEvenly,
+        contentPadding = PaddingValues(vertical = 8.dp),
+        flingBehavior = rememberDampedFling(),
     ) {
-        itemsIndexed(weekDays) { _, day ->
-            WeekDayRow(
-                day = day,
-                dayItems = state.items.filter { it.date == day },
-                isCardRight = day.dayOfWeek.value % 2 == 0,
-                isCurrent = day == today,
-                onDaySelected = onDaySelected,
-            )
+        items(count = count) { i ->
+            val weekStart = periodStartAt(HistoryViewMode.WEEK, today, i)
+            Column {
+                PeriodHeader(
+                    label = weekHeaderLabel(weekStart),
+                    isCurrent = weekStart == currentWeekStart,
+                )
+                (0..6).forEach { d ->
+                    val day = weekStart.plusDays(d.toLong())
+                    WeekDayRow(
+                        day = day,
+                        dayItems = itemsByDate[day].orEmpty(),
+                        isCardRight = day.dayOfWeek.value % 2 == 0,
+                        isCurrent = day == today,
+                        onDaySelected = onDaySelected,
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+            }
         }
     }
 }

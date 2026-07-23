@@ -4,6 +4,9 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.FlingBehavior
+import androidx.compose.foundation.gestures.ScrollScope
+import androidx.compose.foundation.gestures.ScrollableDefaults
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -13,15 +16,14 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -40,6 +42,24 @@ import androidx.compose.ui.unit.sp
 import com.example.smarttracker.R
 import com.example.smarttracker.presentation.theme.WorkoutTextStyles
 import com.example.smarttracker.presentation.theme.geologicaFontFamily
+
+// ── Замедленный fling для timeline-списков ──────────────────────────────────
+
+/**
+ * `FlingBehavior` с уменьшенной инерцией: стартовая скорость fling умножается на
+ * [factor] (<1) — прокрутка быстрее затухает, не «улетает». Применяется к
+ * LazyColumn всех трёх timeline-view (день/неделя/месяц).
+ */
+@Composable
+internal fun rememberDampedFling(factor: Float = 0.4f): FlingBehavior {
+    val base = ScrollableDefaults.flingBehavior()
+    return remember(base, factor) {
+        object : FlingBehavior {
+            override suspend fun ScrollScope.performFling(initialVelocity: Float): Float =
+                with(base) { performFling(initialVelocity * factor) }
+        }
+    }
+}
 
 // ── Modifier-расширения таймлайна ────────────────────────────────────────────
 
@@ -172,6 +192,67 @@ internal fun PeriodLabel(text: String, isCurrent: Boolean) {
     )
 }
 
+// ── Заголовок-разделитель периода (бесконечный скролл) ──────────────────────
+
+/**
+ * Плашка-заголовок между периодами: центральная капсула на стволе (белый фон
+ * перекрывает ствол, рамка `TrunkColor`; текущий период — акцент `TealAccent`).
+ * Используется в Day/Week/Month timeline-view как разделитель периодов.
+ */
+@Composable
+internal fun PeriodHeader(label: String, isCurrent: Boolean, modifier: Modifier = Modifier) {
+    val accent = if (isCurrent) TealAccent else TrunkColor
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 10.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(percent = 50))
+                .background(Color.White)
+                .border(1.dp, accent, RoundedCornerShape(percent = 50))
+                .padding(horizontal = 16.dp, vertical = 6.dp),
+        ) {
+            Text(
+                text = label,
+                color = accent,
+                fontSize = 14.sp,
+                fontFamily = geologicaFontFamily,
+                fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Medium,
+            )
+        }
+    }
+}
+
+/**
+ * Компактная пометка «нет тренировок» под заголовком пустого дня (только DAY-режим:
+ * там нет под-строк-нодов, в отличие от Week/Month). Белый фон перекрывает ствол.
+ */
+@Composable
+internal fun PeriodEmptyNote(text: String = "Нет тренировок", modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            modifier = Modifier
+                .background(Color.White)
+                .padding(horizontal = 12.dp, vertical = 4.dp),
+        ) {
+            Text(
+                text = text,
+                color = TrunkColor.copy(alpha = 0.5f),
+                fontSize = 13.sp,
+                fontFamily = geologicaFontFamily,
+            )
+        }
+    }
+}
+
 // ── Инфо-колонка карточки ────────────────────────────────────────────────────
 
 /**
@@ -228,38 +309,6 @@ internal fun InfoRow(
             style = textStyle,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-        )
-    }
-}
-
-// ── Блок пустого состояния (нет тренировок за период) ───────────────────────
-
-/**
- * Небольшой блок «нет тренировок»: белая карточка (перекрывает ствол), иконка
- * отдыха и текст. Согласован с блоком ошибки — та же рамка/скругление/фон.
- */
-@Composable
-internal fun CalendarEmptyBlock(text: String, modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier
-            .widthIn(max = 300.dp)
-            .clip(RoundedCornerShape(TimelineDims.CornerRadius))
-            .background(Color.White)
-            .border(TimelineDims.BorderThickness, TrunkColor, RoundedCornerShape(TimelineDims.CornerRadius))
-            .padding(horizontal = 24.dp, vertical = 20.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Icon(
-            painter = painterResource(R.drawable.ic_sleep),
-            contentDescription = null,
-            modifier = Modifier.size(36.dp),
-            tint = Color.Unspecified,
-        )
-        Spacer(Modifier.height(10.dp))
-        Text(
-            text = text,
-            style = WorkoutTextStyles.screenHeaderDate,
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
         )
     }
 }

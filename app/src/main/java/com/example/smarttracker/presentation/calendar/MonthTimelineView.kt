@@ -2,15 +2,21 @@ package com.example.smarttracker.presentation.calendar
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.tooling.preview.Preview
 import com.example.smarttracker.presentation.theme.SmartTrackerTheme
 import androidx.compose.ui.Alignment
@@ -26,34 +32,70 @@ import java.time.DayOfWeek
 import java.time.LocalDate
 
 /**
- * Месячный вид истории тренировок.
- * Один нод = одна неделя (Пн–Вс). Нодов обычно 4–5.
- * Недели без тренировок: только нод и метка диапазона дат (без карточки).
- * Тап по карточке → [onWeekSelected] (переход в Week view).
+ * Месячный вид истории — бесконечный скролл по месяцам (сверху текущий, вниз до
+ * первой тренировки). Каждый месяц: [PeriodHeader] («Июль 2026») + строки-недели
+ * месяца (Пн–Вс; неделя без тренировок — только нод и метка диапазона).
+ * Тап по карточке недели → [onWeekSelected] (переход в Week view).
  */
 @Composable
 internal fun MonthTimelineView(
     state: TrainingHistoryUiState,
     onWeekSelected: (LocalDate) -> Unit,
+    onVisiblePeriodChanged: (LocalDate) -> Unit = {},
 ) {
-    val monthStart = state.selectedDate.withDayOfMonth(1)
-    val weeks = generateWeeksForMonth(monthStart)
-    val currentWeekStart = LocalDate.now().with(DayOfWeek.MONDAY)
+    val today = LocalDate.now()
+    val currentMonthStart = today.withDayOfMonth(1)
+    val currentWeekStart = today.with(DayOfWeek.MONDAY)
+    val firstDate = state.items.minOfOrNull { it.date } ?: today
+    val count = periodCount(HistoryViewMode.MONTH, firstDate, today)
+    val itemsByDate = remember(state.items) { state.items.groupBy { it.date } }
+    val listState = rememberLazyListState()
+
+    LaunchedEffect(state.selectedDate) {
+        val idx = periodIndexOf(HistoryViewMode.MONTH, state.selectedDate, today)
+            .coerceIn(0, count - 1)
+        listState.scrollToItem(idx)
+    }
+
+    // Верхний видимый месяц → дата в шапке экрана.
+    val topMonth by remember(count) {
+        derivedStateOf {
+            periodStartAt(HistoryViewMode.MONTH, today, listState.firstVisibleItemIndex.coerceIn(0, count - 1))
+        }
+    }
+    LaunchedEffect(topMonth) { onVisiblePeriodChanged(topMonth) }
 
     LazyColumn(
+        state = listState,
         modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.SpaceEvenly,
+        contentPadding = PaddingValues(vertical = 8.dp),
+        flingBehavior = rememberDampedFling(),
     ) {
-        itemsIndexed(weeks) { index, weekStart ->
-            val weekEnd = weekStart.plusDays(6)
-            MonthWeekRow(
-                weekStart = weekStart,
-                weekEnd = weekEnd,
-                weekItems = state.items.filter { it.date >= weekStart && it.date <= weekEnd },
-                isCardRight = index % 2 != 0,
-                isCurrent = weekStart == currentWeekStart,
-                onWeekSelected = onWeekSelected,
-            )
+        items(count = count) { i ->
+            val monthStart = periodStartAt(HistoryViewMode.MONTH, today, i)
+            Column {
+                PeriodHeader(
+                    label = monthHeaderLabel(monthStart),
+                    isCurrent = monthStart == currentMonthStart,
+                )
+                generateWeeksForMonth(monthStart).forEachIndexed { index, weekStart ->
+                    val weekEnd = weekStart.plusDays(6)
+                    // Тренировки недели — из группировки по дате (недели крайние
+                    // могут залезать в соседний месяц, как и раньше).
+                    val weekItems = (0..6).flatMap {
+                        itemsByDate[weekStart.plusDays(it.toLong())].orEmpty()
+                    }
+                    MonthWeekRow(
+                        weekStart = weekStart,
+                        weekEnd = weekEnd,
+                        weekItems = weekItems,
+                        isCardRight = index % 2 != 0,
+                        isCurrent = weekStart == currentWeekStart,
+                        onWeekSelected = onWeekSelected,
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+            }
         }
     }
 }

@@ -5,7 +5,9 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -49,7 +51,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.smarttracker.R
 import com.example.smarttracker.presentation.theme.ColorPrimary
 import com.example.smarttracker.presentation.theme.WorkoutTextStyles
-import java.time.DayOfWeek
 
 /**
  * Корневой экран истории тренировок.
@@ -93,6 +94,10 @@ fun TrainingHistoryScreen(
     var coachmarkStep by remember { mutableIntStateOf(0) }
     val coachmarkVisible = coachmarkForced || (!state.isLoading && !state.coachmarkShown)
 
+    // Начало верхнего видимого периода — дата в шапке (обновляется при скролле,
+    // «вплывает»). View сообщает его через onVisiblePeriodChanged.
+    var visiblePeriod by remember { mutableStateOf(state.selectedDate) }
+
     // Box-обёртка — чтобы поверх экрана лёг onboarding-coachmark на весь экран.
     Box(modifier = Modifier.fillMaxSize()) {
     Column(
@@ -102,7 +107,8 @@ fun TrainingHistoryScreen(
             .background(Color.White),
     ) {
         HistoryHeader(
-            state = state,
+            viewMode = state.viewMode,
+            periodStart = visiblePeriod,
             onHelpClick = { coachmarkStep = 0; coachmarkForced = true },
         )
 
@@ -121,19 +127,32 @@ fun TrainingHistoryScreen(
                         // узкого Box у края, а не по стволу дерева.
                         .fillMaxWidth()
                         .pointerInput(state.viewMode) {
-                            // Инвертированный жест: spread (пальцы расходятся) →
-                            // углубление в детали (zoomIn: MONTH→WEEK→DAY);
-                            // pinch (пальцы сходятся) → обобщение (zoomOut: DAY→WEEK→MONTH).
-                            // Совпадает с привычным жестом «увеличения» на карте/фото.
-                            detectTransformGestures { _, _, zoomChange, _ ->
-                                accumulatedScale *= zoomChange
-                                if (accumulatedScale > 1.3f) {
-                                    viewModel.onZoomIn()
-                                    accumulatedScale = 1f
-                                } else if (accumulatedScale < 0.7f) {
-                                    viewModel.onZoomOut()
-                                    accumulatedScale = 1f
-                                }
+                            // Пинч обрабатываем ТОЛЬКО при 2+ пальцах и потребляем
+                            // события лишь тогда — одно-пальцевый вертикальный скролл
+                            // уходит в LazyColumn нативно (плавно). detectTransformGestures
+                            // перехватывал и одно-пальцевый pan → скролл был резким.
+                            // Инвертированный жест: spread (пальцы расходятся) → детали
+                            // (zoomIn: MONTH→WEEK→DAY); pinch → обобщение (zoomOut).
+                            awaitEachGesture {
+                                awaitFirstDown(requireUnconsumed = false)
+                                do {
+                                    val event = awaitPointerEvent()
+                                    if (event.changes.count { it.pressed } >= 2) {
+                                        val zoom = event.calculateZoom()
+                                        if (zoom != 1f) {
+                                            accumulatedScale *= zoom
+                                            when {
+                                                accumulatedScale > 1.3f -> {
+                                                    viewModel.onZoomIn(); accumulatedScale = 1f
+                                                }
+                                                accumulatedScale < 0.7f -> {
+                                                    viewModel.onZoomOut(); accumulatedScale = 1f
+                                                }
+                                            }
+                                            event.changes.forEach { it.consume() }
+                                        }
+                                    }
+                                } while (event.changes.any { it.pressed })
                             }
                         },
                 ) {
@@ -151,14 +170,17 @@ fun TrainingHistoryScreen(
                             HistoryViewMode.DAY -> DayTimelineView(
                                 state = state,
                                 onTrainingClick = onTrainingClick,
+                                onVisiblePeriodChanged = { visiblePeriod = it },
                             )
                             HistoryViewMode.WEEK -> WeekTimelineView(
                                 state = state,
                                 onDaySelected = viewModel::onDaySelected,
+                                onVisiblePeriodChanged = { visiblePeriod = it },
                             )
                             HistoryViewMode.MONTH -> MonthTimelineView(
                                 state = state,
                                 onWeekSelected = viewModel::onWeekSelected,
+                                onVisiblePeriodChanged = { visiblePeriod = it },
                             )
                         }
                     }
@@ -196,7 +218,11 @@ fun TrainingHistoryScreen(
 // ── Шапка ─────────────────────────────────────────────────────────────────────
 
 @Composable
-private fun HistoryHeader(state: TrainingHistoryUiState, onHelpClick: () -> Unit) {
+private fun HistoryHeader(
+    viewMode: HistoryViewMode,
+    periodStart: java.time.LocalDate,
+    onHelpClick: () -> Unit,
+) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -204,7 +230,7 @@ private fun HistoryHeader(state: TrainingHistoryUiState, onHelpClick: () -> Unit
         contentAlignment = Alignment.Center,
     ) {
         Text(
-            text = periodLabel(state),
+            text = periodLabel(viewMode, periodStart),
             style = WorkoutTextStyles.screenHeaderDate,
         )
         // Кнопка справки (левый угол хедера) — открывает онбординг в любой момент.
@@ -222,22 +248,13 @@ private fun HistoryHeader(state: TrainingHistoryUiState, onHelpClick: () -> Unit
     HorizontalDivider(color = ColorPrimary, thickness = 1.dp)
 }
 
-private fun periodLabel(state: TrainingHistoryUiState): String {
-    val date = state.selectedDate
-    return when (state.viewMode) {
-        HistoryViewMode.DAY -> date.format(DateFmt)
-        HistoryViewMode.WEEK -> {
-            val mon = date.with(DayOfWeek.MONDAY)
-            val sun = mon.plusDays(6)
-            "${mon.format(DateFmt)} - ${sun.format(DateFmt)}"
-        }
-        HistoryViewMode.MONTH -> {
-            val first = date.withDayOfMonth(1)
-            val last = date.withDayOfMonth(date.lengthOfMonth())
-            "${first.format(DateFmt)} - ${last.format(DateFmt)}"
-        }
+/** Лейбл верхнего видимого периода для шапки (те же форматы, что у плашек-разделителей). */
+private fun periodLabel(viewMode: HistoryViewMode, periodStart: java.time.LocalDate): String =
+    when (viewMode) {
+        HistoryViewMode.DAY -> dayHeaderLabel(periodStart)
+        HistoryViewMode.WEEK -> weekHeaderLabel(periodStartOf(HistoryViewMode.WEEK, periodStart))
+        HistoryViewMode.MONTH -> monthHeaderLabel(periodStartOf(HistoryViewMode.MONTH, periodStart))
     }
-}
 
 // ── Блок ошибки загрузки истории ───────────────────────────────────────────────
 

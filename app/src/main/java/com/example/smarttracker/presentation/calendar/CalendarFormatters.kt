@@ -6,6 +6,8 @@ import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
+import java.util.Locale
 
 private val LocalTimeFmt: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 
@@ -186,4 +188,72 @@ internal fun generateWeeksForMonth(monthStart: LocalDate): List<LocalDate> {
         weekStart = weekStart.plusWeeks(1)
     }
     return weeks
+}
+
+// ── Бесконечный скролл: заголовки периодов и индексация ──────────────────────
+// Все периоды идут подряд без пропусков, поэтому индекс периода в списке = прямое
+// календарное смещение от сегодня (0 = сегодня сверху, дальше — в прошлое).
+
+private val DayMonthFmt: DateTimeFormatter = DateTimeFormatter.ofPattern("dd.MM")
+private val MonthYearFmt: DateTimeFormatter = DateTimeFormatter.ofPattern("LLLL yyyy", Locale("ru"))
+
+/** Краткие дни недели (индекс = DayOfWeek.value − 1: MONDAY=1..SUNDAY=7). */
+private val ShortDaysOfWeek = arrayOf("пн", "вт", "ср", "чт", "пт", "сб", "вс")
+
+/** Заголовок дня: «22.07.2026, ср». */
+internal fun dayHeaderLabel(date: LocalDate): String =
+    "${date.format(DateFmt)}, ${ShortDaysOfWeek[date.dayOfWeek.value - 1]}"
+
+/** Заголовок недели: «20.07 – 26.07.2026» (начало без года, конец с годом). */
+internal fun weekHeaderLabel(weekStart: LocalDate): String {
+    val weekEnd = weekStart.plusDays(6)
+    return "${weekStart.format(DayMonthFmt)} – ${weekEnd.format(DateFmt)}"
+}
+
+/** Заголовок месяца: «Июль 2026» (русский месяц с заглавной). */
+internal fun monthHeaderLabel(monthStart: LocalDate): String =
+    monthStart.format(MonthYearFmt).replaceFirstChar { it.uppercase() }
+
+/** Начало периода уровня [mode], в который попадает [date] (день/понедельник/1-е число). */
+internal fun periodStartOf(mode: HistoryViewMode, date: LocalDate): LocalDate = when (mode) {
+    HistoryViewMode.DAY -> date
+    HistoryViewMode.WEEK -> date.with(DayOfWeek.MONDAY)
+    HistoryViewMode.MONTH -> date.withDayOfMonth(1)
+}
+
+/**
+ * Число периодов уровня [mode] от начала (период [firstDate]) до сегодня включительно.
+ * Минимум 1 (при пустой истории — только текущий период).
+ */
+internal fun periodCount(mode: HistoryViewMode, firstDate: LocalDate, today: LocalDate): Int {
+    val from = periodStartOf(mode, firstDate)
+    val to = periodStartOf(mode, today)
+    val span = when (mode) {
+        HistoryViewMode.DAY -> ChronoUnit.DAYS.between(from, to)
+        HistoryViewMode.WEEK -> ChronoUnit.WEEKS.between(from, to)
+        HistoryViewMode.MONTH -> ChronoUnit.MONTHS.between(from, to)
+    }
+    return (span.toInt() + 1).coerceAtLeast(1)
+}
+
+/** Начало периода на позиции [index] в списке (0 = сегодняшний период сверху). */
+internal fun periodStartAt(mode: HistoryViewMode, today: LocalDate, index: Int): LocalDate {
+    val base = periodStartOf(mode, today)
+    return when (mode) {
+        HistoryViewMode.DAY -> base.minusDays(index.toLong())
+        HistoryViewMode.WEEK -> base.minusWeeks(index.toLong())
+        HistoryViewMode.MONTH -> base.minusMonths(index.toLong())
+    }
+}
+
+/** Индекс периода, в который попадает [date] (для прокрутки). Не клампится — вызывающий ограничивает по count. */
+internal fun periodIndexOf(mode: HistoryViewMode, date: LocalDate, today: LocalDate): Int {
+    val from = periodStartOf(mode, date)
+    val to = periodStartOf(mode, today)
+    val span = when (mode) {
+        HistoryViewMode.DAY -> ChronoUnit.DAYS.between(from, to)
+        HistoryViewMode.WEEK -> ChronoUnit.WEEKS.between(from, to)
+        HistoryViewMode.MONTH -> ChronoUnit.MONTHS.between(from, to)
+    }
+    return span.toInt()
 }
