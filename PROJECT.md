@@ -4,7 +4,7 @@
 подробная документация по каждому файлу, каждому классу/интерфейсу и каждой функции.
 
 Документ сгенерирован автоматическим обходом всех Kotlin-файлов проекта (main, test, androidTest)
-по состоянию на 2026-07-23, коммит `93b234a`, ветка `feat/calendar-onboarding`.
+по состоянию на 2026-07-23, коммит `86b1f8a`, ветка `feat/calendar-onboarding`.
 
 ---
 
@@ -2423,7 +2423,9 @@ Composable-обработчик системных разрешений для G
 - `@Composable internal fun TimelineInfoColumn(modifier, verticalArrangement, content)` — готовая инфо-колонка карточки (белый фон, рамка, скругление справа).
 - `@Composable internal fun InfoRow(iconRes, value, textStyle, iconSize)` — строка "иконка + текст" внутри карточки, с `Ellipsis`-обрезкой в одну строку.
 - `@Composable internal fun TimelineIconBox(iconRes, bgColor, boxSize, iconSize, cornerRadius)` — квадратная иконка с фоном (используется в стрипах Week/Month и Day-полоске).
-- `@Composable internal fun CalendarEmptyBlock(text, modifier)` — блок пустого состояния «нет тренировок»: белая карточка (перекрывает ствол), иконка отдыха `ic_sleep` + текст; та же рамка/скругление/фон, что у блока ошибки. Используется в `DayTimelineView`.
+- `@Composable internal fun PeriodHeader(label, isCurrent, modifier)` — плашка-заголовок между периодами (бесконечный скролл): центральная капсула на стволе (белый фон перекрывает ствол, рамка `TrunkColor`; текущий период — акцент `TealAccent`).
+- `@Composable internal fun PeriodEmptyNote(text, modifier)` — компактная пометка «нет тренировок» под заголовком пустого дня (только DAY: там нет под-строк-нодов).
+- `@Composable internal fun rememberDampedFling(factor = 0.4f): FlingBehavior` — `FlingBehavior` с уменьшенной инерцией (стартовая скорость fling × factor) для LazyColumn всех трёх view: скролл быстрее затухает, не «улетает».
 Особенности/нюансы: используется во всех трёх видах (`DayTimelineView`, `WeekTimelineView`, `MonthTimelineView`) для единообразного визуального языка "дерева" с чередующимися карточками.
 
 #### `presentation/calendar/CalendarConstants.kt`
@@ -2453,18 +2455,19 @@ Composable-обработчик системных разрешений для G
 - `internal fun longestTypeIdOf(items): Int?` — `typeActivId` самой длинной тренировки.
 - `internal fun dominantType(items): Pair<Int, Float>?` — доминирующий тип активности за период + его доля в процентах от общего времени.
 - `internal fun generateWeeksForMonth(monthStart): List<LocalDate>` — список понедельников недель, покрывающих месяц (первый понедельник может быть в предыдущем месяце).
+- **Бесконечный скролл** (чистые функции, покрыты `CalendarFormattersTest`): `dayHeaderLabel(date)` — «22.07.2026, ср» (дата + короткий день недели, рус.); `weekHeaderLabel(weekStart)` — «20.07 – 26.07.2026»; `monthHeaderLabel(monthStart)` — «Июль 2026» (`LLLL yyyy`, `Locale("ru")`, capitalize). Индексация периодов (все периоды подряд → индекс = календарное смещение от сегодня): `periodStartOf(mode, date)` (день/понедельник/1-е число), `periodCount(mode, firstDate, today)` (≥1), `periodStartAt(mode, today, index)` (0 = сегодня), `periodIndexOf(mode, date, today)`.
 Особенности/нюансы: `formatTime` исправляет прежний баг — раньше время резалось substring без учёта таймзоны, тренировка в 11:44 MSK показывалась как "08:44". `elevationM` в `PeriodTotals` берётся из серверного поля `elevation_gain` (`/training/history`), не пересчитывается на клиенте для агрегатов.
 
 #### `presentation/calendar/DayTimelineView.kt`
-Дневной вид истории тренировок — список карточек тренировок конкретного дня, чередующихся лево/право от "ствола".
-- `@Composable internal fun DayTimelineView(state, onTrainingClick)` — фильтрует `state.items` по `state.selectedDate`, сортирует по `timeStart`; при пустом списке показывает `CalendarEmptyBlock` («Нет тренировок за этот день»); иначе `LazyColumn` с центрированием (`Arrangement.spacedBy(16.dp, CenterVertically)`) если ≤4 тренировок.
-- `@Composable private fun DayRow(item, activityName, isCardRight, onTrainingClick)` — одна строка таймлайна (`TimelineRow` + карточка).
-- `@Composable private fun DayCard(item, activityName)` — карточка: цветная полоска (`activityColorFor`, иконка активности 20dp) + инфо-блок (название / длительность / дистанция-или-калории — приоритет дистанции, если она известна).
-Особенности/нюансы: клик по карточке вызывает `onTrainingClick(item, activityName)` → в `WorkoutHomeScreen` открывает `SummaryOverlay` через `viewModel.showHistorySummary`. Название активности разрешается через `state.workoutTypes.find { it.id == item.typeActivId }`.
+Дневной вид истории — бесконечная скролл-**лента** по дням (`reverseLayout=true`: сегодня внизу, старые дни выше, скролл вверх = в прошлое до первой тренировки).
+- `@Composable internal fun DayTimelineView(state, onTrainingClick, onVisiblePeriodChanged)` — `LazyColumn(reverseLayout)` с `count = periodCount(DAY, firstDate, today)` (`firstDate = items.minOf date`); элемент `i` → день `periodStartAt(DAY, today, i)`. `itemsByDate = remember { items.groupBy date }`. Прокрутка к `selectedDate` через `LaunchedEffect(selectedDate) { scrollToItem(periodIndexOf...) }` (ручной скролл не дёргает). Верхний видимый день (`visibleItemsInfo.last().index` при reverseLayout) → `onVisiblePeriodChanged` (дата в шапке). `flingBehavior = rememberDampedFling()`.
+- `@Composable private fun DayPeriod(day, isCurrent, dayItems, startParity, workoutTypes, onTrainingClick)` — `PeriodHeader(dayHeaderLabel)` + карточки дня (`DayRow`) или `PeriodEmptyNote`. Чередование лево/право — `(startParity + index) % 2`, где `startParity` — кумулятивный (число тренировок во всех днях выше % 2) для НЕПРЕРЫВНОГО чередования через границы дней (`startParityByDate` считается один раз в `remember`).
+- `@Composable private fun DayRow(...)` / `DayCard(item, activityName)` — строка/карточка (цветная полоска + инфо: название / длительность / дистанция-или-калории).
+Особенности/нюансы: клик по карточке → `onTrainingClick` → `SummaryOverlay` через `viewModel.showHistorySummary`. Название активности — `state.workoutTypes.find { it.id == typeActivId }`.
 
 #### `presentation/calendar/MonthTimelineView.kt`
-Месячный вид истории — один нод = одна неделя (Пн–Вс), обычно 4-5 нодов на месяц.
-- `@Composable internal fun MonthTimelineView(state, onWeekSelected)` — генерирует недели месяца через `generateWeeksForMonth`, для каждой фильтрует `items` в диапазон `[weekStart, weekEnd]`.
+Месячный вид истории — бесконечный скролл по месяцам (сверху текущий, вниз до первой тренировки). Каждый месяц: `PeriodHeader(monthHeaderLabel «Июль 2026»)` + строки-недели (`generateWeeksForMonth`, `MonthWeekRow`).
+- `@Composable internal fun MonthTimelineView(state, onWeekSelected, onVisiblePeriodChanged)` — `LazyColumn` с `count = periodCount(MONTH, ...)`; элемент `i` → месяц `periodStartAt(MONTH, today, i)`; недельные тренировки собираются из `itemsByDate` по дням недели. Верхний видимый месяц (`firstVisibleItemIndex`) → `onVisiblePeriodChanged`. Прокрутка к `selectedDate`, `rememberDampedFling()`.
 - `@Composable private fun MonthWeekRow(weekStart, weekEnd, weekItems, isCardRight, isCurrent, onWeekSelected)` — строка недели; если `weekItems` пуст — карточка не рисуется (только нод + метка диапазона дат).
 - `@Composable private fun MonthWeekCard(weekItems, weekStart)` — карточка агрегатов недели: стрип из 7 иконок (`MonthActivityStrip`, по дню недели) + инфо-блок из 6 строк (кол-во тренировок жирным через `formatTrainingCountFull` — «N тренировок» со склонением, `maxLines=1`; доминирующий тип с процентом, время, дистанция, набор высоты, калории).
 - `@Composable private fun MonthActivityStrip(dayTypeIds: List<Int?>)` — 7 квадратных иконок: `null` (нет тренировки) → белый фон + `ic_sleep`; иначе → `TealAccent` фон + иконка активности самой длинной тренировки дня.
@@ -2472,12 +2475,12 @@ Composable-обработчик системных разрешений для G
 
 #### `presentation/calendar/TrainingHistoryScreen.kt`
 Корневой экран истории тренировок с тремя режимами (День/Неделя/Месяц), переключаемыми жестами pinch/spread.
-- `@Composable fun TrainingHistoryScreen(padding, onNavigateToStart, onTrainingClick)` — хоистит `TrainingHistoryViewModel`, сбрасывает на "День/сегодня" при каждом входе (`LaunchedEffect(Unit) { viewModel.resetToToday() }`). Обрабатывает `pointerInput { detectTransformGestures }`: накопленный `scale > 1.3` → `onZoomIn()` (углубление в детали DAY←WEEK←MONTH), `scale < 0.7` → `onZoomOut()` (обобщение). `BackHandler` работает, только если `backStack` не пуст. Корневой `Column` обёрнут в `Box(fillMaxSize)` — поверх ложится `CalendarCoachmark` (онбординг). Видимость coachmark: локальные `coachmarkForced`/`coachmarkStep` (remember); `coachmarkVisible = coachmarkForced || (!state.isLoading && !state.coachmarkShown)` — авто-показ при первом заходе (флаг persist), гейт `!isLoading` не мигает поверх спиннера. Дисмисс → `viewModel.onCoachmarkDismissed()`.
-- `@Composable private fun HistoryHeader(state, onHelpClick)` — центрированная метка периода (дата/диапазон недели/диапазон месяца через `periodLabel`) + кнопка справки `ic_help` в левом углу (`Alignment.CenterStart`), `onHelpClick = { coachmarkStep = 0; coachmarkForced = true }` — повторный показ онбординга.
+- `@Composable fun TrainingHistoryScreen(padding, onNavigateToStart, onTrainingClick)` — хоистит `TrainingHistoryViewModel`, сбрасывает на "День/сегодня" при входе (`LaunchedEffect(Unit) { resetToToday() }`). Пинч через `pointerInput { awaitEachGesture }`: зум обрабатывается ТОЛЬКО при 2+ пальцах и события потребляются лишь тогда — одно-пальцевый вертикальный скролл уходит в `LazyColumn` нативно (`detectTransformGestures` перехватывал pan → скролл был резким). `accumulatedScale` растёт через `calculateZoom()`, порог 1.3 → `onZoomIn`, 0.7 → `onZoomOut`. `visiblePeriod` (remember) — начало верхнего видимого периода, обновляется через `onVisiblePeriodChanged` из каждого view (дата «вплывает» в шапку). `BackHandler` при непустом `backStack`. Корневой `Column` в `Box(fillMaxSize)` — поверх `CalendarCoachmark`; видимость `coachmarkForced || (!isLoading && !coachmarkShown)`.
+- `@Composable private fun HistoryHeader(viewMode, periodStart, onHelpClick)` — метка верхнего видимого периода (`periodLabel(viewMode, periodStart)`) + кнопка справки `ic_help` (`CenterStart`).
 - `@Composable private fun HistoryErrorBlock(message, onRetry, modifier)` — блок ошибки загрузки: белая карточка (перекрывает ствол), иконка `Icons.Filled.Warning`, заголовок «Не удалось загрузить историю», переведённое сообщение (`message` уже русское) и кнопка «Повторить» (`Icons.Filled.Refresh`) → `viewModel::loadHistory`. Контейнер спиннера/ошибки — `Box(weight(1f).fillMaxWidth())`: без `fillMaxWidth` Box в `Column` оборачивал контент и прижимался влево, `align(Center)` центрировал у края, а не по стволу.
-- `private fun periodLabel(state): String` — форматирует заголовок в зависимости от `viewMode`.
-- `@Composable private fun StartWorkoutButton(label, onClick)` — кнопка внизу экрана (текст меняется: "Начать свою тренировку" в DAY-режиме, "Запланировать тренировку" в остальных); белые `Spacer` перекрывают линию ствола до/после кнопки.
-Особенности/нюансы: жест инвертирован интуитивно (spread=увеличение=углубление в детали, как zoom на карте/фото). Ствол дерева рисуется `Modifier.drawTrunk()` на весь контентный `Box`, включая область под кнопкой. Онбординг хостится прямо здесь (не в `WorkoutHomeScreen`, как у тренировки): на этом экране нет живой карты, нюанс 36 неактуален.
+- `private fun periodLabel(viewMode, periodStart): String` — лейбл верхнего видимого периода для шапки (те же форматы, что у плашек: `dayHeaderLabel`/`weekHeaderLabel`/`monthHeaderLabel`).
+- `@Composable private fun StartWorkoutButton(label, onClick)` — кнопка внизу экрана (текст: "Начать свою тренировку" в DAY, "Запланировать тренировку" в остальных); белые `Spacer` перекрывают ствол до/после кнопки.
+Особенности/нюансы: жест инвертирован интуитивно (spread=углубление в детали, как zoom на карте/фото). Ствол — `Modifier.drawTrunk()` на весь контентный `Box` (рисуется на высоту viewport → непрерывен при скролле). Онбординг хостится прямо здесь (не в `WorkoutHomeScreen`, как у тренировки): на этом экране нет живой карты, нюанс 36 неактуален.
 
 #### `presentation/calendar/CalendarCoachmark.kt`
 Многошаговый onboarding-coachmark экрана истории (по образцу `WorkoutStartScreen.WorkoutCoachmark`, но без spotlight-выреза по реальным контролам: у нового пользователя истории нет и экран показывает лишь один режим за раз, поэтому виды — демо-строки таймлайна прямо в оверлее).
@@ -2494,7 +2497,7 @@ Composable-обработчик системных разрешений для G
 Модель режимов просмотра и состояния экрана истории тренировок.
 - `enum class HistoryViewMode { DAY, WEEK, MONTH }` — с методами `zoomIn()` (MONTH→WEEK→DAY) и `zoomOut()` (DAY→WEEK→MONTH), в конечных состояниях no-op.
 - `data class TrainingHistoryUiState(isLoading, items, workoutTypes, error, viewMode, selectedDate, backStack: List<Pair<HistoryViewMode, LocalDate>>, coachmarkShown: Boolean = false)`.
-Особенности/нюансы: `selectedDate` — опорная дата, интерпретируется по-разному в зависимости от `viewMode` (конкретный день / неделя, в которую попадает дата / месяц). `backStack` пушится при каждой навигации, используется `onBack()` для возврата. `coachmarkShown` зеркалит `SettingsStorage.calendarCoachmarkShown` — гейт авто-показа онбординга.
+Особенности/нюансы: при бесконечном скролле `selectedDate` — **якорь прокрутки** (цель drill-down / сегодня), а не единственный показываемый период; все периоды рендерятся лентой (`periodStartAt`/`periodCount`). `backStack` пушится при навигации, `onBack()` — возврат. `coachmarkShown` зеркалит `SettingsStorage.calendarCoachmarkShown`.
 
 #### `presentation/calendar/TrainingHistoryViewModel.kt`
 `@HiltViewModel` экрана истории (`@Inject constructor(workoutRepository, settingsStorage)`): загрузка списка тренировок, навигация между периодами через zoom/tap/back, флаг онбординга.
@@ -2503,17 +2506,17 @@ Composable-обработчик системных разрешений для G
 - `fun onZoomIn()` / `fun onZoomOut()` — меняют `viewMode` через `zoomIn()`/`zoomOut()`, пушат текущее состояние в `backStack`; no-op если режим не изменился (уже в конечном состоянии).
 - `fun onDaySelected(date: LocalDate)` — переход в DAY для конкретной даты (из Week view), пушит текущее состояние в стек.
 - `fun onWeekSelected(weekStart: LocalDate)` — переход в WEEK для конкретной недели (из Month view).
-- `fun resetToToday()` — сбрасывает на DAY/сегодня с очисткой `backStack`; вызывается при каждом входе на экран.
+- `fun resetToToday()` — сбрасывает на DAY/сегодня (якорь прокрутки → топ ленты) с очисткой `backStack`; вызывается при входе на экран.
 - `fun onBack(): Boolean` — pop из `backStack`, возвращает `false` если стек пуст (тогда система сама обработает Back — выход с экрана).
 Особенности/нюансы: подписан на `workoutRepository.historyChangedFlow` — автообновление истории при `saveTraining` (в т.ч. из `SaveTrainingWorker` в офлайн-сценарии) или `deleteCompletedTraining`. Также подписан на `workoutTypesFlow()` для резолва названий активностей в UI и на `settingsStorage.settings` — зеркалит `calendarCoachmarkShown` в UiState.
 
 #### `presentation/calendar/WeekTimelineView.kt`
-Недельный вид истории — один нод = один день недели (7 нодов, Пн–Вс).
-- `@Composable internal fun WeekTimelineView(state, onDaySelected)` — вычисляет `weekStart` через `state.selectedDate.with(DayOfWeek.MONDAY)`, для каждого из 7 дней строит строку.
-- `@Composable private fun WeekDayRow(day, dayItems, isCardRight, isCurrent, onDaySelected)` — строка дня; при пустом `dayItems` карточка не рисуется (только нод + метка даты).
-- `@Composable private fun WeekDayCard(dayItems)` — карточка агрегатов дня: `WeekActivityStrip` (до 3 иконок первых по времени тренировок) + инфо-блок из 4 строк (время / дистанция / калории / кол-во тренировок).
-- `@Composable private fun WeekActivityStrip(iconIds: List<Int>)` — до 3 иконок активности, белый фон, без подсветки (в отличие от Month-стрипа).
-Особенности/нюансы: `isCardRight = day.dayOfWeek.value % 2 == 0` — чередование лево/право зависит от номера дня недели, а не от индекса в списке (в отличие от `DayTimelineView`, где чередование по индексу тренировки). Тап по карточке дня → `onDaySelected(day)` переключает в DAY-режим.
+Недельный вид истории — бесконечный скролл по неделям (сверху текущая, вниз до первой тренировки). Каждая неделя: `PeriodHeader(weekHeaderLabel «20.07 – 26.07.2026»)` + 7 строк-дней.
+- `@Composable internal fun WeekTimelineView(state, onDaySelected, onVisiblePeriodChanged)` — `LazyColumn` с `count = periodCount(WEEK, ...)`; элемент `i` → неделя `periodStartAt(WEEK, today, i)` + 7 `WeekDayRow`. Верхняя видимая неделя (`firstVisibleItemIndex`) → `onVisiblePeriodChanged`. Прокрутка к `selectedDate`, `rememberDampedFling()`.
+- `@Composable private fun WeekDayRow(...)` — строка дня; пустой день — только нод + метка даты (без карточки).
+- `@Composable private fun WeekDayCard(dayItems)` — агрегаты дня: `WeekActivityStrip` (до 3 иконок) + 4 строки (время / дистанция / калории / кол-во тренировок `formatTrainingCount`).
+- `@Composable private fun WeekActivityStrip(iconIds)` — до 3 иконок, белый фон.
+Особенности/нюансы: `isCardRight = day.dayOfWeek.value % 2 == 0` — чередование по номеру дня недели (пн всегда слева). Тап по карточке дня → `onDaySelected(day)` → DAY-режим.
 
 ### utils
 
