@@ -1,6 +1,7 @@
 package com.example.smarttracker.presentation.calendar
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTransformGestures
@@ -12,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
@@ -19,6 +21,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -27,9 +30,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.smarttracker.R
 import com.example.smarttracker.presentation.theme.ColorPrimary
 import com.example.smarttracker.presentation.theme.WorkoutTextStyles
 import java.time.DayOfWeek
@@ -68,13 +73,26 @@ fun TrainingHistoryScreen(
 
     var accumulatedScale by remember { mutableStateOf(1f) }
 
+    // ── Onboarding-coachmark ─────────────────────────────────────────────────
+    // Авто-показ при первом заходе (флаг persist в SettingsStorage) ИЛИ
+    // принудительно по кнопке справки «?» в шапке ([coachmarkForced]).
+    // Гейт !isLoading — не мигать поверх спиннера загрузки истории.
+    var coachmarkForced by remember { mutableStateOf(false) }
+    var coachmarkStep by remember { mutableIntStateOf(0) }
+    val coachmarkVisible = coachmarkForced || (!state.isLoading && !state.coachmarkShown)
+
+    // Box-обёртка — чтобы поверх экрана лёг onboarding-coachmark на весь экран.
+    Box(modifier = Modifier.fillMaxSize()) {
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(padding)
             .background(Color.White),
     ) {
-        HistoryHeader(state)
+        HistoryHeader(
+            state = state,
+            onHelpClick = { coachmarkStep = 0; coachmarkForced = true },
+        )
 
         Box(
             modifier = Modifier
@@ -142,12 +160,28 @@ fun TrainingHistoryScreen(
             }
         }
     }
+
+        // ── Onboarding-coachmark поверх экрана ───────────────────────────────
+        if (coachmarkVisible) {
+            CalendarCoachmark(
+                step = coachmarkStep,
+                stepCount = COACHMARK_STEPS,
+                onNext = { coachmarkStep++ },
+                onBack = { if (coachmarkStep > 0) coachmarkStep-- },
+                onDismiss = {
+                    coachmarkStep = 0
+                    coachmarkForced = false
+                    viewModel.onCoachmarkDismissed()
+                },
+            )
+        }
+    } // конец Box-обёртки
 }
 
 // ── Шапка ─────────────────────────────────────────────────────────────────────
 
 @Composable
-private fun HistoryHeader(state: TrainingHistoryUiState) {
+private fun HistoryHeader(state: TrainingHistoryUiState, onHelpClick: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -157,6 +191,17 @@ private fun HistoryHeader(state: TrainingHistoryUiState) {
         Text(
             text = periodLabel(state),
             style = WorkoutTextStyles.screenHeaderDate,
+        )
+        // Кнопка справки (левый угол хедера) — открывает онбординг в любой момент.
+        Image(
+            painter = painterResource(id = R.drawable.ic_help),
+            contentDescription = "Справка",
+            modifier = Modifier
+                .align(Alignment.CenterStart)
+                .padding(start = 12.dp)
+                .size(24.dp)
+                .clip(RoundedCornerShape(percent = 50))
+                .clickable(onClick = onHelpClick),
         )
     }
     HorizontalDivider(color = ColorPrimary, thickness = 1.dp)

@@ -70,6 +70,31 @@ internal fun formatKcal(kcal: Double?): String =
     if (kcal == null) "--" else "${kcal.toInt()} кКал"
 
 /**
+ * Количество тренировок за период — компактное «N трен.».
+ * Полное слово не помещается в тесную карточку Week (120dp, обрезается),
+ * поэтому там — сокращение. В месячном режиме (140dp) влезает полное —
+ * [formatTrainingCountFull].
+ */
+internal fun formatTrainingCount(count: Int): String = "$count трен."
+
+/**
+ * Количество тренировок с русским склонением слова «тренировка».
+ * 1 тренировка / 2–4 тренировки / 5+ тренировок (исключения 11–14).
+ * Используется только в месячном режиме — там ширина карточки (140dp) вмещает.
+ */
+internal fun formatTrainingCountFull(count: Int): String {
+    val mod100 = count % 100
+    val mod10 = count % 10
+    val word = when {
+        mod100 in 11..14 -> "тренировок"
+        mod10 == 1 -> "тренировка"
+        mod10 in 2..4 -> "тренировки"
+        else -> "тренировок"
+    }
+    return "$count $word"
+}
+
+/**
  * Парсит ISO-строку в LocalDateTime.
  * API возвращает формат "2026-05-16T08:44:00.613000Z" (UTC + микросекунды).
  * Попытка 1: OffsetDateTime (основной путь для формата API).

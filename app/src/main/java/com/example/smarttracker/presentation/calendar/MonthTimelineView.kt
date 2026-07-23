@@ -16,6 +16,7 @@ import com.example.smarttracker.presentation.theme.SmartTrackerTheme
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.smarttracker.R
 import com.example.smarttracker.domain.model.TrainingHistoryItem
@@ -112,8 +113,10 @@ private fun MonthWeekCard(
             verticalArrangement = Arrangement.SpaceEvenly,
         ) {
             Text(
-                text = "Тр. - ${weekItems.size}",
+                text = formatTrainingCountFull(weekItems.size),
                 style = WorkoutTextStyles.timelineLabelBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(vertical = 1.dp, horizontal = 5.dp),
             )
             dominant?.let { (typeId, pct) ->

@@ -29,6 +29,9 @@ enum class HistoryViewMode {
  *
  * [backStack] — стек пар (режим, дата) для кнопки «Назад».
  * При каждой навигации текущее состояние пушится в стек.
+ *
+ * [coachmarkShown] — показан ли уже одноразовый onboarding-coachmark экрана
+ * (персист в SettingsStorage). false → показать автоматически при первом заходе.
  */
 data class TrainingHistoryUiState(
     val isLoading: Boolean = true,
@@ -38,4 +41,5 @@ data class TrainingHistoryUiState(
     val viewMode: HistoryViewMode = HistoryViewMode.DAY,
     val selectedDate: LocalDate = LocalDate.now(),
     val backStack: List<Pair<HistoryViewMode, LocalDate>> = emptyList(),
+    val coachmarkShown: Boolean = false,
 )

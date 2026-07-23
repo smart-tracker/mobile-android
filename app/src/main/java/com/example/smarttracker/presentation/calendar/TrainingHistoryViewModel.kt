@@ -2,6 +2,7 @@ package com.example.smarttracker.presentation.calendar
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.smarttracker.data.local.SettingsStorage
 import com.example.smarttracker.domain.repository.WorkoutRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,6 +28,7 @@ import javax.inject.Inject
 @HiltViewModel
 class TrainingHistoryViewModel @Inject constructor(
     private val workoutRepository: WorkoutRepository,
+    private val settingsStorage: SettingsStorage,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(TrainingHistoryUiState())
@@ -36,6 +38,13 @@ class TrainingHistoryViewModel @Inject constructor(
         viewModelScope.launch {
             workoutRepository.workoutTypesFlow().collect { types ->
                 _state.update { it.copy(workoutTypes = types) }
+            }
+        }
+        // Флаг показанного онбординга: false → coachmark покажется автоматически
+        // при первом заходе на экран (гейт в TrainingHistoryScreen).
+        viewModelScope.launch {
+            settingsStorage.settings.collect { s ->
+                _state.update { it.copy(coachmarkShown = s.calendarCoachmarkShown) }
             }
         }
         // Автообновление истории при любом изменении: сохранение тренировки
@@ -120,5 +129,10 @@ class TrainingHistoryViewModel @Inject constructor(
             backStack = it.backStack.dropLast(1),
         ) }
         return true
+    }
+
+    /** «Понятно» в onboarding-coachmark — больше не показывать автоматически (персист). */
+    fun onCoachmarkDismissed() {
+        viewModelScope.launch { settingsStorage.setCalendarCoachmarkShown(true) }
     }
 }

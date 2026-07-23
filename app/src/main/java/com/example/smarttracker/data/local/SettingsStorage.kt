@@ -43,6 +43,12 @@ data class AppSettings(
      */
     val workoutCoachmarkShown: Boolean = false,
     /**
+     * Служебный флаг (не в UI настроек): показан ли одноразовый onboarding-coachmark
+     * при первом заходе на экран истории тренировок (календарь). Ставится в true по
+     * кнопке «Понятно». Повторно открывается кнопкой справки «?» в шапке экрана.
+     */
+    val calendarCoachmarkShown: Boolean = false,
+    /**
      * Сохранённые BLE-пульсометры. Пустой список = датчики не настроены
      * (гейт StatItem «Пульс» и автоподключения). Бейдж пульса гейтится отдельно
      * — [showHeartRateBadge]. Отдельного toggle списка нет: непуст = включено.
@@ -117,6 +123,9 @@ interface SettingsStorage {
 
     /** Отметить onboarding-coachmark тренировки как показанный (кнопка «Понятно»). */
     suspend fun setWorkoutCoachmarkShown(shown: Boolean)
+
+    /** Отметить onboarding-coachmark календаря (истории) как показанный (кнопка «Понятно»). */
+    suspend fun setCalendarCoachmarkShown(shown: Boolean)
 
     /**
      * Добавить пульсометр в список (или обновить имя существующего)

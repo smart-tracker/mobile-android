@@ -100,7 +100,7 @@ private fun WeekDayCard(dayItems: List<TrainingHistoryItem>) {
             InfoRow(R.drawable.ic_time,     formatSeconds(totals.seconds))
             InfoRow(R.drawable.ic_distance, formatDistanceM(totals.distanceM))
             InfoRow(R.drawable.ic_kcal,     formatKcal(totals.kilocalories))
-            InfoRow(R.drawable.ic_samples,  "Тр. - ${dayItems.size}")
+            InfoRow(R.drawable.ic_samples,  formatTrainingCount(dayItems.size))
         }
     }
 }

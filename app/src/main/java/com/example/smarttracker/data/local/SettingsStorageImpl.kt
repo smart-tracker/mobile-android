@@ -45,6 +45,7 @@ class SettingsStorageImpl @Inject constructor(
         val FINISH_CONFIRMATION_HOLD = booleanPreferencesKey("finish_confirmation_hold")
         val SHOW_HR_BADGE = booleanPreferencesKey("show_hr_badge")
         val WORKOUT_COACHMARK_SHOWN = booleanPreferencesKey("workout_coachmark_shown")
+        val CALENDAR_COACHMARK_SHOWN = booleanPreferencesKey("calendar_coachmark_shown")
 
         /** JSON-список сохранённых пульсометров ([encodeHrmDevices]). */
         val HRM_DEVICES = stringPreferencesKey("hrm_devices")
@@ -86,6 +87,8 @@ class SettingsStorageImpl @Inject constructor(
                     ?: defaults.showHeartRateBadge,
                 workoutCoachmarkShown = prefs[Keys.WORKOUT_COACHMARK_SHOWN]
                     ?: defaults.workoutCoachmarkShown,
+                calendarCoachmarkShown = prefs[Keys.CALENDAR_COACHMARK_SHOWN]
+                    ?: defaults.calendarCoachmarkShown,
                 hrmDevices = readHrmDevices(prefs),
                 // Legacy-датчик был единственным и выбранным — он же активный
                 hrmActiveAddress = prefs[Keys.HRM_ACTIVE_ADDRESS]
@@ -124,6 +127,10 @@ class SettingsStorageImpl @Inject constructor(
 
     override suspend fun setWorkoutCoachmarkShown(shown: Boolean) {
         context.settingsDataStore.edit { it[Keys.WORKOUT_COACHMARK_SHOWN] = shown }
+    }
+
+    override suspend fun setCalendarCoachmarkShown(shown: Boolean) {
+        context.settingsDataStore.edit { it[Keys.CALENDAR_COACHMARK_SHOWN] = shown }
     }
 
     override suspend fun addHrmDevice(address: String, name: String?) {
