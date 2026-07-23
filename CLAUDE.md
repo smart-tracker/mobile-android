@@ -244,7 +244,7 @@ com.example.smarttracker/
 │   ├── calendar/    TrainingHistoryScreen, TrainingHistoryViewModel,
 │   │                TrainingHistoryUiState, DayTimelineView, WeekTimelineView,
 │   │                MonthTimelineView, CalendarComponents, CalendarConstants,
-│   │                CalendarFormatters
+│   │                CalendarFormatters, CalendarCoachmark (онбординг 4 шага)
 │   ├── menu/
 │   │   ├── MenuScreen.kt
 │   │   ├── profile/  ProfileScreen, ProfileViewModel, ProfileUiState,
@@ -591,6 +591,12 @@ com.example.smarttracker/
 вырез+стрелка на контроле шага). Повторно открывается кнопкой справки «?» в
 хедере (`ic_help.png`, `coachmarkForced`). Плюс на короткий тап «Завершить»
 в hold-режиме выезжает хинт «Удерживайте 3 сек» (`FinishHoldHint`).
+Аналогичный флаг `calendarCoachmarkShown` — onboarding-coachmark экрана истории
+(календарь), 4 шага: пинч-навигация (анимация мини-«дерева» + два пальца по
+диагонали) / вид «День» / «Неделя» / «Месяц» (демо-строки таймлайна с
+расшифровкой полей). Хостится прямо в `TrainingHistoryScreen`
+(`CalendarCoachmark`), без spotlight — демо-карточки в оверлее (у нового
+пользователя истории нет). Кнопка «?» в шапке (`coachmarkForced`).
 Слайдер громкости подсказок — НЕ настройка приложения: он крутит системную
 громкость медиа (`STREAM_MUSIC`) напрямую, в DataStore не пишет; по отпусканию
 `VoiceCueSamplePlayer` отыгрывает короткий шаблон фразы на этом уровне.

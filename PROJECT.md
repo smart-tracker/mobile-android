@@ -4,7 +4,7 @@
 подробная документация по каждому файлу, каждому классу/интерфейсу и каждой функции.
 
 Документ сгенерирован автоматическим обходом всех Kotlin-файлов проекта (main, test, androidTest)
-по состоянию на 2026-07-23, коммит `5782f85`, ветка `main`.
+по состоянию на 2026-07-23, коммит `c10d194`, ветка `feat/calendar-onboarding`.
 
 ---
 
@@ -669,6 +669,7 @@ UseCase регистрации нового пользователя с клие
   - `finishConfirmationHold: Boolean = true` — завершение по удержанию кнопки «Завершить» 3 сек (защита от случайного нажатия); false → мгновенный тап;
   - `showHeartRateBadge: Boolean = true` — показывать бейдж пульса поверх карты (как GPS-бейдж: зелёный подключён / красный нет связи); тумблер в Настройках; НЕ зависит от наличия датчика;
   - `workoutCoachmarkShown: Boolean = false` — служебный флаг (не в UI настроек): показан ли одноразовый onboarding-coachmark первого входа в тренировку;
+  - `calendarCoachmarkShown: Boolean = false` — служебный флаг (не в UI настроек): показан ли одноразовый onboarding-coachmark первого захода на экран истории (календарь); повторно открывается кнопкой «?» в шапке;
   - `hrmDevices: List<SavedHrmDevice> = emptyList()` — сохранённые BLE-пульсометры (пусто = не настроены; гейт StatItem «Пульс» и автоконнекта, но НЕ бейджа — тот на `showHeartRateBadge`; отдельного toggle списка нет: непуст = включено);
   - `hrmActiveAddress: String? = null` — адрес активного датчика (последний выбранный, к нему автоконнект);
   - `fun autoConnectAddress(): String? = hrmActiveAddress ?: hrmDevices.firstOrNull()?.address` — цель автоподключения (активный, иначе первый).
@@ -682,12 +683,13 @@ UseCase регистрации нового пользователя с клие
   - `suspend fun setKeepScreenOn(enabled: Boolean)`;
   - `suspend fun setFinishConfirmationHold(enabled: Boolean)`;
   - `suspend fun setShowHeartRateBadge(enabled: Boolean)` — показ бейджа пульса поверх карты;
-  - `suspend fun setWorkoutCoachmarkShown(shown: Boolean)` — отметить onboarding-coachmark показанным;
+  - `suspend fun setWorkoutCoachmarkShown(shown: Boolean)` — отметить onboarding-coachmark тренировки показанным;
+  - `suspend fun setCalendarCoachmarkShown(shown: Boolean)` — отметить onboarding-coachmark календаря показанным;
   - `suspend fun addHrmDevice(address: String, name: String?)` — добавить/обновить имя в списке и сделать активным;
   - `suspend fun removeHrmDevice(address: String)` — удалить; активный сбрасывается если удалили его;
   - `suspend fun setActiveHrmDevice(address: String)` — переключить активный (тап по строке списка).
 
-Потребители: `SettingsViewModel` (чтение+запись), `LocationTrackingService` (автопауза, TTS, `autoConnectAddress()` для автоподключения), `WorkoutStartViewModel` (keepScreenOn, hrmConfigured=список непуст, автоконнект), `SensorsViewModel` (чтение+запись списка).
+Потребители: `SettingsViewModel` (чтение+запись), `LocationTrackingService` (автопауза, TTS, `autoConnectAddress()` для автоподключения), `WorkoutStartViewModel` (keepScreenOn, hrmConfigured=список непуст, автоконнект), `SensorsViewModel` (чтение+запись списка), `TrainingHistoryViewModel` (чтение `calendarCoachmarkShown` + запись через `setCalendarCoachmarkShown`).
 
 ---
 
@@ -2440,6 +2442,8 @@ Composable-обработчик системных разрешений для G
 - `internal fun formatSeconds(secs: Long): String` — секунды → "HH:MM:SS".
 - `internal fun formatDistanceM(m: Double?): String` — метры → "11,22 км" (запятая) или "350 м" или "--".
 - `internal fun formatKcal(kcal: Double?): String` — "536 кКал" или "--".
+- `internal fun formatTrainingCount(count: Int): String` — компактное "N трен." (кол-во тренировок; полное слово не влезает в тесную Week-карточку 120dp). Используется в `WeekTimelineView` и демо-карточках `CalendarCoachmark` (узкий callout).
+- `internal fun formatTrainingCountFull(count: Int): String` — "N тренировок" с русским склонением (1 тренировка / 2–4 тренировки / 5+ тренировок, исключения 11–14). Только в месячном режиме `MonthTimelineView` — там ширина карточки (140dp на полном экране) вмещает полное слово.
 - `internal fun parseDateTime(iso: String): LocalDateTime` — три уровня fallback парсинга (OffsetDateTime → LocalDateTime → фиктивная дата + время).
 - `internal fun TrainingHistoryItem.durationSeconds(): Long` — extension-функция длительности одной тренировки.
 - `internal fun totalDurationSeconds(items): Long` — сумма длительностей списка.
@@ -2461,33 +2465,45 @@ Composable-обработчик системных разрешений для G
 Месячный вид истории — один нод = одна неделя (Пн–Вс), обычно 4-5 нодов на месяц.
 - `@Composable internal fun MonthTimelineView(state, onWeekSelected)` — генерирует недели месяца через `generateWeeksForMonth`, для каждой фильтрует `items` в диапазон `[weekStart, weekEnd]`.
 - `@Composable private fun MonthWeekRow(weekStart, weekEnd, weekItems, isCardRight, isCurrent, onWeekSelected)` — строка недели; если `weekItems` пуст — карточка не рисуется (только нод + метка диапазона дат).
-- `@Composable private fun MonthWeekCard(weekItems, weekStart)` — карточка агрегатов недели: стрип из 7 иконок (`MonthActivityStrip`, по дню недели) + инфо-блок из 6 строк ("Тр. - N" жирным, доминирующий тип с процентом, время, дистанция, набор высоты, калории).
+- `@Composable private fun MonthWeekCard(weekItems, weekStart)` — карточка агрегатов недели: стрип из 7 иконок (`MonthActivityStrip`, по дню недели) + инфо-блок из 6 строк (кол-во тренировок жирным через `formatTrainingCountFull` — «N тренировок» со склонением, `maxLines=1`; доминирующий тип с процентом, время, дистанция, набор высоты, калории).
 - `@Composable private fun MonthActivityStrip(dayTypeIds: List<Int?>)` — 7 квадратных иконок: `null` (нет тренировки) → белый фон + `ic_sleep`; иначе → `TealAccent` фон + иконка активности самой длинной тренировки дня.
 Особенности/нюансы: тап по карточке недели → `onWeekSelected(weekStart)` переключает `TrainingHistoryViewModel` в `WEEK`-режим для этой недели. Поле "набор высоты" использует серверное `elevation_gain` через `aggregateTotals`.
 
 #### `presentation/calendar/TrainingHistoryScreen.kt`
 Корневой экран истории тренировок с тремя режимами (День/Неделя/Месяц), переключаемыми жестами pinch/spread.
-- `@Composable fun TrainingHistoryScreen(padding, onNavigateToStart, onTrainingClick)` — хоистит `TrainingHistoryViewModel`, сбрасывает на "День/сегодня" при каждом входе (`LaunchedEffect(Unit) { viewModel.resetToToday() }`). Обрабатывает `pointerInput { detectTransformGestures }`: накопленный `scale > 1.3` → `onZoomIn()` (углубление в детали DAY←WEEK←MONTH), `scale < 0.7` → `onZoomOut()` (обобщение). `BackHandler` работает, только если `backStack` не пуст.
-- `@Composable private fun HistoryHeader(state)` — центрированная метка периода (дата/диапазон недели/диапазон месяца через `periodLabel`).
+- `@Composable fun TrainingHistoryScreen(padding, onNavigateToStart, onTrainingClick)` — хоистит `TrainingHistoryViewModel`, сбрасывает на "День/сегодня" при каждом входе (`LaunchedEffect(Unit) { viewModel.resetToToday() }`). Обрабатывает `pointerInput { detectTransformGestures }`: накопленный `scale > 1.3` → `onZoomIn()` (углубление в детали DAY←WEEK←MONTH), `scale < 0.7` → `onZoomOut()` (обобщение). `BackHandler` работает, только если `backStack` не пуст. Корневой `Column` обёрнут в `Box(fillMaxSize)` — поверх ложится `CalendarCoachmark` (онбординг). Видимость coachmark: локальные `coachmarkForced`/`coachmarkStep` (remember); `coachmarkVisible = coachmarkForced || (!state.isLoading && !state.coachmarkShown)` — авто-показ при первом заходе (флаг persist), гейт `!isLoading` не мигает поверх спиннера. Дисмисс → `viewModel.onCoachmarkDismissed()`.
+- `@Composable private fun HistoryHeader(state, onHelpClick)` — центрированная метка периода (дата/диапазон недели/диапазон месяца через `periodLabel`) + кнопка справки `ic_help` в левом углу (`Alignment.CenterStart`), `onHelpClick = { coachmarkStep = 0; coachmarkForced = true }` — повторный показ онбординга.
 - `private fun periodLabel(state): String` — форматирует заголовок в зависимости от `viewMode`.
 - `@Composable private fun StartWorkoutButton(label, onClick)` — кнопка внизу экрана (текст меняется: "Начать свою тренировку" в DAY-режиме, "Запланировать тренировку" в остальных); белые `Spacer` перекрывают линию ствола до/после кнопки.
-Особенности/нюансы: жест инвертирован интуитивно (spread=увеличение=углубление в детали, как zoom на карте/фото). Ствол дерева рисуется `Modifier.drawTrunk()` на весь контентный `Box`, включая область под кнопкой.
+Особенности/нюансы: жест инвертирован интуитивно (spread=увеличение=углубление в детали, как zoom на карте/фото). Ствол дерева рисуется `Modifier.drawTrunk()` на весь контентный `Box`, включая область под кнопкой. Онбординг хостится прямо здесь (не в `WorkoutHomeScreen`, как у тренировки): на этом экране нет живой карты, нюанс 36 неактуален.
+
+#### `presentation/calendar/CalendarCoachmark.kt`
+Многошаговый onboarding-coachmark экрана истории (по образцу `WorkoutStartScreen.WorkoutCoachmark`, но без spotlight-выреза по реальным контролам: у нового пользователя истории нет и экран показывает лишь один режим за раз, поэтому виды — демо-строки таймлайна прямо в оверлее).
+- `internal const val COACHMARK_STEPS = 4` — шаги: 0 пинч/навигация, 1 День, 2 Неделя, 3 Месяц.
+- `@Composable internal fun CalendarCoachmark(step, stepCount, onNext, onBack, onDismiss)` — скрим `Color.Black.copy(alpha=0.62f)` + тап-дисмисс по фону; белая callout-карточка по центру с заголовком `${step+1}/$stepCount  $title`, скроллящимся контентом (`heightIn(max=440).verticalScroll`) и кнопками Назад/Далее/Понятно.
+- `@Composable private fun ColumnScope.PinchStep()` — `TreePinchDemo()` + буллеты про жесты.
+- `@Composable private fun TreePinchDemo()` — мини-«дерево» таймлайна (ствол `drawBehind` + ноды + карточки слева/справа через `MiniTree`/`MiniTreeRow`/`MiniCard`), два кружка-«пальца» (`FingerDot`) расходятся по диагонали ↙↗. Анимация — `Animatable` в `LaunchedEffect` (плавный ход туда-обратно с паузами ~1.1с на крайних режимах).
+- `@Composable private fun ColumnScope.DayStep()/WeekStep()/MonthStep()` — каждый вызывает `DemoBlock` (полная строка таймлайна + расшифровка полей) с демо-данными; Week-стрип показывает 3 иконки, Month — 7 (5 тренировок + 2 `ic_sleep`); преобладающий вид Month подан конкретным примером («Бег 62%»).
+- `@Composable private fun DemoBlock(rowHeight, label, isCurrent, card, annotations)` — единый блок «фото + текст» на светлом фоне: настоящая `TimelineRow` (ствол+нод+метка+карточка) через `Box(...).drawTrunk()` + краткая расшифровка снизу.
+- `@Composable private fun FieldAnnotation(iconRes, text, iconSize)` — строка расшифровки: иконка-якорь (та же, что на карточке) + стрелка `→` + пояснение. `CoachmarkTip(text)` — буллет «•».
+Особенности/нюансы: демо-карточки собраны из тех же `internal`-хелперов пакета (`TimelineRow`, `TimelineInfoColumn`, `InfoRow`, `TimelineIconBox`, `activityColorFor`, `TimelineStripShape`) — визуально идентичны реальным. Иконка календаря (`ic_samples`) намеренно НЕ показана в Month-расшифровке (в реальной Month-карточке её нет).
 
 #### `presentation/calendar/TrainingHistoryUiState.kt`
 Модель режимов просмотра и состояния экрана истории тренировок.
 - `enum class HistoryViewMode { DAY, WEEK, MONTH }` — с методами `zoomIn()` (MONTH→WEEK→DAY) и `zoomOut()` (DAY→WEEK→MONTH), в конечных состояниях no-op.
-- `data class TrainingHistoryUiState(isLoading, items, workoutTypes, error, viewMode, selectedDate, backStack: List<Pair<HistoryViewMode, LocalDate>>)`.
-Особенности/нюансы: `selectedDate` — опорная дата, интерпретируется по-разному в зависимости от `viewMode` (конкретный день / неделя, в которую попадает дата / месяц). `backStack` пушится при каждой навигации, используется `onBack()` для возврата.
+- `data class TrainingHistoryUiState(isLoading, items, workoutTypes, error, viewMode, selectedDate, backStack: List<Pair<HistoryViewMode, LocalDate>>, coachmarkShown: Boolean = false)`.
+Особенности/нюансы: `selectedDate` — опорная дата, интерпретируется по-разному в зависимости от `viewMode` (конкретный день / неделя, в которую попадает дата / месяц). `backStack` пушится при каждой навигации, используется `onBack()` для возврата. `coachmarkShown` зеркалит `SettingsStorage.calendarCoachmarkShown` — гейт авто-показа онбординга.
 
 #### `presentation/calendar/TrainingHistoryViewModel.kt`
-`@HiltViewModel` экрана истории: загрузка списка тренировок, навигация между периодами через zoom/tap/back.
+`@HiltViewModel` экрана истории (`@Inject constructor(workoutRepository, settingsStorage)`): загрузка списка тренировок, навигация между периодами через zoom/tap/back, флаг онбординга.
 - `fun loadHistory()` — вызывает `workoutRepository.getTrainingHistory()`, обновляет `items`/`error`.
+- `fun onCoachmarkDismissed()` — «Понятно» в онбординге: `settingsStorage.setCalendarCoachmarkShown(true)` (персист).
 - `fun onZoomIn()` / `fun onZoomOut()` — меняют `viewMode` через `zoomIn()`/`zoomOut()`, пушат текущее состояние в `backStack`; no-op если режим не изменился (уже в конечном состоянии).
 - `fun onDaySelected(date: LocalDate)` — переход в DAY для конкретной даты (из Week view), пушит текущее состояние в стек.
 - `fun onWeekSelected(weekStart: LocalDate)` — переход в WEEK для конкретной недели (из Month view).
 - `fun resetToToday()` — сбрасывает на DAY/сегодня с очисткой `backStack`; вызывается при каждом входе на экран.
 - `fun onBack(): Boolean` — pop из `backStack`, возвращает `false` если стек пуст (тогда система сама обработает Back — выход с экрана).
-Особенности/нюансы: подписан на `workoutRepository.historyChangedFlow` — автообновление истории при `saveTraining` (в т.ч. из `SaveTrainingWorker` в офлайн-сценарии) или `deleteCompletedTraining`. Также подписан на `workoutTypesFlow()` для резолва названий активностей в UI.
+Особенности/нюансы: подписан на `workoutRepository.historyChangedFlow` — автообновление истории при `saveTraining` (в т.ч. из `SaveTrainingWorker` в офлайн-сценарии) или `deleteCompletedTraining`. Также подписан на `workoutTypesFlow()` для резолва названий активностей в UI и на `settingsStorage.settings` — зеркалит `calendarCoachmarkShown` в UiState.
 
 #### `presentation/calendar/WeekTimelineView.kt`
 Недельный вид истории — один нод = один день недели (7 нодов, Пн–Вс).
