@@ -4,7 +4,7 @@
 подробная документация по каждому файлу, каждому классу/интерфейсу и каждой функции.
 
 Документ сгенерирован автоматическим обходом всех Kotlin-файлов проекта (main, test, androidTest)
-по состоянию на 2026-07-23, коммит `c10d194`, ветка `feat/calendar-onboarding`.
+по состоянию на 2026-07-23, коммит `93b234a`, ветка `feat/calendar-onboarding`.
 
 ---
 
@@ -2423,6 +2423,7 @@ Composable-обработчик системных разрешений для G
 - `@Composable internal fun TimelineInfoColumn(modifier, verticalArrangement, content)` — готовая инфо-колонка карточки (белый фон, рамка, скругление справа).
 - `@Composable internal fun InfoRow(iconRes, value, textStyle, iconSize)` — строка "иконка + текст" внутри карточки, с `Ellipsis`-обрезкой в одну строку.
 - `@Composable internal fun TimelineIconBox(iconRes, bgColor, boxSize, iconSize, cornerRadius)` — квадратная иконка с фоном (используется в стрипах Week/Month и Day-полоске).
+- `@Composable internal fun CalendarEmptyBlock(text, modifier)` — блок пустого состояния «нет тренировок»: белая карточка (перекрывает ствол), иконка отдыха `ic_sleep` + текст; та же рамка/скругление/фон, что у блока ошибки. Используется в `DayTimelineView`.
 Особенности/нюансы: используется во всех трёх видах (`DayTimelineView`, `WeekTimelineView`, `MonthTimelineView`) для единообразного визуального языка "дерева" с чередующимися карточками.
 
 #### `presentation/calendar/CalendarConstants.kt`
@@ -2456,7 +2457,7 @@ Composable-обработчик системных разрешений для G
 
 #### `presentation/calendar/DayTimelineView.kt`
 Дневной вид истории тренировок — список карточек тренировок конкретного дня, чередующихся лево/право от "ствола".
-- `@Composable internal fun DayTimelineView(state, onTrainingClick)` — фильтрует `state.items` по `state.selectedDate`, сортирует по `timeStart`; при пустом списке показывает "Нет тренировок за этот день"; иначе `LazyColumn` с центрированием (`Arrangement.spacedBy(16.dp, CenterVertically)`) если ≤4 тренировок.
+- `@Composable internal fun DayTimelineView(state, onTrainingClick)` — фильтрует `state.items` по `state.selectedDate`, сортирует по `timeStart`; при пустом списке показывает `CalendarEmptyBlock` («Нет тренировок за этот день»); иначе `LazyColumn` с центрированием (`Arrangement.spacedBy(16.dp, CenterVertically)`) если ≤4 тренировок.
 - `@Composable private fun DayRow(item, activityName, isCardRight, onTrainingClick)` — одна строка таймлайна (`TimelineRow` + карточка).
 - `@Composable private fun DayCard(item, activityName)` — карточка: цветная полоска (`activityColorFor`, иконка активности 20dp) + инфо-блок (название / длительность / дистанция-или-калории — приоритет дистанции, если она известна).
 Особенности/нюансы: клик по карточке вызывает `onTrainingClick(item, activityName)` → в `WorkoutHomeScreen` открывает `SummaryOverlay` через `viewModel.showHistorySummary`. Название активности разрешается через `state.workoutTypes.find { it.id == item.typeActivId }`.
@@ -2473,6 +2474,7 @@ Composable-обработчик системных разрешений для G
 Корневой экран истории тренировок с тремя режимами (День/Неделя/Месяц), переключаемыми жестами pinch/spread.
 - `@Composable fun TrainingHistoryScreen(padding, onNavigateToStart, onTrainingClick)` — хоистит `TrainingHistoryViewModel`, сбрасывает на "День/сегодня" при каждом входе (`LaunchedEffect(Unit) { viewModel.resetToToday() }`). Обрабатывает `pointerInput { detectTransformGestures }`: накопленный `scale > 1.3` → `onZoomIn()` (углубление в детали DAY←WEEK←MONTH), `scale < 0.7` → `onZoomOut()` (обобщение). `BackHandler` работает, только если `backStack` не пуст. Корневой `Column` обёрнут в `Box(fillMaxSize)` — поверх ложится `CalendarCoachmark` (онбординг). Видимость coachmark: локальные `coachmarkForced`/`coachmarkStep` (remember); `coachmarkVisible = coachmarkForced || (!state.isLoading && !state.coachmarkShown)` — авто-показ при первом заходе (флаг persist), гейт `!isLoading` не мигает поверх спиннера. Дисмисс → `viewModel.onCoachmarkDismissed()`.
 - `@Composable private fun HistoryHeader(state, onHelpClick)` — центрированная метка периода (дата/диапазон недели/диапазон месяца через `periodLabel`) + кнопка справки `ic_help` в левом углу (`Alignment.CenterStart`), `onHelpClick = { coachmarkStep = 0; coachmarkForced = true }` — повторный показ онбординга.
+- `@Composable private fun HistoryErrorBlock(message, onRetry, modifier)` — блок ошибки загрузки: белая карточка (перекрывает ствол), иконка `Icons.Filled.Warning`, заголовок «Не удалось загрузить историю», переведённое сообщение (`message` уже русское) и кнопка «Повторить» (`Icons.Filled.Refresh`) → `viewModel::loadHistory`. Контейнер спиннера/ошибки — `Box(weight(1f).fillMaxWidth())`: без `fillMaxWidth` Box в `Column` оборачивал контент и прижимался влево, `align(Center)` центрировал у края, а не по стволу.
 - `private fun periodLabel(state): String` — форматирует заголовок в зависимости от `viewMode`.
 - `@Composable private fun StartWorkoutButton(label, onClick)` — кнопка внизу экрана (текст меняется: "Начать свою тренировку" в DAY-режиме, "Запланировать тренировку" в остальных); белые `Spacer` перекрывают линию ствола до/после кнопки.
 Особенности/нюансы: жест инвертирован интуитивно (spread=увеличение=углубление в детали, как zoom на карте/фото). Ствол дерева рисуется `Modifier.drawTrunk()` на весь контентный `Box`, включая область под кнопкой. Онбординг хостится прямо здесь (не в `WorkoutHomeScreen`, как у тренировки): на этом экране нет живой карты, нюанс 36 неактуален.
@@ -2496,7 +2498,7 @@ Composable-обработчик системных разрешений для G
 
 #### `presentation/calendar/TrainingHistoryViewModel.kt`
 `@HiltViewModel` экрана истории (`@Inject constructor(workoutRepository, settingsStorage)`): загрузка списка тренировок, навигация между периодами через zoom/tap/back, флаг онбординга.
-- `fun loadHistory()` — вызывает `workoutRepository.getTrainingHistory()`, обновляет `items`/`error`.
+- `fun loadHistory()` — вызывает `workoutRepository.getTrainingHistory()`, обновляет `items`; при ошибке `error = ApiErrorHandler.getErrorMessage(e)` (понятное русское сообщение вместо сырого `e.message`). Вызывается и из кнопки «Повторить» в блоке ошибки.
 - `fun onCoachmarkDismissed()` — «Понятно» в онбординге: `settingsStorage.setCalendarCoachmarkShown(true)` (персист).
 - `fun onZoomIn()` / `fun onZoomOut()` — меняют `viewMode` через `zoomIn()`/`zoomOut()`, пушат текущее состояние в `backStack`; no-op если режим не изменился (уже в конечном состоянии).
 - `fun onDaySelected(date: LocalDate)` — переход в DAY для конкретной даты (из Week view), пушит текущее состояние в стек.
