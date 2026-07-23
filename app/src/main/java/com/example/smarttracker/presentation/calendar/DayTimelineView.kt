@@ -1,6 +1,5 @@
 package com.example.smarttracker.presentation.calendar
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
@@ -15,7 +14,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -27,7 +25,6 @@ import com.example.smarttracker.R
 import com.example.smarttracker.domain.model.TrainingHistoryItem
 import com.example.smarttracker.domain.model.WorkoutType
 import com.example.smarttracker.presentation.theme.SmartTrackerTheme
-import com.example.smarttracker.presentation.theme.WorkoutTextStyles
 import com.example.smarttracker.presentation.workout.activityIconRes
 import java.time.LocalDate
 
@@ -50,13 +47,7 @@ internal fun DayTimelineView(
 
     if (dayItems.isEmpty()) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text(
-                text = "Нет тренировок за этот день",
-                style = WorkoutTextStyles.screenHeaderDate,
-                modifier = Modifier
-                    .padding(16.dp)
-                    .background(Color.White),
-            )
+            CalendarEmptyBlock(text = "Нет тренировок за этот день")
         }
     } else {
         LazyColumn(

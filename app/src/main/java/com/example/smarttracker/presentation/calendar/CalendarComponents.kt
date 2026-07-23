@@ -13,9 +13,11 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -226,6 +228,38 @@ internal fun InfoRow(
             style = textStyle,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+// ── Блок пустого состояния (нет тренировок за период) ───────────────────────
+
+/**
+ * Небольшой блок «нет тренировок»: белая карточка (перекрывает ствол), иконка
+ * отдыха и текст. Согласован с блоком ошибки — та же рамка/скругление/фон.
+ */
+@Composable
+internal fun CalendarEmptyBlock(text: String, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier
+            .widthIn(max = 300.dp)
+            .clip(RoundedCornerShape(TimelineDims.CornerRadius))
+            .background(Color.White)
+            .border(TimelineDims.BorderThickness, TrunkColor, RoundedCornerShape(TimelineDims.CornerRadius))
+            .padding(horizontal = 24.dp, vertical = 20.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Icon(
+            painter = painterResource(R.drawable.ic_sleep),
+            contentDescription = null,
+            modifier = Modifier.size(36.dp),
+            tint = Color.Unspecified,
+        )
+        Spacer(Modifier.height(10.dp))
+        Text(
+            text = text,
+            style = WorkoutTextStyles.screenHeaderDate,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
         )
     }
 }

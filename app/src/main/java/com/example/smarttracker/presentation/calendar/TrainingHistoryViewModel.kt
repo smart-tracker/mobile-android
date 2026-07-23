@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.smarttracker.data.local.SettingsStorage
 import com.example.smarttracker.domain.repository.WorkoutRepository
+import com.example.smarttracker.utils.ApiErrorHandler
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -63,7 +64,10 @@ class TrainingHistoryViewModel @Inject constructor(
             _state.update { it.copy(isLoading = true, error = null) }
             workoutRepository.getTrainingHistory()
                 .onSuccess { items -> _state.update { it.copy(isLoading = false, items = items) } }
-                .onFailure { e -> _state.update { it.copy(isLoading = false, error = e.message) } }
+                .onFailure { e ->
+                    // Понятное сообщение на русском (сеть/HTTP/прочее) вместо сырого e.message.
+                    _state.update { it.copy(isLoading = false, error = ApiErrorHandler.getErrorMessage(e)) }
+                }
         }
     }
 
