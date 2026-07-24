@@ -71,6 +71,21 @@ class TrainingHistoryViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Прямое переключение уровня табами (День/Неделя/Месяц). В отличие от пинча —
+     * любой уровень напрямую. [anchorDate] — текущий верхний видимый период, чтобы
+     * при смене уровня остаться на том же времени (не прыгать на старый selectedDate).
+     */
+    fun setViewMode(mode: HistoryViewMode, anchorDate: LocalDate) {
+        val current = _state.value
+        if (mode == current.viewMode) return
+        _state.update { it.copy(
+            viewMode = mode,
+            selectedDate = anchorDate,
+            backStack = it.backStack + (it.viewMode to it.selectedDate),
+        ) }
+    }
+
     fun onZoomIn() {
         val current = _state.value
         val newMode = current.viewMode.zoomIn()

@@ -108,7 +108,6 @@ fun WorkoutHomeScreen(
             }
             WorkoutTab.WORKOUTS -> TrainingHistoryScreen(
                     padding = padding,
-                    onNavigateToStart = { currentTab = WorkoutTab.START },
                     onTrainingClick = { item, activityName ->
                         currentTab = WorkoutTab.START
                         viewModel.showHistorySummary(item, activityName)

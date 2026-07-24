@@ -169,6 +169,45 @@ private fun ColumnScope.PinchStep() {
     CoachmarkTip("Разведите пальцы — глубже: Месяц → Неделя → День.")
     CoachmarkTip("Сведите пальцы — обзорнее: День → Неделя → Месяц.")
     CoachmarkTip("Тап по карточке открывает период подробнее.")
+    Spacer(Modifier.height(10.dp))
+    CoachmarkTip("Или переключайте режим табами внизу экрана:")
+    Spacer(Modifier.height(6.dp))
+    MiniModeTabs()
+}
+
+/** Мини-образец сегмент-контрола режимов (для онбординга). */
+@Composable
+private fun MiniModeTabs() {
+    val shape = RoundedCornerShape(6.dp)
+    val labels = listOf("День", "Неделя", "Месяц")
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(28.dp)
+            .clip(shape)
+            .border(1.dp, ColorPrimary, shape),
+    ) {
+        labels.forEachIndexed { i, label ->
+            if (i > 0) {
+                Box(Modifier.width(1.dp).fillMaxHeight().background(ColorPrimary.copy(alpha = 0.4f)))
+            }
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    // Для примера подсвечен «День».
+                    .background(if (i == 0) ColorSecondary else Color.White),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = label,
+                    color = if (i == 0) Color.White else ColorPrimary,
+                    fontSize = 13.sp,
+                    fontWeight = if (i == 0) FontWeight.Bold else FontWeight.Normal,
+                )
+            }
+        }
+    }
 }
 
 /**

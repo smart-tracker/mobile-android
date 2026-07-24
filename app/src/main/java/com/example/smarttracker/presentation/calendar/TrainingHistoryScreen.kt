@@ -10,6 +10,7 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -43,6 +44,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -50,6 +52,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.smarttracker.R
 import com.example.smarttracker.presentation.theme.ColorPrimary
+import com.example.smarttracker.presentation.theme.ColorSecondary
 import com.example.smarttracker.presentation.theme.WorkoutTextStyles
 
 /**
@@ -57,19 +60,19 @@ import com.example.smarttracker.presentation.theme.WorkoutTextStyles
  *
  * Управляет тремя режимами просмотра: День / Неделя / Месяц.
  * Переключение:
- *  - Пинч-spread (scale > 1.3) → zoom out (DAY→WEEK→MONTH)
- *  - Пинч-pinch  (scale < 0.7) → zoom in  (MONTH→WEEK→DAY)
- *  - Тап на день в Week view   → Day view для той даты
+ *  - Табы «День/Неделя/Месяц» внизу → прямой выбор уровня
+ *  - Пинч-spread/pinch          → смена уровня (ускоритель)
+ *  - Тап на день в Week view    → Day view для той даты
  *  - Тап на неделю в Month view → Week view для той недели
- *  - Системный «Назад»          → предыдущий режим из бэкстека
+ *  - Тап по дате в шапке         → выбор даты (прыжок ленты)
+ *  - Системный «Назад»           → предыдущий режим из бэкстека
  *
  * Ствол дерева (16dp, ColorPrimary) рисуется drawBehind на весь контентный Box,
- * включая область кнопки внизу.
+ * включая область табов внизу.
  */
 @Composable
 fun TrainingHistoryScreen(
     padding: PaddingValues,
-    onNavigateToStart: () -> Unit,
     onTrainingClick: (com.example.smarttracker.domain.model.TrainingHistoryItem, String) -> Unit = { _, _ -> },
 ) {
     val viewModel: TrainingHistoryViewModel = hiltViewModel()
@@ -193,13 +196,11 @@ fun TrainingHistoryScreen(
                     }
                 }
 
-                StartWorkoutButton(
-                    label = if (state.viewMode == HistoryViewMode.DAY) {
-                        "Начать свою тренировку"
-                    } else {
-                        "Запланировать тренировку"
-                    },
-                    onClick = onNavigateToStart,
+                // Табы режима внизу (белая подложка перекрывает ствол).
+                ModeTabs(
+                    current = state.viewMode,
+                    // anchorDate — верхний видимый период: смена уровня сохраняет время.
+                    onSelect = { viewModel.setViewMode(it, visiblePeriod) },
                 )
             }
         }
@@ -345,37 +346,57 @@ private fun HistoryErrorBlock(
     }
 }
 
-// ── Кнопка внизу ──────────────────────────────────────────────────────────────
+// ── Табы режима (сегмент-контрол День/Неделя/Месяц) ────────────────────────────
+
+/**
+ * Переключатель режима: единый сегмент-контрол из трёх равных по ширине сегментов,
+ * активный залит `ColorSecondary`. Видимый индикатор текущего уровня + альтернатива
+ * пинчу (находка №3). Компактная тонкая полоса под шапкой.
+ */
+@Composable
+private fun ModeTabs(current: HistoryViewMode, onSelect: (HistoryViewMode) -> Unit) {
+    val shape = RoundedCornerShape(8.dp)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, end = 16.dp, top = 6.dp, bottom = 14.dp)
+            .height(30.dp)
+            .clip(shape)
+            .border(1.dp, ColorPrimary, shape),
+    ) {
+        SegmentTab("День", current == HistoryViewMode.DAY, Modifier.weight(1f)) { onSelect(HistoryViewMode.DAY) }
+        SegmentDivider()
+        SegmentTab("Неделя", current == HistoryViewMode.WEEK, Modifier.weight(1f)) { onSelect(HistoryViewMode.WEEK) }
+        SegmentDivider()
+        SegmentTab("Месяц", current == HistoryViewMode.MONTH, Modifier.weight(1f)) { onSelect(HistoryViewMode.MONTH) }
+    }
+}
 
 @Composable
-private fun StartWorkoutButton(label: String, onClick: () -> Unit) {
-    // Белые Spacer перекрывают ствол до и после кнопки (drawBehind рисуется ДО детей)
-    Spacer(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(6.dp)
-            .background(Color.White),
-    )
+private fun SegmentTab(label: String, isActive: Boolean, modifier: Modifier, onClick: () -> Unit) {
     Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp)
-            .height(50.dp)
-            .clip(RoundedCornerShape(10.dp))
-            .background(TrunkColor)
+        modifier = modifier
+            .fillMaxHeight()
+            .background(if (isActive) ColorSecondary else Color.White)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         Text(
             text = label,
-            style = WorkoutTextStyles.primaryButtonLabel,
-            color = Color.White,
+            color = if (isActive) Color.White else ColorPrimary,
+            fontSize = 14.sp,
+            fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
         )
     }
-    Spacer(
+}
+
+/** Тонкий вертикальный разделитель между сегментами. */
+@Composable
+private fun SegmentDivider() {
+    Box(
         modifier = Modifier
-            .fillMaxWidth()
-            .height(6.dp)
-            .background(Color.White),
+            .width(1.dp)
+            .fillMaxHeight()
+            .background(ColorPrimary.copy(alpha = 0.4f)),
     )
 }
