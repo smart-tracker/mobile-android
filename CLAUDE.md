@@ -244,7 +244,8 @@ com.example.smarttracker/
 │   ├── calendar/    TrainingHistoryScreen, TrainingHistoryViewModel,
 │   │                TrainingHistoryUiState, DayTimelineView, WeekTimelineView,
 │   │                MonthTimelineView, CalendarComponents, CalendarConstants,
-│   │                CalendarFormatters, CalendarCoachmark (онбординг 4 шага)
+│   │                CalendarFormatters, CalendarCoachmark (онбординг 4 шага),
+│   │                CalendarDatePicker (выбор даты, адаптивный под режим)
 │   ├── menu/
 │   │   ├── MenuScreen.kt
 │   │   ├── profile/  ProfileScreen, ProfileViewModel, ProfileUiState,
@@ -580,7 +581,10 @@ com.example.smarttracker/
 верхнего видимого периода «вплывает» в шапку. День — reverse-лента (сегодня внизу,
 старые вверху), непрерывное чередование карточок через границы дней (кумулятивный
 паритет). Пинч (смена уровня) обрабатывается только при 2+ пальцах — одно-пальцевый
-скролл идёт в LazyColumn нативно (`rememberDampedFling` смягчает инерцию).
+скролл идёт в LazyColumn (`rememberSnappyFling` — fling короче доезжает через
+повышенное трение `exponentialDecay`). Тап по дате в шапке → выбор даты
+(`CalendarDatePicker`, адаптивный под режим: день-сетка / список недель / сетка
+месяцев, кастомные в фирменном стиле) → `viewModel.jumpToDate` прыгает лентой.
 Индексация/лейблы периодов — чистые функции в `CalendarFormatters`
 (`periodCount`/`periodStartAt`/`periodIndexOf`/`*HeaderLabel`, покрыты
 `CalendarFormattersTest`).

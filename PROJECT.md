@@ -4,7 +4,7 @@
 подробная документация по каждому файлу, каждому классу/интерфейсу и каждой функции.
 
 Документ сгенерирован автоматическим обходом всех Kotlin-файлов проекта (main, test, androidTest)
-по состоянию на 2026-07-23, коммит `86b1f8a`, ветка `feat/calendar-onboarding`.
+по состоянию на 2026-07-24, коммит `4a0ac74`, ветка `feat/calendar-onboarding`.
 
 ---
 
@@ -2425,7 +2425,7 @@ Composable-обработчик системных разрешений для G
 - `@Composable internal fun TimelineIconBox(iconRes, bgColor, boxSize, iconSize, cornerRadius)` — квадратная иконка с фоном (используется в стрипах Week/Month и Day-полоске).
 - `@Composable internal fun PeriodHeader(label, isCurrent, modifier)` — плашка-заголовок между периодами (бесконечный скролл): центральная капсула на стволе (белый фон перекрывает ствол, рамка `TrunkColor`; текущий период — акцент `TealAccent`).
 - `@Composable internal fun PeriodEmptyNote(text, modifier)` — компактная пометка «нет тренировок» под заголовком пустого дня (только DAY: там нет под-строк-нодов).
-- `@Composable internal fun rememberDampedFling(factor = 0.4f): FlingBehavior` — `FlingBehavior` с уменьшенной инерцией (стартовая скорость fling × factor) для LazyColumn всех трёх view: скролл быстрее затухает, не «улетает».
+- `@Composable internal fun rememberSnappyFling(frictionMultiplier = 2.2f): FlingBehavior` — `FlingBehavior` на `exponentialDecay` с повышенным трением для LazyColumn всех трёх view: fling короче доезжает на длинной ленте, движение естественное (не «вязкое», как при урезании velocity).
 Особенности/нюансы: используется во всех трёх видах (`DayTimelineView`, `WeekTimelineView`, `MonthTimelineView`) для единообразного визуального языка "дерева" с чередующимися карточками.
 
 #### `presentation/calendar/CalendarConstants.kt`
@@ -2436,6 +2436,15 @@ Composable-обработчик системных разрешений для G
 - `internal object TimelineDims` — централизованные размеры: `TrunkWidth` (16dp), `NodeColumnWidth` (32dp), `CornerRadius` (10dp), `BorderThickness` (1dp), `TrunkGap` (12dp), `InfoCardWidth` (120dp), паддинги, `IconBoxCornerRadius` (5dp).
 - `internal val TimelineStripShape`, `TimelineInfoShape: RoundedCornerShape` — скругление слева (стрип) и справа (инфо-блок).
 Особенности/нюансы: централизованное место размеров — изменения подхватываются во всех трёх view (Day/Week/Month) одновременно.
+
+#### `presentation/calendar/CalendarDatePicker.kt`
+Выбор даты по тапу на шапку истории — **адаптивный под текущий режим**, кастомные диалоги в едином фирменном стиле (белая карточка, бирюзовый акцент, русский текст). Результат → `ViewModel.jumpToDate` (якорь прокрутки), диапазон ограничен `[firstDate … today]`.
+- `@Composable internal fun HistoryDatePickerDialog(viewMode, currentDate, firstDate, today, onDismiss, onPick)` — роутинг по `viewMode` на нужный пикер.
+- `@Composable private fun DayPickerDialog(...)` — сетка-календарь месяца (навигация ← → по месяцам в пределах диапазона), дни недели Пн–Вс, недоступные даты серые; выбранный день — `ColorSecondary`, сегодня — обводка. Тап по дню = моментальный выбор + `onPick`.
+- `@Composable private fun WeekPickerDialog(...)` — `LazyColumn`-список недель (диапазоны `weekHeaderLabel`), тап → `onPick(weekStart)`.
+- `@Composable private fun MonthYearPickerDialog(...)` — переключатель года ← → + сетка 3×4 месяцев (`ShortMonths`), недоступные — серые; тап → `onPick(LocalDate(year, month, 1))`.
+- `@Composable private fun PickerScaffold(title, onDismiss, content)` — общий каркас кастомного диалога (`Dialog` + `Surface` + заголовок + «Отмена»); `DayCell`/`MonthCell` — ячейки.
+Особенности/нюансы: единый стиль вместо Material3 `DatePicker` (тот тянул локаль устройства и не совпадал с дизайном). Даты/месяцы/недели вне `[firstDate … today]` задизейблены — данных там нет.
 
 #### `presentation/calendar/CalendarFormatters.kt`
 Чистые функции форматирования времени/дистанций и агрегации статистики для истории тренировок.
@@ -2476,7 +2485,7 @@ Composable-обработчик системных разрешений для G
 #### `presentation/calendar/TrainingHistoryScreen.kt`
 Корневой экран истории тренировок с тремя режимами (День/Неделя/Месяц), переключаемыми жестами pinch/spread.
 - `@Composable fun TrainingHistoryScreen(padding, onNavigateToStart, onTrainingClick)` — хоистит `TrainingHistoryViewModel`, сбрасывает на "День/сегодня" при входе (`LaunchedEffect(Unit) { resetToToday() }`). Пинч через `pointerInput { awaitEachGesture }`: зум обрабатывается ТОЛЬКО при 2+ пальцах и события потребляются лишь тогда — одно-пальцевый вертикальный скролл уходит в `LazyColumn` нативно (`detectTransformGestures` перехватывал pan → скролл был резким). `accumulatedScale` растёт через `calculateZoom()`, порог 1.3 → `onZoomIn`, 0.7 → `onZoomOut`. `visiblePeriod` (remember) — начало верхнего видимого периода, обновляется через `onVisiblePeriodChanged` из каждого view (дата «вплывает» в шапку). `BackHandler` при непустом `backStack`. Корневой `Column` в `Box(fillMaxSize)` — поверх `CalendarCoachmark`; видимость `coachmarkForced || (!isLoading && !coachmarkShown)`.
-- `@Composable private fun HistoryHeader(viewMode, periodStart, onHelpClick)` — метка верхнего видимого периода (`periodLabel(viewMode, periodStart)`) + кнопка справки `ic_help` (`CenterStart`).
+- `@Composable private fun HistoryHeader(viewMode, periodStart, onHelpClick, onDateClick)` — метка верхнего видимого периода (`periodLabel`) кликабельна → `onDateClick` (выбор даты, `HistoryDatePickerDialog` по тапу); кнопка справки `ic_help` (`CenterStart`). `showDatePicker`-стейт хостит диалог; `firstDate = items.minOf date`, `onPick = viewModel::jumpToDate`.
 - `@Composable private fun HistoryErrorBlock(message, onRetry, modifier)` — блок ошибки загрузки: белая карточка (перекрывает ствол), иконка `Icons.Filled.Warning`, заголовок «Не удалось загрузить историю», переведённое сообщение (`message` уже русское) и кнопка «Повторить» (`Icons.Filled.Refresh`) → `viewModel::loadHistory`. Контейнер спиннера/ошибки — `Box(weight(1f).fillMaxWidth())`: без `fillMaxWidth` Box в `Column` оборачивал контент и прижимался влево, `align(Center)` центрировал у края, а не по стволу.
 - `private fun periodLabel(viewMode, periodStart): String` — лейбл верхнего видимого периода для шапки (те же форматы, что у плашек: `dayHeaderLabel`/`weekHeaderLabel`/`monthHeaderLabel`).
 - `@Composable private fun StartWorkoutButton(label, onClick)` — кнопка внизу экрана (текст: "Начать свою тренировку" в DAY, "Запланировать тренировку" в остальных); белые `Spacer` перекрывают ствол до/после кнопки.
@@ -2502,6 +2511,7 @@ Composable-обработчик системных разрешений для G
 #### `presentation/calendar/TrainingHistoryViewModel.kt`
 `@HiltViewModel` экрана истории (`@Inject constructor(workoutRepository, settingsStorage)`): загрузка списка тренировок, навигация между периодами через zoom/tap/back, флаг онбординга.
 - `fun loadHistory()` — вызывает `workoutRepository.getTrainingHistory()`, обновляет `items`; при ошибке `error = ApiErrorHandler.getErrorMessage(e)` (понятное русское сообщение вместо сырого `e.message`). Вызывается и из кнопки «Повторить» в блоке ошибки.
+- `fun jumpToDate(date: LocalDate)` — прыжок ленты к выбранной дате (из пикера в шапке): меняет только `selectedDate` (якорь прокрутки), режим/агрегация не трогаются; view нормализует к своему периоду и листает.
 - `fun onCoachmarkDismissed()` — «Понятно» в онбординге: `settingsStorage.setCalendarCoachmarkShown(true)` (персист).
 - `fun onZoomIn()` / `fun onZoomOut()` — меняют `viewMode` через `zoomIn()`/`zoomOut()`, пушат текущее состояние в `backStack`; no-op если режим не изменился (уже в конечном состоянии).
 - `fun onDaySelected(date: LocalDate)` — переход в DAY для конкретной даты (из Week view), пушит текущее состояние в стек.
