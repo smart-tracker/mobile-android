@@ -585,6 +585,10 @@ com.example.smarttracker/
 повышенное трение `exponentialDecay`). Тап по дате в шапке → выбор даты
 (`CalendarDatePicker`, адаптивный под режим: день-сетка / список недель / сетка
 месяцев, кастомные в фирменном стиле) → `viewModel.jumpToDate` прыгает лентой.
+Переключение режима — сегмент-контрол `ModeTabs` внизу (День·Неделя·Месяц,
+активный `ColorSecondary`) через `setViewMode(mode, anchor)`; пинч — ускоритель.
+Прежней кнопки «Начать/Запланировать тренировку» нет (в Дне дубль вкладки «Старт»;
+планирование — будущий FAB «Запланировать»).
 Индексация/лейблы периодов — чистые функции в `CalendarFormatters`
 (`periodCount`/`periodStartAt`/`periodIndexOf`/`*HeaderLabel`, покрыты
 `CalendarFormattersTest`).
