@@ -86,7 +86,7 @@ internal fun DayTimelineView(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(vertical = 8.dp),
         reverseLayout = true,
-        flingBehavior = rememberDampedFling(),
+        flingBehavior = rememberSnappyFling(),
     ) {
         items(count = count) { i ->
             val day = periodStartAt(HistoryViewMode.DAY, today, i)

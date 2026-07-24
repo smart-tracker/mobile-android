@@ -135,6 +135,15 @@ class TrainingHistoryViewModel @Inject constructor(
         return true
     }
 
+    /**
+     * Прыжок ленты к выбранной дате (из пикера в шапке). Меняет только якорь
+     * прокрутки — режим и агрегация не трогаются; view нормализует дату к своему
+     * периоду (день/неделя/месяц) через `periodIndexOf` и прокручивается туда.
+     */
+    fun jumpToDate(date: LocalDate) {
+        _state.update { it.copy(selectedDate = date) }
+    }
+
     /** «Понятно» в onboarding-coachmark — больше не показывать автоматически (персист). */
     fun onCoachmarkDismissed() {
         viewModelScope.launch { settingsStorage.setCalendarCoachmarkShown(true) }

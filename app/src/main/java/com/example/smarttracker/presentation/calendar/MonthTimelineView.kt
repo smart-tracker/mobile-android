@@ -69,7 +69,7 @@ internal fun MonthTimelineView(
         state = listState,
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(vertical = 8.dp),
-        flingBehavior = rememberDampedFling(),
+        flingBehavior = rememberSnappyFling(),
     ) {
         items(count = count) { i ->
             val monthStart = periodStartAt(HistoryViewMode.MONTH, today, i)

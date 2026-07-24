@@ -98,6 +98,12 @@ fun TrainingHistoryScreen(
     // «вплывает»). View сообщает его через onVisiblePeriodChanged.
     var visiblePeriod by remember { mutableStateOf(state.selectedDate) }
 
+    // Выбор даты по тапу на шапку (пикер адаптируется под режим). Диапазон
+    // ограничен [firstDate … today] — за его пределами данных нет.
+    var showDatePicker by remember { mutableStateOf(false) }
+    val today = java.time.LocalDate.now()
+    val firstDate = state.items.minOfOrNull { it.date } ?: today
+
     // Box-обёртка — чтобы поверх экрана лёг onboarding-coachmark на весь экран.
     Box(modifier = Modifier.fillMaxSize()) {
     Column(
@@ -110,6 +116,7 @@ fun TrainingHistoryScreen(
             viewMode = state.viewMode,
             periodStart = visiblePeriod,
             onHelpClick = { coachmarkStep = 0; coachmarkForced = true },
+            onDateClick = { showDatePicker = true },
         )
 
         Box(
@@ -212,6 +219,18 @@ fun TrainingHistoryScreen(
                 },
             )
         }
+
+        // ── Выбор даты (пикер по тапу на шапку) ──────────────────────────────
+        if (showDatePicker) {
+            HistoryDatePickerDialog(
+                viewMode = state.viewMode,
+                currentDate = visiblePeriod,
+                firstDate = firstDate,
+                today = today,
+                onDismiss = { showDatePicker = false },
+                onPick = { viewModel.jumpToDate(it) },
+            )
+        }
     } // конец Box-обёртки
 }
 
@@ -222,6 +241,7 @@ private fun HistoryHeader(
     viewMode: HistoryViewMode,
     periodStart: java.time.LocalDate,
     onHelpClick: () -> Unit,
+    onDateClick: () -> Unit,
 ) {
     Box(
         modifier = Modifier
@@ -229,9 +249,14 @@ private fun HistoryHeader(
             .height(30.dp),
         contentAlignment = Alignment.Center,
     ) {
+        // Дата кликабельна → выбор даты (пикер адаптируется под режим).
         Text(
             text = periodLabel(viewMode, periodStart),
             style = WorkoutTextStyles.screenHeaderDate,
+            modifier = Modifier
+                .clip(RoundedCornerShape(6.dp))
+                .clickable(onClick = onDateClick)
+                .padding(horizontal = 8.dp, vertical = 2.dp),
         )
         // Кнопка справки (левый угол хедера) — открывает онбординг в любой момент.
         Image(

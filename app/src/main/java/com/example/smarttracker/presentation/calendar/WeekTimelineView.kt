@@ -65,7 +65,7 @@ internal fun WeekTimelineView(
         state = listState,
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(vertical = 8.dp),
-        flingBehavior = rememberDampedFling(),
+        flingBehavior = rememberSnappyFling(),
     ) {
         items(count = count) { i ->
             val weekStart = periodStartAt(HistoryViewMode.WEEK, today, i)

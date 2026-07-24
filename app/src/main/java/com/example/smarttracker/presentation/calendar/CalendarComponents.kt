@@ -3,10 +3,12 @@ package com.example.smarttracker.presentation.calendar
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.animation.core.AnimationState
+import androidx.compose.animation.core.animateDecay
+import androidx.compose.animation.core.exponentialDecay
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.FlingBehavior
 import androidx.compose.foundation.gestures.ScrollScope
-import androidx.compose.foundation.gestures.ScrollableDefaults
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -43,20 +45,37 @@ import com.example.smarttracker.R
 import com.example.smarttracker.presentation.theme.WorkoutTextStyles
 import com.example.smarttracker.presentation.theme.geologicaFontFamily
 
-// ── Замедленный fling для timeline-списков ──────────────────────────────────
+// ── Fling с повышенным трением для timeline-списков ─────────────────────────
 
 /**
- * `FlingBehavior` с уменьшенной инерцией: стартовая скорость fling умножается на
- * [factor] (<1) — прокрутка быстрее затухает, не «улетает». Применяется к
- * LazyColumn всех трёх timeline-view (день/неделя/месяц).
+ * `FlingBehavior` на `exponentialDecay` с увеличенным [frictionMultiplier]
+ * (дефолт платформы = 1). Fling короче доезжает после отпускания, но само
+ * движение остаётся естественным (не «вязким», как при урезании velocity).
+ * Применяется к LazyColumn всех трёх timeline-view — на длинной ленте периодов
+ * нативный fling пролетал слишком далеко.
  */
 @Composable
-internal fun rememberDampedFling(factor: Float = 0.4f): FlingBehavior {
-    val base = ScrollableDefaults.flingBehavior()
-    return remember(base, factor) {
+internal fun rememberSnappyFling(frictionMultiplier: Float = 2.2f): FlingBehavior {
+    val decay = remember(frictionMultiplier) {
+        exponentialDecay<Float>(frictionMultiplier = frictionMultiplier)
+    }
+    return remember(decay) {
         object : FlingBehavior {
-            override suspend fun ScrollScope.performFling(initialVelocity: Float): Float =
-                with(base) { performFling(initialVelocity * factor) }
+            override suspend fun ScrollScope.performFling(initialVelocity: Float): Float {
+                if (kotlin.math.abs(initialVelocity) <= 1f) return initialVelocity
+                var lastValue = 0f
+                var leftoverVelocity = initialVelocity
+                AnimationState(initialValue = 0f, initialVelocity = initialVelocity)
+                    .animateDecay(decay) {
+                        val delta = value - lastValue
+                        val consumed = scrollBy(delta)
+                        lastValue = value
+                        leftoverVelocity = velocity
+                        // Дошли до края списка — прекращаем анимацию.
+                        if (kotlin.math.abs(delta - consumed) > 0.5f) cancelAnimation()
+                    }
+                return leftoverVelocity
+            }
         }
     }
 }
