@@ -32,7 +32,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -73,15 +72,14 @@ import com.example.smarttracker.presentation.theme.WorkoutTextStyles
 @Composable
 fun TrainingHistoryScreen(
     padding: PaddingValues,
+    viewModel: TrainingHistoryViewModel = hiltViewModel(),
     onTrainingClick: (com.example.smarttracker.domain.model.TrainingHistoryItem, String) -> Unit = { _, _ -> },
 ) {
-    val viewModel: TrainingHistoryViewModel = hiltViewModel()
     val state by viewModel.state.collectAsStateWithLifecycle()
 
-    // При каждом входе на экран сбрасываем на День / сегодня
-    LaunchedEffect(Unit) {
-        viewModel.resetToToday()
-    }
+    // resetToToday намеренно НЕ вызывается при входе: возврат на экран сохраняет
+    // прошлое место (режим + период). Первый заход = дефолт VM (сегодня/День);
+    // повторный тап вкладки «Тренировки» → сегодня (в WorkoutHomeScreen).
 
     BackHandler(enabled = state.backStack.isNotEmpty()) {
         viewModel.onBack()

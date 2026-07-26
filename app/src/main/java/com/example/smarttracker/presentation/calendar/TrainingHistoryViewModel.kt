@@ -83,6 +83,7 @@ class TrainingHistoryViewModel @Inject constructor(
             viewMode = mode,
             selectedDate = anchorDate,
             backStack = it.backStack + (it.viewMode to it.selectedDate),
+            scrollTick = it.scrollTick + 1,
         ) }
     }
 
@@ -93,6 +94,7 @@ class TrainingHistoryViewModel @Inject constructor(
         _state.update { it.copy(
             viewMode = newMode,
             backStack = it.backStack + (it.viewMode to it.selectedDate),
+            scrollTick = it.scrollTick + 1,
         ) }
     }
 
@@ -103,6 +105,7 @@ class TrainingHistoryViewModel @Inject constructor(
         _state.update { it.copy(
             viewMode = newMode,
             backStack = it.backStack + (it.viewMode to it.selectedDate),
+            scrollTick = it.scrollTick + 1,
         ) }
     }
 
@@ -111,6 +114,7 @@ class TrainingHistoryViewModel @Inject constructor(
             viewMode = HistoryViewMode.DAY,
             selectedDate = date,
             backStack = it.backStack + (it.viewMode to it.selectedDate),
+            scrollTick = it.scrollTick + 1,
         ) }
     }
 
@@ -119,6 +123,7 @@ class TrainingHistoryViewModel @Inject constructor(
             viewMode = HistoryViewMode.WEEK,
             selectedDate = weekStart,
             backStack = it.backStack + (it.viewMode to it.selectedDate),
+            scrollTick = it.scrollTick + 1,
         ) }
     }
 
@@ -131,6 +136,7 @@ class TrainingHistoryViewModel @Inject constructor(
             viewMode = HistoryViewMode.DAY,
             selectedDate = LocalDate.now(),
             backStack = emptyList(),
+            scrollTick = it.scrollTick + 1,
         ) }
     }
 
@@ -146,6 +152,7 @@ class TrainingHistoryViewModel @Inject constructor(
             viewMode = prevMode,
             selectedDate = prevDate,
             backStack = it.backStack.dropLast(1),
+            scrollTick = it.scrollTick + 1,
         ) }
         return true
     }
@@ -156,7 +163,7 @@ class TrainingHistoryViewModel @Inject constructor(
      * периоду (день/неделя/месяц) через `periodIndexOf` и прокручивается туда.
      */
     fun jumpToDate(date: LocalDate) {
-        _state.update { it.copy(selectedDate = date) }
+        _state.update { it.copy(selectedDate = date, scrollTick = it.scrollTick + 1) }
     }
 
     /** «Понятно» в onboarding-coachmark — больше не показывать автоматически (персист). */

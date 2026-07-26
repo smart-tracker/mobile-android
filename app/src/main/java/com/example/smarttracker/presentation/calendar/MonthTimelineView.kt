@@ -16,7 +16,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.tooling.preview.Preview
 import com.example.smarttracker.presentation.theme.SmartTrackerTheme
 import androidx.compose.ui.Alignment
@@ -51,10 +54,14 @@ internal fun MonthTimelineView(
     val itemsByDate = remember(state.items) { state.items.groupBy { it.date } }
     val listState = rememberLazyListState()
 
-    LaunchedEffect(state.selectedDate) {
-        val idx = periodIndexOf(HistoryViewMode.MONTH, state.selectedDate, today)
-            .coerceIn(0, count - 1)
-        listState.scrollToItem(idx)
+    var lastScrollTick by rememberSaveable { mutableStateOf(-1L) }
+    LaunchedEffect(state.scrollTick) {
+        if (state.scrollTick != lastScrollTick) {
+            val idx = periodIndexOf(HistoryViewMode.MONTH, state.selectedDate, today)
+                .coerceIn(0, count - 1)
+            listState.scrollToItem(idx)
+            lastScrollTick = state.scrollTick
+        }
     }
 
     // Верхний видимый месяц → дата в шапке экрана.

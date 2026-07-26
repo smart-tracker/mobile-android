@@ -42,4 +42,11 @@ data class TrainingHistoryUiState(
     val selectedDate: LocalDate = LocalDate.now(),
     val backStack: List<Pair<HistoryViewMode, LocalDate>> = emptyList(),
     val coachmarkShown: Boolean = false,
+    /**
+     * Счётчик команд прокрутки к [selectedDate]. Инкрементируется ТОЛЬКО при явной
+     * навигации (пинч/таб/тап/выбор даты/сброс) — view скроллит при его изменении.
+     * Возврат на экран (restore listState) счётчик не трогает → точная пиксельная
+     * позиция сохраняется, а не перескролливается к якорю.
+     */
+    val scrollTick: Long = 0L,
 )

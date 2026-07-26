@@ -17,7 +17,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -63,12 +66,17 @@ internal fun DayTimelineView(
     }
     val listState = rememberLazyListState()
 
-    // Прокрутка к выбранному дню (drill-down / сегодня). Ручной скролл не меняет
-    // selectedDate → не дёргается; меняется только при явной навигации.
-    LaunchedEffect(state.selectedDate) {
-        val idx = periodIndexOf(HistoryViewMode.DAY, state.selectedDate, today)
-            .coerceIn(0, count - 1)
-        listState.scrollToItem(idx)
+    // Прокрутка к выбранному дню — только при явной навигации (scrollTick изменился).
+    // При возврате на экран (restore listState) scrollTick == сохранённый → скролла
+    // нет, точная пиксельная позиция сохраняется. rememberSaveable переживает restore.
+    var lastScrollTick by rememberSaveable { mutableStateOf(-1L) }
+    LaunchedEffect(state.scrollTick) {
+        if (state.scrollTick != lastScrollTick) {
+            val idx = periodIndexOf(HistoryViewMode.DAY, state.selectedDate, today)
+                .coerceIn(0, count - 1)
+            listState.scrollToItem(idx)
+            lastScrollTick = state.scrollTick
+        }
     }
 
     // Верхний видимый день. При reverseLayout самый большой индекс среди видимых
