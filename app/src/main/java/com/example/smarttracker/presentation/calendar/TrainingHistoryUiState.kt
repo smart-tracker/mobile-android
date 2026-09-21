@@ -20,6 +20,19 @@ enum class HistoryViewMode {
 }
 
 /**
+ * Раскладка экрана истории — независимая ось от [HistoryViewMode].
+ * Обе раскладки работают во всех трёх режимах (День/Неделя/Месяц).
+ *
+ * [TREE] — «дерево»: ствол + ноды + карточки-листья слева/справа (основной вид).
+ * [LIST] — «строчный»: тренировки рядами, фильтр по видам, сортировка,
+ *          сворачиваемые блоки детальной статистики периодов.
+ */
+enum class HistoryLayout { TREE, LIST }
+
+/** Поле сортировки строчной раскладки (направление — отдельным флагом `sortAsc`). */
+enum class HistorySort { DATE, DURATION, DISTANCE, CALORIES }
+
+/**
  * UI-состояние экрана истории тренировок.
  *
  * [selectedDate] — опорная дата для вычисления периода:
@@ -29,6 +42,9 @@ enum class HistoryViewMode {
  *
  * [backStack] — стек пар (режим, дата) для кнопки «Назад».
  * При каждой навигации текущее состояние пушится в стек.
+ *
+ * [coachmarkShown] — показан ли уже одноразовый onboarding-coachmark экрана
+ * (персист в SettingsStorage). false → показать автоматически при первом заходе.
  */
 data class TrainingHistoryUiState(
     val isLoading: Boolean = true,
@@ -38,4 +54,23 @@ data class TrainingHistoryUiState(
     val viewMode: HistoryViewMode = HistoryViewMode.DAY,
     val selectedDate: LocalDate = LocalDate.now(),
     val backStack: List<Pair<HistoryViewMode, LocalDate>> = emptyList(),
+    val coachmarkShown: Boolean = false,
+    /**
+     * Счётчик команд прокрутки к [selectedDate]. Инкрементируется ТОЛЬКО при явной
+     * навигации (пинч/таб/тап/выбор даты/сброс) — view скроллит при его изменении.
+     * Возврат на экран (restore listState) счётчик не трогает → точная пиксельная
+     * позиция сохраняется, а не перескролливается к якорю.
+     */
+    val scrollTick: Long = 0L,
+    /** Раскладка (дерево/строки). Персистится в SettingsStorage. */
+    val layout: HistoryLayout = HistoryLayout.TREE,
+    /**
+     * Фильтр по видам активности (`type_activ_id`), мультивыбор.
+     * Пустое множество = показывать все виды. Влияет и на агрегаты периодов.
+     */
+    val selectedTypeIds: Set<Int> = emptySet(),
+    /** Поле сортировки в строчной раскладке. */
+    val sortBy: HistorySort = HistorySort.DATE,
+    /** Направление сортировки: false = по убыванию (новые/большие сверху). */
+    val sortAsc: Boolean = false,
 )

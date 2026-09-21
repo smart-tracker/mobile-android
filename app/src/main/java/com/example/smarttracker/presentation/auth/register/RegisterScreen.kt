@@ -517,4 +517,55 @@ private fun RegisterStep4(
     }
 }
 
+// ── Preview ──────────────────────────────────────────────────────────────────
+
+/** Обёртка: RegisterScreen со всеми колбэками-пустышками, состояние — параметром. */
+@Composable
+private fun RegisterScreenPreviewHost(state: RegisterUiState) {
+    SmartTrackerTheme {
+        RegisterScreen(
+            state = state,
+            onFirstNameChange = {},
+            onUsernameChange = {},
+            onBirthDateChange = {},
+            onGenderChange = {},
+            onPurposeChange = {},
+            onEmailChange = {},
+            onPasswordChange = {},
+            onConfirmPasswordChange = {},
+            onTogglePasswordVisibility = {},
+            onToggleConfirmPasswordVisibility = {},
+            onTermsAcceptedChange = {},
+            onVerificationCodeChange = {},
+            onResendCode = {},
+            onNext = {},
+            onBack = {},
+        )
+    }
+}
+
+@Preview(showBackground = true, name = "Шаг 1 — личные данные")
+@Composable
+private fun RegisterStep1Preview() = RegisterScreenPreviewHost(
+    RegisterUiState(step = 1, firstName = "Иван", username = "ivan_run", gender = Gender.MALE)
+)
+
+@Preview(showBackground = true, name = "Шаг 2 — цель")
+@Composable
+private fun RegisterStep2Preview() = RegisterScreenPreviewHost(
+    RegisterUiState(step = 2, purpose = UserPurpose.ATHLETE)
+)
+
+@Preview(showBackground = true, name = "Шаг 3 — почта и пароль")
+@Composable
+private fun RegisterStep3Preview() = RegisterScreenPreviewHost(
+    RegisterUiState(step = 3, email = "ivan@yandex.ru", password = "secret", termsAccepted = true)
+)
+
+@Preview(showBackground = true, name = "Шаг 4 — код подтверждения")
+@Composable
+private fun RegisterStep4Preview() = RegisterScreenPreviewHost(
+    RegisterUiState(step = 4, email = "ivan@yandex.ru", verificationCode = "123", resendCooldownSeconds = 87)
+)
+
 

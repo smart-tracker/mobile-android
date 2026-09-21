@@ -22,6 +22,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -33,6 +34,7 @@ import com.example.smarttracker.presentation.theme.ColorLink
 import com.example.smarttracker.presentation.theme.ColorPlaceholder
 import com.example.smarttracker.presentation.theme.ColorPrimary
 import com.example.smarttracker.presentation.theme.ColorWhite
+import com.example.smarttracker.presentation.theme.SmartTrackerTheme
 import java.util.Locale
 
 /**
@@ -358,4 +360,45 @@ private fun ErrorText(text: String, modifier: Modifier = Modifier) {
         style = MaterialTheme.typography.bodySmall,
         modifier = modifier
     )
+}
+
+// ── Preview ──────────────────────────────────────────────────────────────────
+// Экран — контейнер над ViewModel; превьюим приватные шаги напрямую.
+
+@Preview(showBackground = true, name = "Шаг 1 — почта")
+@Composable
+private fun ForgotStep1Preview() {
+    SmartTrackerTheme {
+        ForgotPasswordStep1Screen(
+            email = "ivan@yandex.ru", emailError = null, isLoading = false,
+            generalError = null, onEmailChanged = {}, onContinue = {}, onBack = {},
+        )
+    }
+}
+
+@Preview(showBackground = true, name = "Шаг 2 — код")
+@Composable
+private fun ForgotStep2Preview() {
+    SmartTrackerTheme {
+        ForgotPasswordStep2Screen(
+            email = "ivan@yandex.ru", verificationCode = "123", verificationCodeError = null,
+            resendCodeCooldown = 87, isLoading = false, generalError = null,
+            onVerificationCodeChanged = {}, onResendCode = {}, onContinue = {}, onBack = {},
+        )
+    }
+}
+
+@Preview(showBackground = true, name = "Шаг 3 — новый пароль")
+@Composable
+private fun ForgotStep3Preview() {
+    SmartTrackerTheme {
+        ForgotPasswordStep3Screen(
+            newPassword = "secret", newPasswordError = null, newPasswordVisibility = false,
+            confirmPassword = "secret", confirmPasswordError = null, confirmPasswordVisibility = false,
+            isLoading = false, generalError = null,
+            onNewPasswordChanged = {}, onConfirmPasswordChanged = {},
+            onToggleNewPasswordVisibility = {}, onToggleConfirmPasswordVisibility = {},
+            onResetPassword = {}, onBack = {},
+        )
+    }
 }

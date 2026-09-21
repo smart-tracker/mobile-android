@@ -1,5 +1,6 @@
 package com.example.smarttracker.data.remote
 
+import com.example.smarttracker.data.remote.dto.AllowedEmailDomainsResponseDto
 import com.example.smarttracker.data.remote.dto.AuthResponseDto
 import com.example.smarttracker.data.remote.dto.EmailVerificationDto
 import com.example.smarttracker.data.remote.dto.ForgotPasswordRequestDto
@@ -83,6 +84,14 @@ interface AuthApiService {
      */
     @POST("auth/check-nickname")
     suspend fun checkNickname(@Body request: NicknameCheckRequestDto): NicknameCheckResponseDto
+
+    /**
+     * Список почтовых доменов, разрешённых для регистрации (BR-4, 149-ФЗ).
+     * Публичный эндпоинт — Bearer-токен не нужен (интерцептор добавит, сервер игнорирует).
+     * Единый источник с серверной проверкой домена в POST /auth/register.
+     */
+    @GET("auth/allowed-email-domains")
+    suspend fun getAllowedEmailDomains(): AllowedEmailDomainsResponseDto
 
     /**
      * Инициация восстановления пароля.

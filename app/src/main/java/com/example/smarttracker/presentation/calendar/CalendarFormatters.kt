@@ -6,6 +6,8 @@ import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
+import java.util.Locale
 
 private val LocalTimeFmt: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 
@@ -68,6 +70,31 @@ internal fun formatDistanceM(m: Double?): String {
 /** Double? ккал → "536 кКал" или "--". */
 internal fun formatKcal(kcal: Double?): String =
     if (kcal == null) "--" else "${kcal.toInt()} кКал"
+
+/**
+ * Количество тренировок за период — компактное «N трен.».
+ * Полное слово не помещается в тесную карточку Week (120dp, обрезается),
+ * поэтому там — сокращение. В месячном режиме (140dp) влезает полное —
+ * [formatTrainingCountFull].
+ */
+internal fun formatTrainingCount(count: Int): String = "$count трен."
+
+/**
+ * Количество тренировок с русским склонением слова «тренировка».
+ * 1 тренировка / 2–4 тренировки / 5+ тренировок (исключения 11–14).
+ * Используется только в месячном режиме — там ширина карточки (140dp) вмещает.
+ */
+internal fun formatTrainingCountFull(count: Int): String {
+    val mod100 = count % 100
+    val mod10 = count % 10
+    val word = when {
+        mod100 in 11..14 -> "тренировок"
+        mod10 == 1 -> "тренировка"
+        mod10 in 2..4 -> "тренировки"
+        else -> "тренировок"
+    }
+    return "$count $word"
+}
 
 /**
  * Парсит ISO-строку в LocalDateTime.
@@ -161,4 +188,128 @@ internal fun generateWeeksForMonth(monthStart: LocalDate): List<LocalDate> {
         weekStart = weekStart.plusWeeks(1)
     }
     return weeks
+}
+
+// ── Строчная раскладка: фильтр и сортировка (чистые функции) ─────────────────
+
+/**
+ * Фильтр по видам активности (мультивыбор). Пустое [typeIds] = все виды.
+ * Применяется ДО агрегации: иначе итоги периода соврут при активном фильтре.
+ */
+internal fun filterByTypes(
+    items: List<TrainingHistoryItem>,
+    typeIds: Set<Int>,
+): List<TrainingHistoryItem> =
+    if (typeIds.isEmpty()) items else items.filter { it.typeActivId in typeIds }
+
+/**
+ * Сортировка списка тренировок. [asc] = по возрастанию (старые/меньшие сверху);
+ * по умолчанию в UI используется false — новые/большие сверху.
+ *
+ * Элементы без значения метрики (null дистанция/калории) всегда уходят В КОНЕЦ
+ * независимо от направления — «нет данных» не должно возглавлять список.
+ */
+internal fun sortTrainings(
+    items: List<TrainingHistoryItem>,
+    sortBy: HistorySort,
+    asc: Boolean,
+): List<TrainingHistoryItem> = when (sortBy) {
+    // Дата + время старта: у элементов дня сохраняется хронология.
+    HistorySort.DATE -> items.sortedWith(
+        compareBy<TrainingHistoryItem> { it.date }.thenBy { it.timeStart ?: "" }
+            .let { if (asc) it else it.reversed() }
+    )
+    HistorySort.DURATION -> items.sortedByMetric(asc) { it.durationSeconds().toDouble() }
+    HistorySort.DISTANCE -> items.sortedByMetric(asc) { it.distanceM }
+    HistorySort.CALORIES -> items.sortedByMetric(asc) { it.kilocalories }
+}
+
+/** Сортировка по nullable-метрике: null всегда в конец, остальное по [asc]. */
+private inline fun List<TrainingHistoryItem>.sortedByMetric(
+    asc: Boolean,
+    crossinline metric: (TrainingHistoryItem) -> Double?,
+): List<TrainingHistoryItem> {
+    val (withValue, withoutValue) = partition { metric(it) != null }
+    val sorted = if (asc) {
+        withValue.sortedBy { metric(it) }
+    } else {
+        withValue.sortedByDescending { metric(it) }
+    }
+    return sorted + withoutValue
+}
+
+/** Подпись поля сортировки для UI. */
+internal fun sortLabel(sortBy: HistorySort): String = when (sortBy) {
+    HistorySort.DATE -> "По дате"
+    HistorySort.DURATION -> "По длительности"
+    HistorySort.DISTANCE -> "По дистанции"
+    HistorySort.CALORIES -> "По калориям"
+}
+
+// ── Бесконечный скролл: заголовки периодов и индексация ──────────────────────
+// Все периоды идут подряд без пропусков, поэтому индекс периода в списке = прямое
+// календарное смещение от сегодня (0 = сегодня сверху, дальше — в прошлое).
+
+private val DayMonthFmt: DateTimeFormatter = DateTimeFormatter.ofPattern("dd.MM")
+private val MonthYearFmt: DateTimeFormatter = DateTimeFormatter.ofPattern("LLLL yyyy", Locale("ru"))
+
+/** Краткие дни недели (индекс = DayOfWeek.value − 1: MONDAY=1..SUNDAY=7). */
+private val ShortDaysOfWeek = arrayOf("пн", "вт", "ср", "чт", "пт", "сб", "вс")
+
+/** Заголовок дня: «22.07.2026, ср». */
+internal fun dayHeaderLabel(date: LocalDate): String =
+    "${date.format(DateFmt)}, ${ShortDaysOfWeek[date.dayOfWeek.value - 1]}"
+
+/** Заголовок недели: «20.07 – 26.07.2026» (начало без года, конец с годом). */
+internal fun weekHeaderLabel(weekStart: LocalDate): String {
+    val weekEnd = weekStart.plusDays(6)
+    return "${weekStart.format(DayMonthFmt)} – ${weekEnd.format(DateFmt)}"
+}
+
+/** Заголовок месяца: «Июль 2026» (русский месяц с заглавной). */
+internal fun monthHeaderLabel(monthStart: LocalDate): String =
+    monthStart.format(MonthYearFmt).replaceFirstChar { it.uppercase() }
+
+/** Начало периода уровня [mode], в который попадает [date] (день/понедельник/1-е число). */
+internal fun periodStartOf(mode: HistoryViewMode, date: LocalDate): LocalDate = when (mode) {
+    HistoryViewMode.DAY -> date
+    HistoryViewMode.WEEK -> date.with(DayOfWeek.MONDAY)
+    HistoryViewMode.MONTH -> date.withDayOfMonth(1)
+}
+
+/**
+ * Число периодов уровня [mode] от начала (период [firstDate]) до сегодня включительно.
+ * Минимум 1 (при пустой истории — только текущий период).
+ */
+internal fun periodCount(mode: HistoryViewMode, firstDate: LocalDate, today: LocalDate): Int {
+    val from = periodStartOf(mode, firstDate)
+    val to = periodStartOf(mode, today)
+    val span = when (mode) {
+        HistoryViewMode.DAY -> ChronoUnit.DAYS.between(from, to)
+        HistoryViewMode.WEEK -> ChronoUnit.WEEKS.between(from, to)
+        HistoryViewMode.MONTH -> ChronoUnit.MONTHS.between(from, to)
+    }
+    return (span.toInt() + 1).coerceAtLeast(1)
+}
+
+/** Начало периода на позиции [index] в списке (0 = сегодняшний период сверху). */
+internal fun periodStartAt(mode: HistoryViewMode, today: LocalDate, index: Int): LocalDate {
+    val base = periodStartOf(mode, today)
+    return when (mode) {
+        HistoryViewMode.DAY -> base.minusDays(index.toLong())
+        HistoryViewMode.WEEK -> base.minusWeeks(index.toLong())
+        HistoryViewMode.MONTH -> base.minusMonths(index.toLong())
+    }
+}
+
+/** Индекс периода, в который попадает [date] (для прокрутки). Не клампится — вызывающий ограничивает по count. */
+internal fun periodIndexOf(mode: HistoryViewMode, date: LocalDate, today: LocalDate): Int {
+    val from = periodStartOf(mode, date)
+    val to = periodStartOf(mode, today)
+    val span = when (mode) {
+        HistoryViewMode.DAY -> ChronoUnit.DAYS.between(from, to)
+        HistoryViewMode.WEEK -> ChronoUnit.WEEKS.between(from, to)
+        HistoryViewMode.MONTH -> ChronoUnit.MONTHS.between(from, to)
+    }
+    return span.toInt()
 }

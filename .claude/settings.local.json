@@ -12,7 +12,9 @@
       "Bash(xargs -I {} bash -c 'echo {}')",
       "Bash(grep -v \"^$\")",
       "WebFetch(domain:runtastic.gottland.ru)",
-      "Bash(git add *)"
+      "Bash(git add *)",
+      "Bash(curl -s --max-time 20 https://runtastic.gottland.ru/openapi.json -o /private/tmp/claude-501/-Users-novs-GitHub-mobile-android/ee84111e-d2f9-40f2-862d-cb0d258017f2/scratchpad/openapi.json)",
+      "Bash(python3 -c ' *)"
     ]
   }
 }

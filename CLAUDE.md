@@ -34,7 +34,8 @@ API Docs: https://runtastic.gottland.ru/docs
   ✅ AppMetrica-крашрепортинг (wiring; ключ задаёт владелец).
   Осталось: реквизиты оператора ПДн + юр-проверка текстов (плейсхолдеры
   в LegalScreens.kt), хостинг политики (BR-15), регистрация приложения
-  в кабинете AppMetrica + ключ, убрать debug_code на бэке (BR-1),
+  в кабинете AppMetrica + ключ, поднять прод + приёмка BR-1/BR-7 на проде
+  (в коде бэка закрыты, прод отдавал 502 при ревизии 17.07.2026 — BR-13),
   ревизия публичности CONTEXT.md, smoke-test release-APK на устройстве
   (логин → тренировка → финиш → история).
 
@@ -47,7 +48,7 @@ API Docs: https://runtastic.gottland.ru/docs
 | Файл | Что это | Правило |
 |---|---|---|
 | **PROJECT.md** | Справочник по коду: каждый файл/класс/функция + нюансы | **Искать здесь ПЕРЕД грепом кода** — секции содержат сигнатуры и подводные камни. Проверить хеш в шапке: отстаёт от HEAD → секции изменённых файлов перепроверить по коду |
-| **CLAUDE.md** | Правила, конфигурация, критические нюансы 1–29 | Загружается автоматически; новые грабли → новый нюанс N+1 |
+| **CLAUDE.md** | Правила, конфигурация, критические нюансы 1–37 | Загружается автоматически; новые грабли → новый нюанс N+1 |
 | **BACK_REQ.md** | Задачи бэкенда BR-1…BR-16 | Новые требования к бэку — ТОЛЬКО сюда (формат: что/зачем/статус Android/приёмка) |
 | **CONTEXT.md** | ⚠️ Архив (март 2026) | Коду НЕ доверять, ничего не записывать |
 
@@ -181,7 +182,7 @@ com.example.smarttracker/
 │   │   ├── AuthRepositoryImpl.kt
 │   │   ├── WorkoutRepositoryImpl.kt
 │   │   ├── PasswordRecoveryRepositoryImpl.kt
-│   │   ├── AllowedEmailDomainsRepositoryImpl.kt  (149-ФЗ, хардкод до BR-4)
+│   │   ├── AllowedEmailDomainsRepositoryImpl.kt  (149-ФЗ, сеть+DataStore-кэш, BR-4)
 │   │   ├── location/LocationRepositoryImpl.kt    (Room persistence)
 │   │   ├── MockPasswordRecoveryRepository.kt     (в DI не используется)
 │   │   └── MockWorkoutRepository.kt              (в DI не используется)
@@ -243,7 +244,8 @@ com.example.smarttracker/
 │   ├── calendar/    TrainingHistoryScreen, TrainingHistoryViewModel,
 │   │                TrainingHistoryUiState, DayTimelineView, WeekTimelineView,
 │   │                MonthTimelineView, CalendarComponents, CalendarConstants,
-│   │                CalendarFormatters
+│   │                CalendarFormatters, CalendarCoachmark (онбординг 4 шага),
+│   │                CalendarDatePicker (выбор даты, адаптивный под режим)
 │   ├── menu/
 │   │   ├── MenuScreen.kt
 │   │   ├── profile/  ProfileScreen, ProfileViewModel, ProfileUiState,
@@ -258,7 +260,7 @@ com.example.smarttracker/
 │       ├── start/      WorkoutStartScreen, WorkoutStartViewModel
 │       ├── summary/    SummaryOverlay, WorkoutSummaryUiState,
 │       │               WorkoutSummaryFormatters, SplitsBuilder, TrackChart,
-│       │               SummaryDetailsPanel, ShareImageComposer
+│       │               SummaryDetailsPanel, ShareImageComposer, GpxComposer
 │       ├── map/        MapViewComposable, OfflineMapFallback
 │       └── permission/ LocationPermissionHandler
 └── utils/       ApiErrorHandler (перевод ошибок API на русский),
@@ -352,8 +354,10 @@ com.example.smarttracker/
 6. **`RESEND_COOLDOWN_SECONDS = 120`** — при 400 от `/auth/resend-code` тело содержит
    `"Please wait N seconds"`. UI — таймер 120 секунд.
 
-7. **`debug_code`** — `/auth/register` возвращает код верификации открытым текстом.
-   В `RegisterResultDto` не включать. Убрать до прода.
+7. **`debug_code`** — исторически `/auth/register` возвращал код верификации
+   открытым текстом. ✅ Убран из кода бэка (коммит `d662341`, март 2026);
+   в `RegisterResultDto` не включён. После поднятия прода проверить, что
+   задеплоена версия без него (BACK_REQ: BR-1 в «Выполнено»).
 
 8. **`remaining_seconds` — nullable** — `Optional[int]` на бэкенде → `Int?` в DTO.
 
@@ -544,6 +548,25 @@ com.example.smarttracker/
     `suppressLocationDot` в MapViewComposable оставлен как страховка
     (гасит компонент по флагу), но сам по себе краш НЕ предотвращает.
 
+37. **Дистанция и паузы — gap-aware через ЕДИНЫЙ `buildCumulativeData`** —
+    на паузе сервис точек не пишет, пара (gap−1, gap) — «телепорт».
+    Gap-индексы: сервис (`recordedPointCount` на момент паузы) → recoveryPrefs
+    (`KEY_PAUSE_GAP_INDICES`) + `recordingStateFlow` → VM `pauseGapIndices`.
+    Расчёты: (1) сервис — своя дистанция для TTS, `prevDistancePoint=null` на
+    resume; (2) **live `observeTrackingData` — ПОЛНЫЙ пересчёт через
+    `buildCumulativeData` на каждой эмиссии** (не инкрементально!); (3) финиш/
+    scrub — тот же `buildCumulativeData`; (4) история — сервер gap'ы не хранит,
+    эвристика `SplitsBuilder.detectPauseGapIndices` (разрыв > max(15с,
+    3×медианный интервал)). **Почему live НЕ инкрементально** (грабли, ловились
+    в поле): инкрементальный аккумулятор не мог ретроактивно вычесть телепорт,
+    если gap-индекс приходил ПОСЛЕ обработки его пост-резюм точки (async-гонка
+    Intent→SharedFlow→state против Room-потока, особенно флаппинг автопаузы) —
+    телепорт впечатывался навсегда; live расходился с scrub. Полный пересчёт
+    самокорректируется: gap на следующей эмиссии уже в state. Сервер (BR-18):
+    присланная `total_distance_meters` приоритетна — `ST_Length` по непрерывному
+    LINESTRING посчитал бы телепорт (и 3D-скачки от null-высот в WKT). Любой
+    новый расчёт статистики обязан идти через `buildCumulativeData`, не свой цикл.
+
 ---
 
 ## Текущие ограничения и временные решения
@@ -552,11 +575,48 @@ com.example.smarttracker/
 `PATCH /user/edit` и `GET /user/` работают через `AuthRepositoryImpl`.
 
 **`WorkoutHomeScreen` активен** — маршрут `Screen.Home` ведёт на `WorkoutHomeScreen`.
-Вкладка «Тренировки» — история тренировок, pending.
+Вкладка «Тренировки» — история тренировок (бесконечный скролл-лента по периодам,
+не один период): каждый режим (День/Неделя/Месяц) — `LazyColumn` от сегодня вниз
+до первой тренировки, заголовки-плашки `PeriodHeader` между периодами, дата
+верхнего видимого периода «вплывает» в шапку. День — reverse-лента (сегодня внизу,
+старые вверху), непрерывное чередование карточок через границы дней (кумулятивный
+паритет). Пинч (смена уровня) обрабатывается только при 2+ пальцах — одно-пальцевый
+скролл идёт в LazyColumn (`rememberSnappyFling` — fling короче доезжает через
+повышенное трение `exponentialDecay`). Тап по дате в шапке → выбор даты
+(`CalendarDatePicker`, адаптивный под режим: день-сетка / список недель / сетка
+месяцев, кастомные в фирменном стиле) → `viewModel.jumpToDate` прыгает лентой.
+Переключение режима — сегмент-контрол `ModeTabs` внизу (День·Неделя·Месяц,
+активный `ColorSecondary`) через `setViewMode(mode, anchor)`; пинч — ускоритель.
+Возврат на вкладку сохраняет прошлое место (режим/период/точная scroll-позиция —
+VM хоистится в `WorkoutHomeScreen` + `SaveableStateProvider`, прокрутка по
+`scrollTick`); повторный тап вкладки «Тренировки» → сегодня; первый заход → сегодня.
+Прежней кнопки «Начать/Запланировать тренировку» нет (в Дне дубль вкладки «Старт»;
+планирование — будущий FAB «Запланировать»).
+Индексация/лейблы периодов — чистые функции в `CalendarFormatters`
+(`periodCount`/`periodStartAt`/`periodIndexOf`/`*HeaderLabel`, покрыты
+`CalendarFormattersTest`).
 
 **Настройки активны** — Меню → Настройки (`Screen.Settings`): автопауза
 (дефолт выкл), голосовые подсказки (дефолт вкл, частота 1/2/5 км, громкость),
-«не гасить экран». Хранение — `SettingsStorage` (DataStore Preferences).
+«не гасить экран», «удержание кнопки Завершить» (дефолт вкл — завершение
+по зажатию 3 сек с заполнением, защита от случайного нажатия), «Бейдж пульса»
+(дефолт вкл — HR-бейдж поверх карты виден всегда, как GPS-бейдж: зелёный
+подключён / красный нет связи; тап → список датчиков; `showHeartRateBadge`,
+секция «Датчики»). Наличие датчика (`hrmConfigured`) гейтит только StatItem
+«Пульс» в ряду статистики и автоконнект, но НЕ бейдж.
+Хранение — `SettingsStorage` (DataStore Preferences). Там же служебный флаг
+`workoutCoachmarkShown` (не в UI) — многошаговый (3 шага: управление
+тренировкой / GPS и карта / датчик пульса) onboarding-coachmark при первом
+входе в активную тренировку (WorkoutStartScreen: `WorkoutCoachmark`, spotlight-
+вырез+стрелка на контроле шага). Повторно открывается кнопкой справки «?» в
+хедере (`ic_help.png`, `coachmarkForced`). Плюс на короткий тап «Завершить»
+в hold-режиме выезжает хинт «Удерживайте 3 сек» (`FinishHoldHint`).
+Аналогичный флаг `calendarCoachmarkShown` — onboarding-coachmark экрана истории
+(календарь), 4 шага: пинч-навигация (анимация мини-«дерева» + два пальца по
+диагонали) / вид «День» / «Неделя» / «Месяц» (демо-строки таймлайна с
+расшифровкой полей). Хостится прямо в `TrainingHistoryScreen`
+(`CalendarCoachmark`), без spotlight — демо-карточки в оверлее (у нового
+пользователя истории нет). Кнопка «?» в шапке (`coachmarkForced`).
 Слайдер громкости подсказок — НЕ настройка приложения: он крутит системную
 громкость медиа (`STREAM_MUSIC`) напрямую, в DataStore не пишет; по отпусканию
 `VoiceCueSamplePlayer` отыгрывает короткий шаблон фразы на этом уровне.
@@ -579,12 +639,13 @@ com.example.smarttracker/
 ---
 
 ## API эндпоинты (авторизация) — AuthApiService
-- `POST /auth/register` → access_token, refresh_token, expires_in
+- `POST /auth/register` → message, email, expires_in (**токенов НЕТ** — их выдаёт `/auth/verify-email`; DTO: `RegisterResultDto`)
 - `POST /auth/verify-email` → access_token, refresh_token
 - `POST /auth/resend-code` → message, expires_at, remaining_seconds
 - `POST /auth/login` → access_token, refresh_token
 - `POST /auth/refresh` → access_token, refresh_token (**refresh_token — JSON-тело, `@Body RefreshTokenRequestDto`; см. нюанс 4. Query-param — старое ошибочное предположение, давало 422**)
 - `POST /auth/check-nickname` → is_available
+- `GET /auth/allowed-email-domains` → `{domains: [...]}` (публичный; BR-4, единый источник с серверной проверкой в register)
 - `GET /role/` → `[{role_id, name, ...}]`
 - `GET /role/user_roles` → `[{role_id, name}]` (**Bearer-токен обязателен**)
 - `GET /goal/` → `[{goal_id, description, id_role}]`
@@ -668,18 +729,32 @@ with open(f'{git_dir}/COMMIT_MSG', 'wb') as f:
   удалить debug-оверлей network_security_config и строку `LOCAL_API_URL` из
   глобального gradle.properties. Release всегда на prod.
 
-- **После BR-5 (gps_track с `recorded_at`)** — обновить
-  `GetTrainingDetailResponseDto`: убрать `JsonElement?`, вернуть
-  `List<GpsTrackPointDto>?`, добавить `recorded_at` в `GpsTrackPointDto`,
-  обновить маппер. Разблокирует elapsed/скорость в scrub-оверлее истории
-  и экспорт GPX. Сплиты и график скорости в оверлее истории включатся
-  автоматически (гейт `SplitsBuilder.hasRealTiming`, нюанс 33).
+- **ВРЕМЕННО: карта на публичных OSM-тайлах** (21.07.2026) — дипломный
+  `tile.gottland.ru` выведен из эксплуатации; `STYLE_JSON`
+  (OfflineMapManager) указывает на `tile.openstreetmap.org` (maxzoom 19).
+  Требования OSMF Tile Usage Policy соблюдены: идентифицирующий User-Agent
+  ставит интерцептор в AuthModule (MapLibre ходит через общий OkHttpClient),
+  bulk-предзагрузки нет (OfflineMapManager обязан оставаться no-op,
+  работает только прозрачный LRU-кэш MapLibre). ⚠️ Policy запрещает
+  приложениям делать osm.org основным источником тайлов при заметном
+  трафике — **до масштабного релиза** поднять свой рендер-сервер или
+  перейти на коммерческого провайдера (MapTiler/Stadia, есть бесплатные
+  квоты). **Откат/замена:** один URL в `STYLE_JSON` + этот пункт.
 
-- **После BR-4 (`GET /auth/allowed-email-domains`)** — заменить
-  `AllowedEmailDomainsRepositoryImpl` на сетевую реализацию с кэшем
-  (план в TODO-комментарии внутри impl), хардкод оставить fallback'ом.
-  Клиентская часть 149-ФЗ уже реализована: `EmailValidator.isAllowedDomain`,
-  проверка только на регистрации (login/recovery не ограничиваются).
+- **BR-5 закрыт бэком иначе** (ревизия 17.07.2026) — вместо per-point
+  `recorded_at` сервер отдаёт параллельный массив `gps_points_timestamps`
+  (+ `elevation_gain`); `GetTrainingDetailResponseDto` уже адаптирован
+  (маппер собирает `timestampUtc` с fallback на индекс), сплиты/график
+  в оверлее истории включаются сами (гейт `hasRealTiming`). Остаток:
+  **экспорт GPX** — ✅ реализован 21.07.2026: `GpxComposer` + пункт
+  «Файл GPX» в диалоге шаринга (пульс — `gpxtpx:hr`, паузы — сегментами,
+  `<time>` гейтится по `hasRealTiming`).
+
+- **BR-4 закрыт на обеих сторонах** (20.07.2026) —
+  `AllowedEmailDomainsRepositoryImpl` теперь сетевая: сервер → DataStore-кэш →
+  зашитый fallback; хардкод-список должен зеркалить серверный
+  (`app/core/email_domains.py` бэка) на момент сборки APK.
+  Проверка домена — только на регистрации (login/recovery не ограничиваются).
 
 ---
 

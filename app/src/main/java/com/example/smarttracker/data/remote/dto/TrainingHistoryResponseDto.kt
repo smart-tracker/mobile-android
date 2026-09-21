@@ -17,6 +17,8 @@ data class TrainingHistoryResponseDto(
     @SerializedName("distance_m") val distanceM: Double?,
     @SerializedName("avg_speed") val avgSpeed: Double?,
     @SerializedName("elevation_gain") val elevationGain: Double?,
+    @SerializedName("avg_heart_rate") val avgHeartRate: Double?,
+    @SerializedName("max_heart_rate") val maxHeartRate: Int?,
 )
 
 /**
@@ -33,5 +35,7 @@ fun TrainingHistoryResponseDto.toDomain(): TrainingHistoryItem = TrainingHistory
     distanceM = distanceM,
     avgSpeed = avgSpeed,
     elevationGain = elevationGain,
+    avgHeartRate = avgHeartRate,
+    maxHeartRate = maxHeartRate,
 )
 

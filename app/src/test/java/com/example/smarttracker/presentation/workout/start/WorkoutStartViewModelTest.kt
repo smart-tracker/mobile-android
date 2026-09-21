@@ -28,6 +28,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -170,12 +171,13 @@ class WorkoutStartViewModelTest {
     private fun createViewModel(
         types: List<WorkoutType> = listOf(runningType),
         settings: AppSettings = AppSettings(),
+        points: List<com.example.smarttracker.domain.model.LocationPoint> = emptyList(),
     ): WorkoutStartViewModel {
         workoutRepository = mock {
             on { workoutTypesFlow() } doReturn flowOf(types)
         }
         locationRepository = mock {
-            on { observePointsForTraining(any()) } doReturn flowOf(emptyList())
+            on { observePointsForTraining(any()) } doReturn flowOf(points)
             onBlocking { getLastKnownPoint() } doReturn null
         }
         authRepository = mock {
@@ -246,6 +248,52 @@ class WorkoutStartViewModelTest {
         assertEquals(listOf(3, 7), s.pauseGapIndices)
         // Статистика пересчитывается из Room по восстановленному id
         verify(locationRepository).observePointsForTraining("recovered-id")
+    }
+
+    /**
+     * Live-статистика и паузы: gap-пара (1→2) — «телепорт» через паузу.
+     * Дистанция телепорта не считается, его время (elapsedNanos) вычитается
+     * из длительности среднего темпа (иначе темп проседал бы после каждой паузы).
+     */
+    @Test
+    fun `recovery - live-дистанция и темп исключают gap-пару паузы`() = runVmTest {
+        // Точки: 0→1 движение 10с, 1→2 пауза 60с с телепортом, 2→3 движение 10с.
+        // Δlat 0.001° ≈ 111.2 м; телепорт 0.01° ≈ 1112 м — не должен попасть в дистанцию.
+        fun pt(lat: Double, elapsedSec: Long) = com.example.smarttracker.domain.model.LocationPoint(
+            trainingId   = "recovered-id",
+            timestampUtc = 1_700_000_000_000L + elapsedSec * 1000L,
+            elapsedNanos = elapsedSec * 1_000_000_000L,
+            latitude     = lat,
+            longitude    = 34.0,
+            altitude     = null,
+            speed        = null,
+            accuracy     = null,
+        )
+        val points = listOf(
+            pt(61.000, 0L),
+            pt(61.001, 10L),
+            pt(61.011, 70L),  // первая точка после resume — gap-индекс 2
+            pt(61.012, 80L),
+        )
+        writeRecoverySession(pauseGapIndices = "2")
+
+        val vm = createViewModel(points = points)
+
+        // observeTrackingData считает статистику на реальном Dispatchers.Default —
+        // виртуальное время runTest его не покрывает. Ждём результат, прокручивая
+        // test-шедулер (continuation после withContext возвращается на Main).
+        val deadline = System.currentTimeMillis() + 5_000L
+        while (vm.state.value.distanceMeters == 0.0 && System.currentTimeMillis() < deadline) {
+            advanceUntilIdle()
+            Thread.sleep(10)
+        }
+
+        val s = vm.state.value
+        // Две пары движения по ~111.2 м; телепорт ~1112 м исключён
+        assertTrue("distance=${s.distanceMeters}", s.distanceMeters in 200.0..250.0)
+        // Длительность темпа: 80с полного диапазона − 60с паузы = 20с активных
+        val expectedPace = WorkoutStartViewModel.formatPace(s.distanceMeters / 20.0)
+        assertEquals(expectedPace, s.avgSpeedDisplay)
     }
 
     @Test
@@ -500,6 +548,39 @@ class WorkoutStartViewModelTest {
     }
 
     @Test
+    fun `showHistorySummary - серверные агрегаты пульса приоритетнее расчёта по точкам`() = runVmTest {
+        val vm = createViewModel()
+        // Точки дают avg 140 / max 160, но сервер прислал агрегаты 155.4 / 172
+        // (например, часть точек не долетела в трек) — выигрывает сервер.
+        val points = listOf(historyPoint(0, heartRate = 120), historyPoint(1, heartRate = 160))
+        workoutRepository.stub {
+            onBlocking { getTrainingDetail("hist-3") } doReturn Result.success(points)
+        }
+
+        vm.showHistorySummary(historyItem("hist-3", avgHeartRate = 155.4, maxHeartRate = 172), "Бег")
+
+        val overlay = vm.state.value.summaryOverlay
+        assertNotNull(overlay)
+        assertEquals("155 уд/мин", overlay!!.avgHeartRateDisplay)
+        assertEquals("172 уд/мин", overlay.maxHeartRateDisplay)
+    }
+
+    @Test
+    fun `showHistorySummary - агрегаты сервера показываются даже без загруженного трека`() = runVmTest {
+        val vm = createViewModel()
+        workoutRepository.stub {
+            onBlocking { getTrainingDetail("hist-4") } doReturn Result.success(emptyList())
+        }
+
+        vm.showHistorySummary(historyItem("hist-4", avgHeartRate = 148.0, maxHeartRate = 165), "Бег")
+
+        val overlay = vm.state.value.summaryOverlay
+        assertNotNull(overlay)
+        assertEquals("148 уд/мин", overlay!!.avgHeartRateDisplay)
+        assertEquals("165 уд/мин", overlay.maxHeartRateDisplay)
+    }
+
+    @Test
     fun `showHistorySummary без пульса в точках - поля null, секция скрыта`() = runVmTest {
         val vm = createViewModel()
         val points = listOf(historyPoint(0, heartRate = null), historyPoint(1, heartRate = null))
@@ -528,7 +609,11 @@ class WorkoutStartViewModelTest {
             heartRate    = heartRate,
         )
 
-    private fun historyItem(id: String) = com.example.smarttracker.domain.model.TrainingHistoryItem(
+    private fun historyItem(
+        id: String,
+        avgHeartRate: Double? = null,
+        maxHeartRate: Int? = null,
+    ) = com.example.smarttracker.domain.model.TrainingHistoryItem(
         trainingId    = id,
         typeActivId   = 1,
         date          = java.time.LocalDate.of(2026, 7, 10),
@@ -538,6 +623,8 @@ class WorkoutStartViewModelTest {
         distanceM     = 5000.0,
         avgSpeed      = null,
         elevationGain = null,
+        avgHeartRate  = avgHeartRate,
+        maxHeartRate  = maxHeartRate,
     )
 
     // ── Форматтеры (companion) ────────────────────────────────────────────────

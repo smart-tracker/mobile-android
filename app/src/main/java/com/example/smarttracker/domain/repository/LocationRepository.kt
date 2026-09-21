@@ -45,11 +45,21 @@ interface LocationRepository {
     fun observePointsForTraining(trainingId: String): Flow<List<LocationPoint>>
 
     /**
-     * Последняя сохранённая GPS-точка из любой тренировки.
-     * Используется для начального центрирования карты до получения GPS-сигнала.
-     * Возвращает null если тренировок ещё не было.
+     * Последняя известная позиция для начального центрирования карты до
+     * получения GPS-сигнала. Приоритет — последняя точка в Room; если её нет
+     * (точки удаляются при финише — [deletePointsForTraining]), fallback на
+     * durable-хранилище последней локации ([saveLastKnownLocation]).
+     * Возвращает null только если позиция ещё ни разу не записывалась (первый запуск).
+     * У fallback-точки заполнены только lat/lng — карта читает лишь их.
      */
     suspend fun getLastKnownPoint(): LocationPoint?
+
+    /**
+     * Персистит последнюю известную позицию в durable-хранилище (переживает
+     * удаление точек Room при финише и перезапуск процесса). Пишется на каждой
+     * discovery/tracking-точке; читается в [getLastKnownPoint] как fallback.
+     */
+    suspend fun saveLastKnownLocation(latitude: Double, longitude: Double)
 
     /**
      * Удаляет все точки тренировки из базы.

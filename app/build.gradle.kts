@@ -195,6 +195,12 @@ dependencies {
     // и использует оставшийся провайдер или AOSP-fallback.
     implementation(libs.gms.location)
     implementation(libs.hms.location)
+    // Поднимает транзитивную ucs-credential-developers до 16 KB-выровненной
+    // версии: в 1.0.4.312 (из hms-location) RELRO-сегмент libucs-credential.so
+    // не выровнен под 16 KB — предупреждение «not 16 KB compatible» на
+    // Android 15+/16. Huawei починил это в 1.0.4.322 (highest-wins поднимает
+    // транзитивку до объявленной здесь версии).
+    implementation(libs.hms.ucs.credential)
 
     // AppMetrica — крашрепортинг + аналитика (152-ФЗ-совместимая альтернатива Crashlytics)
     implementation(libs.appmetrica.analytics)

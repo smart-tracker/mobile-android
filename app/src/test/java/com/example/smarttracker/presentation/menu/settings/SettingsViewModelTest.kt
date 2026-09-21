@@ -86,4 +86,11 @@ class SettingsViewModelTest {
         testScheduler.advanceUntilIdle()
         verify(storage).setKeepScreenOn(true)
     }
+
+    @Test
+    fun `переключение удержания завершения пишет в хранилище`() = runTest {
+        viewModel.onFinishConfirmationHoldChanged(false)
+        testScheduler.advanceUntilIdle()
+        verify(storage).setFinishConfirmationHold(false)
+    }
 }

@@ -86,16 +86,17 @@ class SaveTrainingWorker @AssistedInject constructor(
 
         var hasTransientFailures = false
         for (item in pending) {
-            // Фолбэк на 0.0 для null-полей: бэкенд валит 500 при отсутствии
-            // total_distance_meters / total_kilocalories в теле (Optional на
-            // схеме, но не обрабатываемое на сервере). 0.0 валиден семантически.
-            // Защищает от старых записей в Room, созданных до фикса в
-            // WorkoutStartViewModel.onFinishClick (тогда поля могли быть null).
+            // null-поля передаются как есть (Gson дропает их из тела — уходит
+            // только time_end): BR-7 закрыт бэком, сервер на частичном теле не
+            // падает. Дистанцию он сам считает из GPS-трека (PostGIS ST_Length,
+            // присланную игнорирует), а kilocalories хранит как прислано —
+            // null («нет данных») честнее фейкового 0: ккал сервер вычислить
+            // не может, MET-расчёт с профилем пользователя есть только у клиента.
             workoutRepository.saveTraining(
                 trainingId          = item.trainingId,
                 timeEnd             = item.timeEnd,
-                totalDistanceMeters = item.totalDistanceMeters ?: 0.0,
-                totalKilocalories   = item.totalKilocalories ?: 0.0,
+                totalDistanceMeters = item.totalDistanceMeters,
+                totalKilocalories   = item.totalKilocalories,
             ).onSuccess {
                 Log.d(TAG, "saveTraining success for ${item.trainingId}, removing from queue")
                 pendingFinishDao.delete(item.trainingId)

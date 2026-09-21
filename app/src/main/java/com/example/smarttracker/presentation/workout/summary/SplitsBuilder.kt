@@ -1,5 +1,7 @@
 package com.example.smarttracker.presentation.workout.summary
 
+import com.example.smarttracker.domain.model.LocationPoint
+
 /**
  * Строка таблицы «Сплиты» в деталях итогов тренировки.
  *
@@ -39,9 +41,42 @@ object SplitsBuilder {
     /** Хвост короче 50 м не показываем — темп на нём — чистый шум. */
     private const val MIN_PARTIAL_KM = 0.05f
 
+    /** Минимальный разрыв времени между точками, считающийся паузой (история). */
+    const val MIN_PAUSE_GAP_MS = 15_000L
+
+    /** Во сколько раз разрыв должен превышать медианный интервал трека. */
+    private const val PAUSE_GAP_MEDIAN_FACTOR = 3L
+
     /** true, если у трека есть настоящие временные метки (гейт сплитов и графика скорости). */
     fun hasRealTiming(data: CumulativeTrackData): Boolean =
         (data.elapsedMs.lastOrNull() ?: 0L) >= MIN_PLAUSIBLE_ELAPSED_MS
+
+    /**
+     * Эвристика границ пауз для трека из истории — сервер gap-индексы пауз
+     * не хранит, но на паузе сервис не пишет точек, поэтому пауза видна как
+     * разрыв времени между соседними точками.
+     *
+     * Gap — интервал больше max([MIN_PAUSE_GAP_MS], [PAUSE_GAP_MEDIAN_FACTOR] ×
+     * медианный интервал трека): медиана устойчива к самим паузам (их единицы
+     * против сотен обычных интервалов), нижний порог страхует треки с редкой
+     * записью точек. Возвращает индексы ПЕРВОЙ точки после паузы — тот же
+     * формат, что pauseGapIndices живой тренировки.
+     *
+     * Синтетические таймстемпы (timestampUtc = index, история до BR-5) дают
+     * интервалы ~1 мс — порог недостижим, список пуст (самогейт, отдельная
+     * проверка hasRealTiming не нужна).
+     */
+    fun detectPauseGapIndices(points: List<LocationPoint>): List<Int> {
+        if (points.size < 3) return emptyList()
+        val deltas = LongArray(points.size - 1) {
+            points[it + 1].timestampUtc - points[it].timestampUtc
+        }
+        val median = deltas.sorted()[deltas.size / 2]
+        val threshold = maxOf(MIN_PAUSE_GAP_MS, median * PAUSE_GAP_MEDIAN_FACTOR)
+        return (1 until points.size).filter {
+            points[it].timestampUtc - points[it - 1].timestampUtc > threshold
+        }
+    }
 
     /**
      * Строит список сплитов. Пустой список, если дистанция < 1 точки пересечения

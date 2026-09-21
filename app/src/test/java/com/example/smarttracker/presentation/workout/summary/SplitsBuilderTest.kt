@@ -1,5 +1,6 @@
 package com.example.smarttracker.presentation.workout.summary
 
+import com.example.smarttracker.domain.model.LocationPoint
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -151,5 +152,60 @@ class SplitsBuilderTest {
         val splits = SplitsBuilder.buildSplits(data)
         assertEquals(1, splits.size)
         assertEquals("5:00 мин/км", splits[0].paceDisplay)
+    }
+
+    // ── detectPauseGapIndices: эвристика пауз для истории ────────────────────
+
+    /** Хелпер: точка с заданным timestampUtc (координаты для эвристики не важны). */
+    private fun timedPoint(tsMs: Long) = LocationPoint(
+        trainingId   = "t",
+        timestampUtc = tsMs,
+        elapsedNanos = 0L,
+        latitude     = 61.0,
+        longitude    = 34.0,
+        altitude     = null,
+        speed        = null,
+        accuracy     = null,
+    )
+
+    @Test
+    fun `detectPauseGapIndices - равномерный трек без пауз даёт пустой список`() {
+        // 100 точек с шагом 5 с — разрывов нет
+        val points = (0 until 100).map { timedPoint(it * 5_000L) }
+        assertTrue(SplitsBuilder.detectPauseGapIndices(points).isEmpty())
+    }
+
+    @Test
+    fun `detectPauseGapIndices - разрыв 60с на фоне 5с интервалов - индекс первой точки после паузы`() {
+        // Индексы 0..49 с шагом 5с, затем пауза 60с, дальше снова 5с
+        val points = buildList {
+            for (i in 0 until 50) add(timedPoint(i * 5_000L))
+            val resumeBase = 49 * 5_000L + 60_000L
+            for (i in 0 until 50) add(timedPoint(resumeBase + i * 5_000L))
+        }
+        assertEquals(listOf(50), SplitsBuilder.detectPauseGapIndices(points))
+    }
+
+    @Test
+    fun `detectPauseGapIndices - синтетические таймстемпы (index) дают пустой список`() {
+        // История до BR-5: timestampUtc = index → интервалы 1 мс, порог 15с недостижим
+        val points = (0 until 100).map { timedPoint(it.toLong()) }
+        assertTrue(SplitsBuilder.detectPauseGapIndices(points).isEmpty())
+    }
+
+    @Test
+    fun `detectPauseGapIndices - меньше трёх точек - пусто`() {
+        assertTrue(SplitsBuilder.detectPauseGapIndices(emptyList()).isEmpty())
+        assertTrue(
+            SplitsBuilder.detectPauseGapIndices(listOf(timedPoint(0L), timedPoint(90_000L))).isEmpty()
+        )
+    }
+
+    @Test
+    fun `detectPauseGapIndices - редкая запись точек не принимается за паузы`() {
+        // Интервал 30с (больше нижнего порога 15с!), но одинаковый у всех —
+        // медианный фактор ×3 держит порог на 90с, пауз нет
+        val points = (0 until 30).map { timedPoint(it * 30_000L) }
+        assertTrue(SplitsBuilder.detectPauseGapIndices(points).isEmpty())
     }
 }

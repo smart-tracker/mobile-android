@@ -32,9 +32,11 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.smarttracker.presentation.theme.ColorBackground
 import com.example.smarttracker.presentation.theme.ColorPrimary
+import com.example.smarttracker.presentation.theme.SmartTrackerTheme
 
 /**
  * Экран "Условия использования".
@@ -238,4 +240,18 @@ fun PrivacyPolicyScreen(
             )
         }
     }
+}
+
+// ── Preview ──────────────────────────────────────────────────────────────────
+
+@Preview(showBackground = true, name = "Условия использования")
+@Composable
+private fun TermsOfServiceScreenPreview() {
+    SmartTrackerTheme { TermsOfServiceScreen(onBack = {}) }
+}
+
+@Preview(showBackground = true, name = "Политика конфиденциальности")
+@Composable
+private fun PrivacyPolicyScreenPreview() {
+    SmartTrackerTheme { PrivacyPolicyScreen(onBack = {}) }
 }

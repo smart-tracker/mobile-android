@@ -26,6 +26,7 @@
     <string name="workout_resume">Продолжить</string>
     <string name="workout_pause">Пауза</string>
     <string name="workout_finish">Завершить</string>
+    <string name="workout_hold_hint">Удерживайте 3 сек</string>
     <string name="tab_start">Старт</string>
     <string name="tab_workouts">Тренировки</string>
     <string name="tab_menu">Меню</string>

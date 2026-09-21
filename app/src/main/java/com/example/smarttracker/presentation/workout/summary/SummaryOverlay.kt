@@ -45,11 +45,13 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.example.smarttracker.R
 import com.example.smarttracker.presentation.theme.ColorPrimary
 import com.example.smarttracker.presentation.theme.ColorSecondary
+import com.example.smarttracker.presentation.theme.SmartTrackerTheme
 import com.example.smarttracker.presentation.theme.WorkoutTextStyles
 import com.example.smarttracker.presentation.workout.activityIconRes
 
@@ -79,9 +81,11 @@ import com.example.smarttracker.presentation.workout.activityIconRes
  * Оба диалога (подтверждение удаления и выбор варианта шаринга) держатся внутри
  * этого composable — вызывающему достаточно передать колбэки.
  *
- * Шаринг: диалог «С картой / Только статистика» — вариант без карты не
- * раскрывает район тренировок (приватность геоданных). [onShareWithMap] = null →
- * иконка шаринга скрыта (нет данных для картинки).
+ * Шаринг: диалог «С картой / Только статистика / Файл GPX» — вариант без карты
+ * не раскрывает район тренировок (приватность геоданных), GPX — экспорт трека
+ * в сторонние сервисы (Strava и т.п., [GpxComposer]). [onShareWithMap] = null →
+ * иконка шаринга скрыта (нет данных для картинки); [onShareGpx] = null →
+ * пункт GPX не показывается (трек пуст).
  *
  * Стрелка «назад» убрана — закрытие оверлея делается системной кнопкой Back
  * или переключением вкладки в нижнем баре [WorkoutHomeScreen].
@@ -93,6 +97,7 @@ fun SummaryHeader(
     onDeleteClick: () -> Unit = {},
     onShareWithMap: (() -> Unit)? = null,
     onShareStatsOnly: (() -> Unit)? = null,
+    onShareGpx: (() -> Unit)? = null,
 ) {
     var showConfirmDialog by remember { mutableStateOf(false) }
     var showShareDialog by remember { mutableStateOf(false) }
@@ -159,18 +164,26 @@ fun SummaryHeader(
         AlertDialog(
             onDismissRequest = { showShareDialog = false },
             title = { Text("Поделиться тренировкой") },
-            text = { Text("Вариант «Только статистика» показывает форму маршрута без карты — место тренировки не раскрывается.") },
+            text = { Text("Вариант «Только статистика» показывает форму маршрута без карты — место тренировки не раскрывается. «Файл GPX» — экспорт трека для Strava и других сервисов.") },
+            // Три варианта не влезают в пару confirm/dismiss — все действия
+            // стопкой в одном слоте (M3 и так переносил длинные кнопки в столбик).
             confirmButton = {
-                TextButton(onClick = {
-                    showShareDialog = false
-                    onShareWithMap?.invoke()
-                }) { Text("С картой") }
-            },
-            dismissButton = {
-                TextButton(onClick = {
-                    showShareDialog = false
-                    onShareStatsOnly?.invoke()
-                }) { Text("Только статистика") }
+                Column(horizontalAlignment = Alignment.End) {
+                    TextButton(onClick = {
+                        showShareDialog = false
+                        onShareWithMap?.invoke()
+                    }) { Text("С картой") }
+                    TextButton(onClick = {
+                        showShareDialog = false
+                        onShareStatsOnly?.invoke()
+                    }) { Text("Только статистика") }
+                    if (onShareGpx != null) {
+                        TextButton(onClick = {
+                            showShareDialog = false
+                            onShareGpx.invoke()
+                        }) { Text("Файл GPX") }
+                    }
+                }
             },
         )
     }
@@ -528,4 +541,36 @@ fun TrainingProgressBar(
             )
         }
     }
+}
+
+// ── Preview ──────────────────────────────────────────────────────────────────
+
+private fun previewSummaryState() = WorkoutSummaryUiState(
+    dateDisplay = "22 июля",
+    activityName = "Бег",
+    activityIconKey = "1",
+    paceDisplay = "5:06 мин/км",
+    distanceDisplay = "2.45 км",
+    durationDisplay = "00:12:34",
+    elevationDisplay = "12 м",
+    avgHeartRateDisplay = "148 уд/мин",
+    maxHeartRateDisplay = "172 уд/мин",
+)
+
+@Preview(showBackground = true, name = "Итоги — тело")
+@Composable
+private fun SummaryBodyPreview() {
+    SmartTrackerTheme { SummaryBody(state = previewSummaryState()) }
+}
+
+@Preview(showBackground = true, name = "Итоги — карточка поверх карты", backgroundColor = 0xFF88AACC)
+@Composable
+private fun StatsOverlayCardPreview() {
+    SmartTrackerTheme { StatsOverlayCard(state = previewSummaryState()) }
+}
+
+@Preview(showBackground = true, name = "Прогресс-бар трека", widthDp = 320)
+@Composable
+private fun TrainingProgressBarPreview() {
+    SmartTrackerTheme { TrainingProgressBar(progress = 0.6f) }
 }

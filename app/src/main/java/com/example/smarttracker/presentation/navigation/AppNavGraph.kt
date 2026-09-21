@@ -240,6 +240,8 @@ fun AppNavGraph(
                 onVoiceCuesChanged = viewModel::onVoiceCuesChanged,
                 onVoiceCueIntervalChanged = viewModel::onVoiceCueIntervalChanged,
                 onKeepScreenOnChanged = viewModel::onKeepScreenOnChanged,
+                onFinishConfirmationHoldChanged = viewModel::onFinishConfirmationHoldChanged,
+                onShowHeartRateBadgeChanged = viewModel::onShowHeartRateBadgeChanged,
                 onOpenSensors = { navController.navigate(Screen.Sensors.route) },
             )
         }

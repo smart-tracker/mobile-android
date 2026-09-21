@@ -19,8 +19,16 @@ import java.time.ZoneOffset
  * координат — timestampUtc для лишних точек синтезируется из индекса (старое
  * поведение). Используем [JsonElement]? чтобы Gson не падал при любом формате.
  *
+ * [gpsPointsHeartRates] — параллельный массив пульса (уд/мин, BR-16), та же
+ * привязка по индексу; null-элемент = в момент точки датчик не был подключён.
+ * Массив отсутствует целиком у тренировок, сохранённых до BR-16.
+ *
  * [elevationGain] — серверный набор высоты (метры). Приоритетнее клиентского
  * расчёта [calculateElevationGain] при показе оверлея истории.
+ * [avgHeartRate]/[maxHeartRate] — серверные агрегаты пульса (BR-16); в оверлее
+ * истории приоритет отдаётся значениям из GET /training/history (см.
+ * showHistorySummary), эти поля — на случай будущих сценариев с деталью без
+ * элемента списка.
  */
 data class GetTrainingDetailResponseDto(
     @SerializedName("training_id")           val trainingId: String,
@@ -34,6 +42,9 @@ data class GetTrainingDetailResponseDto(
     @SerializedName("elevation_gain")        val elevationGain: Double?,
     @SerializedName("gps_track")             val gpsTrack: JsonElement?,
     @SerializedName("gps_points_timestamps") val gpsPointsTimestamps: List<String>?,
+    @SerializedName("gps_points_heart_rates") val gpsPointsHeartRates: List<Int?>?,
+    @SerializedName("avg_heart_rate")        val avgHeartRate: Double?,
+    @SerializedName("max_heart_rate")        val maxHeartRate: Int?,
 )
 
 /**
@@ -60,6 +71,7 @@ fun GetTrainingDetailResponseDto.gpsPointsToDomain(): List<LocationPoint> {
     if (!coordsElement.isJsonArray) return emptyList()
 
     val timestamps = gpsPointsTimestamps
+    val heartRates = gpsPointsHeartRates
 
     return coordsElement.asJsonArray.mapIndexedNotNull { index, entry ->
         if (!entry.isJsonArray) return@mapIndexedNotNull null
@@ -99,6 +111,10 @@ fun GetTrainingDetailResponseDto.gpsPointsToDomain(): List<LocationPoint> {
                 altitude     = if (arr.size() >= 3) arr[2].asDouble else null,
                 speed        = null,
                 accuracy     = null,
+                // Параллельный массив BR-16: getOrNull страхует от массива
+                // короче координат (сервер гарантирует равенство длин, но
+                // клиент не должен падать на расхождении).
+                heartRate    = heartRates?.getOrNull(index),
             )
         }.getOrNull()
     }

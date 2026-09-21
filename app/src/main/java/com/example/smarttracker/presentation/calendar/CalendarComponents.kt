@@ -3,7 +3,12 @@ package com.example.smarttracker.presentation.calendar
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.animation.core.AnimationState
+import androidx.compose.animation.core.animateDecay
+import androidx.compose.animation.core.exponentialDecay
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.FlingBehavior
+import androidx.compose.foundation.gestures.ScrollScope
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -20,6 +25,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -38,6 +44,41 @@ import androidx.compose.ui.unit.sp
 import com.example.smarttracker.R
 import com.example.smarttracker.presentation.theme.WorkoutTextStyles
 import com.example.smarttracker.presentation.theme.geologicaFontFamily
+
+// ── Fling с повышенным трением для timeline-списков ─────────────────────────
+
+/**
+ * `FlingBehavior` на `exponentialDecay` с увеличенным [frictionMultiplier]
+ * (дефолт платформы = 1). Fling короче доезжает после отпускания, но само
+ * движение остаётся естественным (не «вязким», как при урезании velocity).
+ * Применяется к LazyColumn всех трёх timeline-view — на длинной ленте периодов
+ * нативный fling пролетал слишком далеко.
+ */
+@Composable
+internal fun rememberSnappyFling(frictionMultiplier: Float = 2.2f): FlingBehavior {
+    val decay = remember(frictionMultiplier) {
+        exponentialDecay<Float>(frictionMultiplier = frictionMultiplier)
+    }
+    return remember(decay) {
+        object : FlingBehavior {
+            override suspend fun ScrollScope.performFling(initialVelocity: Float): Float {
+                if (kotlin.math.abs(initialVelocity) <= 1f) return initialVelocity
+                var lastValue = 0f
+                var leftoverVelocity = initialVelocity
+                AnimationState(initialValue = 0f, initialVelocity = initialVelocity)
+                    .animateDecay(decay) {
+                        val delta = value - lastValue
+                        val consumed = scrollBy(delta)
+                        lastValue = value
+                        leftoverVelocity = velocity
+                        // Дошли до края списка — прекращаем анимацию.
+                        if (kotlin.math.abs(delta - consumed) > 0.5f) cancelAnimation()
+                    }
+                return leftoverVelocity
+            }
+        }
+    }
+}
 
 // ── Modifier-расширения таймлайна ────────────────────────────────────────────
 
@@ -168,6 +209,67 @@ internal fun PeriodLabel(text: String, isCurrent: Boolean) {
         fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal,
         modifier = Modifier.padding(horizontal = 14.dp),
     )
+}
+
+// ── Заголовок-разделитель периода (бесконечный скролл) ──────────────────────
+
+/**
+ * Плашка-заголовок между периодами: центральная капсула на стволе (белый фон
+ * перекрывает ствол, рамка `TrunkColor`; текущий период — акцент `TealAccent`).
+ * Используется в Day/Week/Month timeline-view как разделитель периодов.
+ */
+@Composable
+internal fun PeriodHeader(label: String, isCurrent: Boolean, modifier: Modifier = Modifier) {
+    val accent = if (isCurrent) TealAccent else TrunkColor
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 10.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(percent = 50))
+                .background(Color.White)
+                .border(1.dp, accent, RoundedCornerShape(percent = 50))
+                .padding(horizontal = 16.dp, vertical = 6.dp),
+        ) {
+            Text(
+                text = label,
+                color = accent,
+                fontSize = 14.sp,
+                fontFamily = geologicaFontFamily,
+                fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Medium,
+            )
+        }
+    }
+}
+
+/**
+ * Компактная пометка «нет тренировок» под заголовком пустого дня (только DAY-режим:
+ * там нет под-строк-нодов, в отличие от Week/Month). Белый фон перекрывает ствол.
+ */
+@Composable
+internal fun PeriodEmptyNote(text: String = "Нет тренировок", modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            modifier = Modifier
+                .background(Color.White)
+                .padding(horizontal = 12.dp, vertical = 4.dp),
+        ) {
+            Text(
+                text = text,
+                color = TrunkColor.copy(alpha = 0.5f),
+                fontSize = 13.sp,
+                fontFamily = geologicaFontFamily,
+            )
+        }
+    }
 }
 
 // ── Инфо-колонка карточки ────────────────────────────────────────────────────

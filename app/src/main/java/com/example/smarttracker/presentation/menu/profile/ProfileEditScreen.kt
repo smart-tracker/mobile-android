@@ -37,6 +37,8 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.tooling.preview.Preview
+import com.example.smarttracker.presentation.theme.SmartTrackerTheme
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -567,6 +569,28 @@ private fun DeleteAccountButton(enabled: Boolean, onClick: () -> Unit, modifier:
             fontWeight = FontWeight.Light,
             fontSize = 18.sp,
             color = ColorDestructive.copy(alpha = if (enabled) 1f else 0.4f),
+        )
+    }
+}
+
+// ── Preview ──────────────────────────────────────────────────────────────────
+
+@Preview(showBackground = true, name = "Редактирование профиля")
+@Composable
+private fun ProfileEditScreenPreview() {
+    SmartTrackerTheme {
+        ProfileEditScreen(
+            state = ProfileEditUiState(
+                isLoading = false,
+                firstName = "Иван", lastName = "Петров", middleName = "Сергеевич",
+                username = "ivan_run", birthDate = "04.05.2004", gender = "male",
+                height = "180", weight = "72",
+            ),
+            onFirstNameChange = {}, onLastNameChange = {}, onMiddleNameChange = {},
+            onUsernameChange = {}, onBirthDateChange = {}, onGenderToggle = {},
+            onHeightChange = {}, onWeightChange = {}, onPhotoSelected = {}, onDeletePhoto = {},
+            onSave = {}, onBack = {}, onDeleteAccountClick = {}, onDismissDeleteDialog = {},
+            onConfirmDelete = {},
         )
     }
 }

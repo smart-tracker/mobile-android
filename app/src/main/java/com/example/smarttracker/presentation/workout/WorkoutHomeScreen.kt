@@ -10,6 +10,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -27,6 +28,7 @@ import com.example.smarttracker.presentation.menu.sensors.SensorsDialog
 import com.example.smarttracker.presentation.theme.ColorPrimary
 import com.example.smarttracker.presentation.theme.geologicaFontFamily
 import com.example.smarttracker.presentation.calendar.TrainingHistoryScreen
+import com.example.smarttracker.presentation.calendar.TrainingHistoryViewModel
 import com.example.smarttracker.presentation.workout.start.WorkoutStartScreen
 import com.example.smarttracker.presentation.workout.start.WorkoutStartViewModel
 
@@ -57,6 +59,13 @@ fun WorkoutHomeScreen(
     val viewModel: WorkoutStartViewModel = hiltViewModel()
     val state by viewModel.state.collectAsStateWithLifecycle()
 
+    // История хоистится здесь (тот же scope), чтобы переживать переключение вкладок
+    // (возврат сохраняет режим/период) и чтобы повторный тап вкладки мог сбросить на сегодня.
+    val historyViewModel: TrainingHistoryViewModel = hiltViewModel()
+    // Сохраняет UI-состояние вкладки истории (в т.ч. scroll-позицию LazyColumn)
+    // при уходе на другую вкладку → возврат восстанавливает точную позицию.
+    val historyStateHolder = rememberSaveableStateHolder()
+
     // Принудительный выход при истечении сессии обрабатывается глобально
     // в AppNavGraph (подписка на AppViewModel.sessionExpired) — работает
     // с любого экрана, а не только с Home. Локальной подписки больше нет.
@@ -75,7 +84,14 @@ fun WorkoutHomeScreen(
             // Используем общий компонент; ordinal совпадает с AppTab.START/WORKOUTS/MENU
             SmartTrackerBottomBar(
                 selectedIndex = currentTab.ordinal,
-                onTabSelected = { currentTab = WorkoutTab.entries[it] },
+                onTabSelected = { index ->
+                    val target = WorkoutTab.entries[index]
+                    // Повторный тап уже активной вкладки «Тренировки» → сброс на сегодня.
+                    if (target == WorkoutTab.WORKOUTS && currentTab == WorkoutTab.WORKOUTS) {
+                        historyViewModel.resetToToday()
+                    }
+                    currentTab = target
+                },
             )
         },
     ) { padding ->
@@ -99,20 +115,25 @@ fun WorkoutHomeScreen(
                         onToggleFullscreenMap = viewModel::onToggleFullscreenMap,
                         onDeleteHistoryTraining = viewModel::onDeleteHistoryTraining,
                         onOpenSensors = { showSensorsOverlay = true },
+                        onCoachmarkDismissed = viewModel::onWorkoutCoachmarkDismissed,
                     )
                     if (showSensorsOverlay) {
                         SensorsDialog(onClose = { showSensorsOverlay = false })
                     }
                 }
             }
-            WorkoutTab.WORKOUTS -> TrainingHistoryScreen(
+            WorkoutTab.WORKOUTS -> historyStateHolder.SaveableStateProvider("history") {
+                TrainingHistoryScreen(
                     padding = padding,
-                    onNavigateToStart = { currentTab = WorkoutTab.START },
+                    viewModel = historyViewModel,
                     onTrainingClick = { item, activityName ->
+                        // Якорь на дату тренировки — возврат из деталей вернёт сюда.
+                        historyViewModel.jumpToDate(item.date)
                         currentTab = WorkoutTab.START
                         viewModel.showHistorySummary(item, activityName)
                     },
                 )
+            }
             WorkoutTab.MENU    -> MenuScreen(
                 padding = padding,
                 onNavigateToProfile = onNavigateToProfile,

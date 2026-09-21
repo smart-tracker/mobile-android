@@ -164,10 +164,26 @@ class WorkoutStartViewModel @Inject constructor(
          */
         val keepScreenOn: Boolean = false,
         /**
-         * Пульсометр настроен (адрес сохранён в настройках). Гейт HR-бейджа
-         * и StatItem «Пульс»: без датчика ряд статов остаётся из трёх элементов.
+         * Завершение тренировки удержанием 3 сек (Меню → Настройки).
+         * true → кнопка «Завершить» требует зажатия с заполнением; false → тап.
+         */
+        val finishConfirmationHold: Boolean = true,
+        /**
+         * Показан ли одноразовый onboarding-coachmark (первый вход в активную
+         * тренировку). true → больше не показываем. Персистится в настройках.
+         */
+        val coachmarkShown: Boolean = false,
+        /**
+         * Пульсометр настроен (адрес сохранён в настройках). Гейт StatItem «Пульс»:
+         * без датчика ряд статов остаётся из трёх элементов. Бейдж пульса гейтится
+         * отдельно — [showHrBadge].
          */
         val hrmConfigured: Boolean = false,
+        /**
+         * Показывать бейдж пульса поверх карты (настройка, дефолт вкл). Не зависит
+         * от наличия датчика — красный бейдж без подключения ведёт к списку датчиков.
+         */
+        val showHrBadge: Boolean = true,
         /** Соединение с пульсометром активно (для цвета бейджа). */
         val hrmConnected: Boolean = false,
         /** Живой пульс для StatItem: "148" или "--" когда данных нет. */
@@ -275,7 +291,10 @@ class WorkoutStartViewModel @Inject constructor(
                 _state.update {
                     it.copy(
                         keepScreenOn = s.keepScreenOn,
+                        finishConfirmationHold = s.finishConfirmationHold,
+                        coachmarkShown = s.workoutCoachmarkShown,
                         hrmConfigured = s.hrmDevices.isNotEmpty(),
+                        showHrBadge = s.showHeartRateBadge,
                     )
                 }
                 val address = s.autoConnectAddress()
@@ -644,6 +663,8 @@ class WorkoutStartViewModel @Inject constructor(
             timeEnd             = Instant.now()
                 .atZone(ZoneOffset.UTC)
                 .format(DateTimeFormatter.ISO_OFFSET_DATE_TIME),
+            // Статистики orphan-тренировки у клиента нет; null валиден (BR-7):
+            // дистанцию сервер посчитает из уже загруженных точек, ккал = null.
             totalDistanceMeters = null,
             totalKilocalories   = null,
         ).onFailure { e ->
@@ -751,6 +772,11 @@ class WorkoutStartViewModel @Inject constructor(
         LocationTrackingService.setRecording(context, false)
     }
 
+    /** «Понятно» в onboarding-coachmark — больше не показывать (персист в настройках). */
+    fun onWorkoutCoachmarkDismissed() {
+        viewModelScope.launch { settingsStorage.setWorkoutCoachmarkShown(true) }
+    }
+
     /**
      * Нажатие «Завершить» — останавливает трекинг и показывает оверлей с итогами
      * поверх текущего экрана. Без навигации: тот же composable WorkoutStartScreen
@@ -823,13 +849,11 @@ class WorkoutStartViewModel @Inject constructor(
             val timeEnd = Instant.now()
                 .atZone(ZoneOffset.UTC)
                 .format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)
-            // Шлём фактические значения даже при 0.0 — иначе Gson дропает null-поля,
-            // и в тело /save_training уходит только {"time_end":"..."} без
-            // total_distance_meters / total_kilocalories. Бэк на таком пустом
-            // теле падает с 500 (баг сервера, не обрабатывает Optional как
-            // отсутствующее поле). 0.0 валиден семантически: тренировка без
-            // движения → 0 м, 0 ккал. Подтверждено в логе 2026-05-18 19:41
-            // (training_id 7aa98edb-..., 1 GPS-точка, 17 сек → 500).
+            // Шлём фактические live-значения осознанно (не как воркэраунд):
+            // kilocalories сервер сам не вычислит — MET-расчёт с профилем
+            // пользователя есть только у клиента; дистанцию сервер пересчитает
+            // из трека (PostGIS), но реальное значение информативно для сверки.
+            // Частичное тело (один time_end) сервер тоже принимает — BR-7 закрыт.
             val distanceMeters = state.distanceMeters
             val kilocalories   = state.kilocalories
 
@@ -1058,9 +1082,17 @@ class WorkoutStartViewModel @Inject constructor(
             // Fallback на клиентский расчёт по точкам — на случай старого ответа без поля
             // или null от сервера.
             val elevationM = (item.elevationGain ?: calculateElevationGain(points)).toFloat()
-            val cumData    = buildCumulativeData(points, emptyList())
-            // Пульс: сервер начнёт отдавать heart_rate в треке после BR-16 —
-            // до этого список пуст и поля остаются null (секция скрыта).
+            // Сервер gap-индексы пауз не хранит — восстанавливаем эвристикой по
+            // разрывам времени между точками (на паузе точки не пишутся). Это
+            // выправляет elapsed в scrub, сплиты и график; на синтетических
+            // таймстемпах (до BR-5) эвристика ничего не находит.
+            val gapIndices = SplitsBuilder.detectPauseGapIndices(points)
+            val cumData    = buildCumulativeData(points, gapIndices)
+            // Пульс: приоритет — серверные агрегаты из списка истории (BR-16,
+            // тот же принцип, что elevation выше: доступны даже если трек не
+            // загрузился). Fallback — клиентский расчёт по точкам трека
+            // (тренировки, сохранённые до серверных агрегатов, но с пульсом
+            // в точках). Обе ветки null → секция скрыта.
             val heartRates = points.mapNotNull { it.heartRate }
             val snapshot = WorkoutSummaryUiState(
                 origin           = SummaryOrigin.HISTORY,
@@ -1076,13 +1108,16 @@ class WorkoutStartViewModel @Inject constructor(
                 elevationDisplay = WorkoutSummaryFormatters.formatElevation(elevationM),
                 trackPoints      = points,
                 cumulativeData   = cumData,
-                // Сплиты появятся, когда бэк начнёт отдавать реальные временные
-                // метки трека (BR-5) — buildSplits сам гейтит по правдоподобию
-                // elapsed (синтетические timestampUtc = index дают elapsed в мс).
+                // Эвристические gap-индексы — в snapshot: график (сегментация
+                // TrackChart) и GPX-экспорт (<trkseg>) читают их из state.
+                pauseGapIndices  = gapIndices,
+                // buildSplits сам гейтит по правдоподобию elapsed (синтетические
+                // timestampUtc = index у истории до BR-5 дают elapsed в мс).
                 splits           = SplitsBuilder.buildSplits(cumData),
-                avgHeartRateDisplay = heartRates.takeIf { it.isNotEmpty() }
-                    ?.let { WorkoutSummaryFormatters.formatHeartRate(it.average().roundToInt()) },
-                maxHeartRateDisplay = heartRates.maxOrNull()
+                avgHeartRateDisplay = (item.avgHeartRate?.roundToInt()
+                    ?: heartRates.takeIf { it.isNotEmpty() }?.average()?.roundToInt())
+                    ?.let { WorkoutSummaryFormatters.formatHeartRate(it) },
+                maxHeartRateDisplay = (item.maxHeartRate ?: heartRates.maxOrNull())
                     ?.let { WorkoutSummaryFormatters.formatHeartRate(it) },
             )
             // Защита от гонки: если оверлей закрыли или уже переключили на другую
@@ -1254,15 +1289,6 @@ class WorkoutStartViewModel @Inject constructor(
     private fun observeTrackingData(trainingId: String) {
         observerJob?.cancel()
         observerJob = viewModelScope.launch {
-            // Инкрементальный счётчик живёт в скоупе coroutine — синхронизация не нужна
-            var accumulatedDistanceM = 0.0
-            // Локальный аккумулятор калорий — симметричен accumulatedDistanceM.
-            // НЕ читаем _state.value.kilocalories: при перезапуске observer'а после re-key
-            // (localUUID → serverUUID) state уже содержит накопленное значение, и
-            // currentKilocalories + deltaKcal дало бы K + K = 2K.
-            var accumulatedKilocalories = 0.0
-            var processedCount = 0
-
             // Дочерний Job таймаута: перезапускается после каждой новой точки,
             // чтобы корректно обнаруживать потерю сигнала и после ACQUIRED.
             // Тренировка при потере сигнала НЕ останавливается — только обновляется
@@ -1288,48 +1314,37 @@ class WorkoutStartViewModel @Inject constructor(
                         restartTimeout()
                     }
 
-                    // gap-индексы из сервиса: пары (i-1, i) с i ∈ gapSet — это «телепорт»
+                    // gap-индексы из сервиса: пары (i-1, i) с i ∈ gapIndices — «телепорт»
                     // через паузу, реального движения там нет. Читаем до withContext.
-                    val gapSet = _state.value.pauseGapIndices.toHashSet()
+                    val gapIndices = _state.value.pauseGapIndices
 
-                    // Инкрементальный расчёт на фоновом потоке, чтобы не блокировать UI.
-                    // Внутри withContext нет точек приостановки, поэтому collectLatest
-                    // не может прервать блок посередине — все аккумуляторы обновляются атомарно.
-                    val (newDistanceM, avgSpeedMps, kilocalories) = withContext(Dispatchers.Default) {
-                        // Считаем дистанцию только новых пар [processedCount, points.size).
-                        // Gap-пары пропускаем — симметрично с buildCumulativeData (summary).
-                        for (i in maxOf(1, processedCount) until points.size) {
-                            if (i in gapSet) continue
-                            accumulatedDistanceM += calculateTrainingStatsUseCase
-                                .distanceBetween(points[i - 1], points[i])
-                        }
-
-                        // Калории инкрементальны на уровне точки. Gap-точка имеет
-                        // calories=null (сервис сбрасывает prevCaloriePoint на resume) →
-                        // её вклад 0, отдельно пропускать не нужно.
-                        for (index in processedCount until points.size) {
-                            accumulatedKilocalories += points[index].calories ?: 0.0
-                        }
-                        val kcal = accumulatedKilocalories
-
-                        processedCount = points.size
-
-                        // Длительность по монотонным часам (elapsedNanos) — не зависит от NTP/смены времени.
-                        // Известное ограничение: elapsedNanos продолжает тикать во время паузы,
-                        // поэтому пауза включается в итоговую длительность.
-                        val durationSeconds = if (points.size >= 2)
-                            (points.last().elapsedNanos - points.first().elapsedNanos) / 1_000_000_000L
-                        else 0L
-
-                        val speed = if (durationSeconds > 0) accumulatedDistanceM / durationSeconds else 0.0
-                        Triple(accumulatedDistanceM, speed, kcal)
+                    // ПОЛНЫЙ пересчёт на каждой эмиссии через тот же buildCumulativeData,
+                    // что и оверлей итогов/scrub — единый источник истины: live-дистанция,
+                    // сохраняемое значение и scrub гарантированно совпадают.
+                    // Почему не инкрементально: инкрементальный аккумулятор не мог
+                    // ретроактивно вычесть телепорт, если gap-индекс приходил ПОСЛЕ того,
+                    // как его пост-резюм точка уже обработана (async-гонка Intent→SharedFlow→
+                    // state против Room-потока, особенно при флаппинге автопаузы) — телепорт
+                    // впечатывался в дистанцию навсегда. Полный пересчёт самокорректируется:
+                    // на следующей эмиссии gap уже в state, и пара исключается.
+                    // O(n) на эмиссию, для реального числа точек (<~5000) незначимо.
+                    val (distanceM, avgSpeedMps, kilocalories) = withContext(Dispatchers.Default) {
+                        val cum = buildCumulativeData(points, gapIndices)
+                        val distM = (cum.distancesKm.lastOrNull() ?: 0f).toDouble() * 1000.0
+                        // elapsedMs из buildCumulativeData уже без пауз (totalPausedMs вычтено).
+                        val activeMs = cum.elapsedMs.lastOrNull() ?: 0L
+                        val speed = if (activeMs > 0L) distM / (activeMs / 1000.0) else 0.0
+                        // Калории: сумма по точкам; gap-точка имеет calories=null (сервис
+                        // сбрасывает prevCaloriePoint на resume) → вклад 0.
+                        val kcal = points.sumOf { it.calories ?: 0.0 }
+                        Triple(distM, speed, kcal)
                     }
 
                     _state.update { it.copy(
-                        distanceDisplay = "%.2f км".format(newDistanceM / 1000.0),
+                        distanceDisplay = "%.2f км".format(distanceM / 1000.0),
                         avgSpeedDisplay = formatPace(avgSpeedMps),
                         caloriesDisplay = "${kilocalories.toInt()} кКал",
-                        distanceMeters  = newDistanceM,
+                        distanceMeters  = distanceM,
                         kilocalories    = kilocalories,
                         trackPoints     = points,
                     ) }
@@ -1373,6 +1388,11 @@ class WorkoutStartViewModel @Inject constructor(
                         _state.update { it.copy(gpsStatus = GpsStatus.ACQUIRED) }
                     }
                     restartTimeout()
+                    // Персистим последнюю discovery-локацию: переживёт удаление
+                    // точек при финише и даст мгновенное центрирование карты на
+                    // следующем холодном старте (до нового GPS-фикса).
+                    val last = points.last()
+                    locationRepository.saveLastKnownLocation(last.latitude, last.longitude)
                 }
             }
         }

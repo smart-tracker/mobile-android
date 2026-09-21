@@ -23,6 +23,7 @@ import org.junit.runner.RunWith
 import org.mockito.kotlin.any
 import org.mockito.kotlin.anyOrNull
 import org.mockito.kotlin.eq
+import org.mockito.kotlin.isNull
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.never
 import org.mockito.kotlin.verify
@@ -200,12 +201,34 @@ class SaveTrainingWorkerTest {
         verify(workoutRepository, never()).saveTraining(any(), any(), anyOrNull(), anyOrNull())
     }
 
+    /**
+     * BR-7 закрыт бэком: null-поля старых pending-записей передаются как есть
+     * (Gson дропает их из тела), а не подменяются на 0.0 — сервер посчитает
+     * дистанцию из трека сам, а kilocalories=null честнее фейкового нуля.
+     */
+    @Test
+    fun `doWork - null-поля pending-записи уходят null, не 0-0`() = runTest {
+        val item = pendingItem("uuid-null", totalDistanceMeters = null, totalKilocalories = null)
+        whenever(pendingFinishDao.getById("uuid-null")).thenReturn(item)
+        whenever(workoutRepository.saveTraining(any(), any(), anyOrNull(), anyOrNull()))
+            .thenReturn(Result.success(SaveTrainingResult("uuid-null", "OK")))
+
+        val result = buildWorker(trainingId = "uuid-null").doWork()
+
+        assertEquals(ListenableWorker.Result.success(), result)
+        verify(workoutRepository).saveTraining(eq("uuid-null"), eq("2026-04-24T10:00:00Z"), isNull(), isNull())
+    }
+
     // ── Хелперы ───────────────────────────────────────────────────────────────
 
-    private fun pendingItem(trainingId: String) = PendingFinishEntity(
+    private fun pendingItem(
+        trainingId: String,
+        totalDistanceMeters: Double? = 1500.0,
+        totalKilocalories: Double? = 80.0,
+    ) = PendingFinishEntity(
         trainingId          = trainingId,
         timeEnd             = "2026-04-24T10:00:00Z",
-        totalDistanceMeters = 1500.0,
-        totalKilocalories   = 80.0,
+        totalDistanceMeters = totalDistanceMeters,
+        totalKilocalories   = totalKilocalories,
     )
 }

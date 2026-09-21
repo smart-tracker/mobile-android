@@ -26,6 +26,8 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.tooling.preview.Preview
+import com.example.smarttracker.presentation.theme.SmartTrackerTheme
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -362,5 +364,31 @@ private fun LogoutButton(
             fontSize = 20.sp,
             color = ColorPrimary,
         )
+    }
+}
+
+// ── Preview ──────────────────────────────────────────────────────────────────
+
+@Preview(showBackground = true, name = "Профиль — загружен")
+@Composable
+private fun ProfileScreenPreview() {
+    SmartTrackerTheme {
+        ProfileScreen(
+            state = ProfileUiState(
+                isLoading = false,
+                firstName = "Иван", lastName = "Петров", middleName = "Сергеевич",
+                username = "@ivan_run", birthDate = "04.05.2004", gender = "Мужской",
+                weight = "72", height = "180", lastTrainingDate = "20.07.2026",
+            ),
+            onBack = {}, onLogout = {}, onEditProfile = {},
+        )
+    }
+}
+
+@Preview(showBackground = true, name = "Профиль — загрузка")
+@Composable
+private fun ProfileScreenLoadingPreview() {
+    SmartTrackerTheme {
+        ProfileScreen(state = ProfileUiState(isLoading = true), onBack = {}, onLogout = {}, onEditProfile = {})
     }
 }

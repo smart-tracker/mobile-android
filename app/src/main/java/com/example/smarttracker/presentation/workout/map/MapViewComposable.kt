@@ -16,6 +16,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
@@ -51,8 +52,8 @@ import org.maplibre.geojson.Point
  * Composable-обёртка над MapLibre MapView.
  *
  * Жизненный цикл MapView привязан к Compose lifecycle через [DisposableEffect] +
- * [LocalLifecycleOwner]. Карта загружает raster-стиль с собственного тайл-сервера
- * tile.gottland.ru (см. OfflineMapManager.STYLE_JSON) — никакого внешнего API-ключа.
+ * [LocalLifecycleOwner]. Карта загружает raster-стиль с публичных тайлов
+ * OpenStreetMap (см. OfflineMapManager.STYLE_JSON) — никакого внешнего API-ключа.
  *
  * Слои поверх базовой карты:
  * - "track-layer" — LineLayer с цветом ColorSecondary, рисует GPS-трек тренировки
@@ -146,6 +147,15 @@ fun MapViewComposable(
     snapshotRequest: Int = 0,
     onSnapshot: ((android.graphics.Bitmap) -> Unit)? = null,
 ) {
+    // В @Preview (Android Studio) MapLibre не инициализирован и MapView во
+    // AndroidView не рендерится — без этой заглушки любой экран с картой не
+    // открылся бы в превью. Рантайм не затрагивается (нюансы 34/36): ветка
+    // только для LocalInspectionMode. Переиспользуем чистый OfflineMapFallback.
+    if (LocalInspectionMode.current) {
+        OfflineMapFallback(currentLocation = currentLocation, modifier = modifier)
+        return
+    }
+
     // Когда тайлы недоступны — показываем текстовый fallback, карту не создаём
     if (mapTilesFailed) {
         OfflineMapFallback(currentLocation = currentLocation, modifier = modifier)
@@ -398,10 +408,10 @@ fun MapViewComposable(
                         setCompassMargins(0, compassTopPx, compassRight8px, 0)
                     }
 
-                    // Стиль собирается inline из raster-XYZ источника tile.gottland.ru
-                    // (см. OfflineMapManager.STYLE_JSON). Раньше передавали URL OpenFreeMap —
-                    // теперь сервер отдаёт только PNG-тайлы без хостинга style.json,
-                    // поэтому JSON конструируется в коде и передаётся через Style.Builder.
+                    // Стиль собирается inline из raster-XYZ источника OpenStreetMap
+                    // (см. OfflineMapManager.STYLE_JSON): публичные osm.org-тайлы не
+                    // хостят style.json, поэтому JSON конструируется в коде и
+                    // передаётся через Style.Builder.
                     map.setStyle(Style.Builder().fromJson(OfflineMapManager.STYLE_JSON)) { style ->
                         // ── Источник и слой трека ──────────────────────────────────
                         style.addSource(

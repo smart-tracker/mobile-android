@@ -21,6 +21,9 @@ room = "2.6.1"
 maplibre = "11.8.2"
 gmsLocation = "21.3.0"
 hmsLocation = "6.12.0.300"
+# Транзитивка hms-location; поднята явно: 1.0.4.312 не выровнена под 16 KB
+# page size (RELRO), 1.0.4.322 — починена Huawei'ем
+hmsUcsCredential = "1.0.4.322"
 work        = "2.9.1"
 hiltWork    = "1.2.0"
 robolectric = "4.13"
@@ -85,6 +88,8 @@ maplibre-android = { group = "org.maplibre.gl", name = "android-sdk", version.re
 # GPS провайдеры — GMS (Google) и HMS (Huawei); оба в одном APK, выбор через RuntimeDetector
 gms-location = { group = "com.google.android.gms", name = "play-services-location", version.ref = "gmsLocation" }
 hms-location = { group = "com.huawei.hms", name = "location", version.ref = "hmsLocation" }
+# Прямое объявление поднимает транзитивную версию (highest wins) — 16 KB, см. hmsUcsCredential
+hms-ucs-credential = { group = "com.huawei.hms", name = "ucs-credential-developers", version.ref = "hmsUcsCredential" }
 
 # AppMetrica — крашрепортинг и аналитика (Яндекс, серверы в РФ — 152-ФЗ-совместимо)
 appmetrica-analytics = { group = "io.appmetrica.analytics", name = "analytics", version.ref = "appmetrica" }

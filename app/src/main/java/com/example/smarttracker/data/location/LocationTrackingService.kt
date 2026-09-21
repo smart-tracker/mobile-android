@@ -1346,7 +1346,12 @@ class LocationTrackingService : Service() {
         // Сообщаем ViewModel о смене состояния — синхронизирует UI когда
         // pause/resume инициирован из notification или автопаузой, и передаёт
         // точный gap-индекс (recordedPointCount) на момент паузы.
-        _recordingStateFlow.tryEmit(RecordingState(newRecording, recordedPointCount))
+        if (!_recordingStateFlow.tryEmit(RecordingState(newRecording, recordedPointCount))) {
+            // Потеря pause-события = потеря gap-индекса → live-дистанция посчитает
+            // «телепорт» через паузу. VM восстановит gap'ы из recovery-prefs только
+            // при пересоздании — залогировать, чтобы увидеть в поле.
+            Log.w(TAG, "recordingStateFlow buffer overflow, event dropped (recording=$newRecording, gap=$recordedPointCount)")
+        }
 
         // Голосовое подтверждение автопаузы: экран погашен, телефон в кармане —
         // без звука пользователь не узнает, что трекер остановился/продолжил.
@@ -1563,10 +1568,15 @@ class LocationTrackingService : Service() {
          *
          * replay=0: подписчики получают только живые изменения. Это важно — VM не должна
          * реагировать на «древний» стейт из прошлой сессии тренировки.
+         *
+         * extraBufferCapacity=16: при буфере 1 быстрый pause→resume (флаппинг
+         * автопаузы) с занятым коллектором молча ронял событие в tryEmit —
+         * потерянный gap-индекс паузы навсегда впечатывал «телепорт» в
+         * live-дистанцию (аккумулятор VM не пересчитывается задним числом).
          */
         private val _recordingStateFlow = MutableSharedFlow<RecordingState>(
             replay = 0,
-            extraBufferCapacity = 1,
+            extraBufferCapacity = 16,
         )
         val recordingStateFlow: SharedFlow<RecordingState> = _recordingStateFlow.asSharedFlow()
 

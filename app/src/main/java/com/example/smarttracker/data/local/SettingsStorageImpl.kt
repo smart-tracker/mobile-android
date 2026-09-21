@@ -42,6 +42,11 @@ class SettingsStorageImpl @Inject constructor(
         val VOICE_CUES_ENABLED = booleanPreferencesKey("voice_cues_enabled")
         val VOICE_CUE_INTERVAL_KM = intPreferencesKey("voice_cue_interval_km")
         val KEEP_SCREEN_ON = booleanPreferencesKey("keep_screen_on")
+        val FINISH_CONFIRMATION_HOLD = booleanPreferencesKey("finish_confirmation_hold")
+        val SHOW_HR_BADGE = booleanPreferencesKey("show_hr_badge")
+        val WORKOUT_COACHMARK_SHOWN = booleanPreferencesKey("workout_coachmark_shown")
+        val CALENDAR_COACHMARK_SHOWN = booleanPreferencesKey("calendar_coachmark_shown")
+        val CALENDAR_LIST_LAYOUT = booleanPreferencesKey("calendar_list_layout")
 
         /** JSON-список сохранённых пульсометров ([encodeHrmDevices]). */
         val HRM_DEVICES = stringPreferencesKey("hrm_devices")
@@ -77,6 +82,16 @@ class SettingsStorageImpl @Inject constructor(
                     if (it in AppSettings.ALLOWED_VOICE_INTERVALS) it else defaults.voiceCueIntervalKm
                 },
                 keepScreenOn = prefs[Keys.KEEP_SCREEN_ON] ?: defaults.keepScreenOn,
+                finishConfirmationHold = prefs[Keys.FINISH_CONFIRMATION_HOLD]
+                    ?: defaults.finishConfirmationHold,
+                showHeartRateBadge = prefs[Keys.SHOW_HR_BADGE]
+                    ?: defaults.showHeartRateBadge,
+                workoutCoachmarkShown = prefs[Keys.WORKOUT_COACHMARK_SHOWN]
+                    ?: defaults.workoutCoachmarkShown,
+                calendarCoachmarkShown = prefs[Keys.CALENDAR_COACHMARK_SHOWN]
+                    ?: defaults.calendarCoachmarkShown,
+                calendarListLayout = prefs[Keys.CALENDAR_LIST_LAYOUT]
+                    ?: defaults.calendarListLayout,
                 hrmDevices = readHrmDevices(prefs),
                 // Legacy-датчик был единственным и выбранным — он же активный
                 hrmActiveAddress = prefs[Keys.HRM_ACTIVE_ADDRESS]
@@ -103,6 +118,26 @@ class SettingsStorageImpl @Inject constructor(
 
     override suspend fun setKeepScreenOn(enabled: Boolean) {
         context.settingsDataStore.edit { it[Keys.KEEP_SCREEN_ON] = enabled }
+    }
+
+    override suspend fun setFinishConfirmationHold(enabled: Boolean) {
+        context.settingsDataStore.edit { it[Keys.FINISH_CONFIRMATION_HOLD] = enabled }
+    }
+
+    override suspend fun setShowHeartRateBadge(enabled: Boolean) {
+        context.settingsDataStore.edit { it[Keys.SHOW_HR_BADGE] = enabled }
+    }
+
+    override suspend fun setWorkoutCoachmarkShown(shown: Boolean) {
+        context.settingsDataStore.edit { it[Keys.WORKOUT_COACHMARK_SHOWN] = shown }
+    }
+
+    override suspend fun setCalendarCoachmarkShown(shown: Boolean) {
+        context.settingsDataStore.edit { it[Keys.CALENDAR_COACHMARK_SHOWN] = shown }
+    }
+
+    override suspend fun setCalendarListLayout(listLayout: Boolean) {
+        context.settingsDataStore.edit { it[Keys.CALENDAR_LIST_LAYOUT] = listLayout }
     }
 
     override suspend fun addHrmDevice(address: String, name: String?) {

@@ -35,8 +35,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -49,6 +52,7 @@ import com.example.smarttracker.presentation.common.SmartTrackerBottomBar
 import com.example.smarttracker.presentation.theme.ColorGpsActive
 import com.example.smarttracker.presentation.theme.ColorGpsInactive
 import com.example.smarttracker.presentation.theme.ColorPrimary
+import com.example.smarttracker.presentation.theme.SmartTrackerTheme
 import com.example.smarttracker.presentation.theme.geologicaFontFamily
 
 /**
@@ -89,6 +93,7 @@ fun SensorsScreen(
                     Text(
                         text = stringResource(R.string.sensors_title),
                         fontFamily = geologicaFontFamily,
+                        fontStyle = FontStyle.Normal,
                         fontWeight = FontWeight.Bold,
                         fontSize = 22.sp,
                         color = ColorPrimary,
@@ -142,10 +147,14 @@ fun SensorsScreenContent(
     onBluetoothEnabled: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    BluetoothPermissionHandler(
-        onGranted = onPermissionsGranted,
-        onDenied = onPermissionsDenied,
-    )
+    // В @Preview пропускаем: handler дёргает LaunchedEffect + checkSelfPermission
+    // на композиции — в inspection-контексте это лишнее и может мешать рендеру.
+    if (!LocalInspectionMode.current) {
+        BluetoothPermissionHandler(
+            onGranted = onPermissionsGranted,
+            onDenied = onPermissionsDenied,
+        )
+    }
 
     // Bluetooth выключен (вход / тап «Поиск») — окно с предложением включить
     if (state.promptEnableBluetooth) {
@@ -377,3 +386,40 @@ private fun HintText(text: String) {
 
 /** Янтарный статус «подключается» — промежуточный между зелёным и красным. */
 private val ColorAmber = Color(0xFFFFB300)
+
+// ── Preview ──────────────────────────────────────────────────────────────────
+
+@Preview(showBackground = true, name = "Датчики — есть сохранённый")
+@Composable
+private fun SensorsScreenContentPreview() {
+    SmartTrackerTheme {
+        SensorsScreenContent(
+            state = SensorsUiState(
+                permissionsGranted = true,
+                savedDevices = listOf(
+                    SavedHrmDevice("AA:BB:CC:DD:EE:FF", "Magene H64"),
+                    SavedHrmDevice("11:22:33:44:55:66", "Polar H10"),
+                ),
+                activeAddress = "AA:BB:CC:DD:EE:FF",
+                connectionState = HrmConnectionState.CONNECTED,
+                currentBpm = 148,
+            ),
+            onPermissionsGranted = {}, onPermissionsDenied = {}, onScanClick = {},
+            onSavedDeviceClick = {}, onRemoveDeviceClick = {}, onAddDeviceClick = {},
+            onDismissBluetoothPrompt = {}, onBluetoothEnabled = {},
+        )
+    }
+}
+
+@Preview(showBackground = true, name = "Датчики — пусто")
+@Composable
+private fun SensorsScreenContentEmptyPreview() {
+    SmartTrackerTheme {
+        SensorsScreenContent(
+            state = SensorsUiState(permissionsGranted = true),
+            onPermissionsGranted = {}, onPermissionsDenied = {}, onScanClick = {},
+            onSavedDeviceClick = {}, onRemoveDeviceClick = {}, onAddDeviceClick = {},
+            onDismissBluetoothPrompt = {}, onBluetoothEnabled = {},
+        )
+    }
+}
