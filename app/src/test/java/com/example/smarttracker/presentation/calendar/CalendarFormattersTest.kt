@@ -1,5 +1,6 @@
 package com.example.smarttracker.presentation.calendar
 
+import com.example.smarttracker.domain.model.TrainingHistoryItem
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import java.time.LocalDate
@@ -93,5 +94,81 @@ class CalendarFormattersTest {
             val idx = periodIndexOf(mode, date, today)
             assertEquals(periodStartOf(mode, date), periodStartAt(mode, today, idx))
         }
+    }
+
+    // ── Фильтр и сортировка строчной раскладки ───────────────────────────────
+
+    /** id, тип, дата, старт, конец, ккал, дистанция(м), ср.скорость, набор высоты. */
+    private fun item(
+        id: String,
+        typeId: Int,
+        date: LocalDate,
+        startHour: Int = 8,
+        durationMin: Long = 30,
+        kcal: Double? = 300.0,
+        distanceM: Double? = 5000.0,
+    ) = TrainingHistoryItem(
+        id, typeId, date,
+        "%sT%02d:00:00+00:00".format(date, startHour),
+        "%sT%02d:%02d:00+00:00".format(date, startHour + (durationMin / 60), durationMin % 60),
+        kcal, distanceM, 2.5, 20.0,
+    )
+
+    private val run1 = item("r1", 1, LocalDate.of(2026, 7, 20), durationMin = 30, distanceM = 5000.0, kcal = 300.0)
+    private val bike = item("b1", 3, LocalDate.of(2026, 7, 21), durationMin = 50, distanceM = 15000.0, kcal = 500.0)
+    private val run2 = item("r2", 1, LocalDate.of(2026, 7, 22), durationMin = 10, distanceM = null, kcal = null)
+
+    private val all = listOf(run1, bike, run2)
+
+    @Test
+    fun `filterByTypes — пустой набор возвращает все`() {
+        assertEquals(all, filterByTypes(all, emptySet()))
+    }
+
+    @Test
+    fun `filterByTypes — мультивыбор оставляет только выбранные виды`() {
+        assertEquals(listOf(run1, run2), filterByTypes(all, setOf(1)))
+        assertEquals(all, filterByTypes(all, setOf(1, 3)))
+        assertEquals(emptyList<TrainingHistoryItem>(), filterByTypes(all, setOf(99)))
+    }
+
+    @Test
+    fun `sortTrainings — по дате в обе стороны`() {
+        assertEquals(
+            listOf(run2, bike, run1),
+            sortTrainings(all, HistorySort.DATE, asc = false).map { it }
+        )
+        assertEquals(listOf(run1, bike, run2), sortTrainings(all, HistorySort.DATE, asc = true))
+    }
+
+    @Test
+    fun `sortTrainings — по длительности`() {
+        // bike 50 мин > run1 30 мин > run2 10 мин
+        assertEquals(listOf(bike, run1, run2), sortTrainings(all, HistorySort.DURATION, asc = false))
+        assertEquals(listOf(run2, run1, bike), sortTrainings(all, HistorySort.DURATION, asc = true))
+    }
+
+    @Test
+    fun `sortTrainings — null-метрика всегда в конце независимо от направления`() {
+        // run2 без дистанции и калорий → в конце и при asc, и при desc.
+        assertEquals(run2, sortTrainings(all, HistorySort.DISTANCE, asc = false).last())
+        assertEquals(run2, sortTrainings(all, HistorySort.DISTANCE, asc = true).last())
+        assertEquals(run2, sortTrainings(all, HistorySort.CALORIES, asc = false).last())
+        assertEquals(run2, sortTrainings(all, HistorySort.CALORIES, asc = true).last())
+    }
+
+    @Test
+    fun `sortTrainings — по дистанции и калориям среди значений`() {
+        assertEquals(listOf(bike, run1), sortTrainings(all, HistorySort.DISTANCE, asc = false).take(2))
+        assertEquals(listOf(run1, bike), sortTrainings(all, HistorySort.DISTANCE, asc = true).take(2))
+        assertEquals(listOf(bike, run1), sortTrainings(all, HistorySort.CALORIES, asc = false).take(2))
+    }
+
+    @Test
+    fun `sortLabel — русские подписи для всех метрик`() {
+        assertEquals("По дате", sortLabel(HistorySort.DATE))
+        assertEquals("По длительности", sortLabel(HistorySort.DURATION))
+        assertEquals("По дистанции", sortLabel(HistorySort.DISTANCE))
+        assertEquals("По калориям", sortLabel(HistorySort.CALORIES))
     }
 }

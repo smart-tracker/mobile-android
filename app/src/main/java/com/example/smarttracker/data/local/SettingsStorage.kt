@@ -49,6 +49,11 @@ data class AppSettings(
      */
     val calendarCoachmarkShown: Boolean = false,
     /**
+     * Раскладка экрана истории: false — «дерево» (основной вид), true — «строчный».
+     * Не в UI настроек: переключается слайдером в шапке экрана истории.
+     */
+    val calendarListLayout: Boolean = false,
+    /**
      * Сохранённые BLE-пульсометры. Пустой список = датчики не настроены
      * (гейт StatItem «Пульс» и автоподключения). Бейдж пульса гейтится отдельно
      * — [showHeartRateBadge]. Отдельного toggle списка нет: непуст = включено.
@@ -126,6 +131,9 @@ interface SettingsStorage {
 
     /** Отметить onboarding-coachmark календаря (истории) как показанный (кнопка «Понятно»). */
     suspend fun setCalendarCoachmarkShown(shown: Boolean)
+
+    /** Запомнить раскладку экрана истории (false — дерево, true — строчный вид). */
+    suspend fun setCalendarListLayout(listLayout: Boolean)
 
     /**
      * Добавить пульсометр в список (или обновить имя существующего)

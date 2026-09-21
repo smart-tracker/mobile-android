@@ -9,10 +9,10 @@ package com.example.smarttracker.data.location
  */
 object LocationConfig {
     /** Интервал обновлений GPS для бега и ходьбы, мс */
-    const val INTERVAL_MS_RUNNING  = 3000L
+    const val INTERVAL_MS_RUNNING  = 2000L
 
     /** Интервал обновлений GPS для велосипеда, мс */
-    const val INTERVAL_MS_CYCLING  = 2000L
+    const val INTERVAL_MS_CYCLING  = 1000L
 
     /**
      * Минимальное смещение (метры) для OS-level LocationListener.
@@ -28,7 +28,7 @@ object LocationConfig {
     const val MAX_ACCURACY_CYCLING = 30f
 
     /** Через сколько мс без первого GPS-фикса показать предупреждение UNAVAILABLE */
-    const val GPS_FIX_TIMEOUT_MS   = 30_000L
+    const val GPS_FIX_TIMEOUT_MS   = 15_000L
 
     /**
      * Минимальный интервал между принятыми точками (мс).

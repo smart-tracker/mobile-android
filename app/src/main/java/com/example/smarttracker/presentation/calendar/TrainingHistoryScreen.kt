@@ -8,9 +8,14 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -23,11 +28,15 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -41,6 +50,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -116,14 +126,27 @@ fun TrainingHistoryScreen(
         HistoryHeader(
             viewMode = state.viewMode,
             periodStart = visiblePeriod,
+            layout = state.layout,
             onHelpClick = { coachmarkStep = 0; coachmarkForced = true },
             onDateClick = { showDatePicker = true },
+            onLayoutChange = viewModel::setLayout,
         )
+
+        // Фильтр по видам + сортировка — только в строчной раскладке.
+        if (state.layout == HistoryLayout.LIST) {
+            FilterSortBar(
+                state = state,
+                onToggleType = viewModel::toggleTypeFilter,
+                onClearTypes = viewModel::clearTypeFilter,
+                onSort = viewModel::setSort,
+            )
+        }
 
         Box(
             modifier = Modifier
                 .weight(1f)
-                .drawTrunk(),
+                // Ствол дерева — только в древовидной раскладке.
+                .then(if (state.layout == HistoryLayout.TREE) Modifier.drawTrunk() else Modifier),
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
                 Box(
@@ -173,6 +196,11 @@ fun TrainingHistoryScreen(
                             message = state.error ?: "",
                             onRetry = viewModel::loadHistory,
                             modifier = Modifier.align(Alignment.Center),
+                        )
+                        state.layout == HistoryLayout.LIST -> HistoryListView(
+                            state = state,
+                            onTrainingClick = onTrainingClick,
+                            onVisiblePeriodChanged = { visiblePeriod = it },
                         )
                         else -> when (state.viewMode) {
                             HistoryViewMode.DAY -> DayTimelineView(
@@ -239,8 +267,10 @@ fun TrainingHistoryScreen(
 private fun HistoryHeader(
     viewMode: HistoryViewMode,
     periodStart: java.time.LocalDate,
+    layout: HistoryLayout,
     onHelpClick: () -> Unit,
     onDateClick: () -> Unit,
+    onLayoutChange: (HistoryLayout) -> Unit,
 ) {
     Box(
         modifier = Modifier
@@ -248,6 +278,14 @@ private fun HistoryHeader(
             .height(30.dp),
         contentAlignment = Alignment.Center,
     ) {
+        // Переключатель раскладки — правый угол шапки.
+        LayoutToggle(
+            layout = layout,
+            onChange = onLayoutChange,
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .padding(end = 12.dp),
+        )
         // Дата кликабельна → выбор даты (пикер адаптируется под режим).
         Text(
             text = periodLabel(viewMode, periodStart),
@@ -342,6 +380,229 @@ private fun HistoryErrorBlock(
             )
         }
     }
+}
+
+// ── Переключатель раскладки (слайдер: дерево ↔ строки) ────────────────────────
+
+/**
+ * Слайдер-переключатель раскладки в правом углу шапки: капсула с двумя иконками
+ * (дерево / строки), под активной ездит подсветка `ColorSecondary`
+ * (`animateDpAsState`). Тап по половине — выбор соответствующей раскладки.
+ */
+@Composable
+private fun LayoutToggle(
+    layout: HistoryLayout,
+    onChange: (HistoryLayout) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val cell = 28.dp
+    val shape = RoundedCornerShape(percent = 50)
+    val indicatorOffset by animateDpAsState(
+        targetValue = if (layout == HistoryLayout.TREE) 0.dp else cell,
+        label = "layout-indicator",
+    )
+    Box(
+        modifier = modifier
+            .clip(shape)
+            .background(Color.White)
+            .border(1.dp, ColorPrimary, shape)
+            .height(26.dp)
+            .width(cell * 2),
+    ) {
+        // Бегунок под активной иконкой.
+        Box(
+            modifier = Modifier
+                .offset(x = indicatorOffset)
+                .width(cell)
+                .fillMaxHeight()
+                .padding(2.dp)
+                .clip(shape)
+                .background(ColorSecondary),
+        )
+        Row(modifier = Modifier.fillMaxSize()) {
+            ToggleIcon(
+                iconRes = R.drawable.ic_view_tree,
+                description = "Вид «дерево»",
+                active = layout == HistoryLayout.TREE,
+                modifier = Modifier.width(cell),
+                onClick = { onChange(HistoryLayout.TREE) },
+            )
+            ToggleIcon(
+                iconRes = R.drawable.ic_view_list,
+                description = "Строчный вид",
+                active = layout == HistoryLayout.LIST,
+                modifier = Modifier.width(cell),
+                onClick = { onChange(HistoryLayout.LIST) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun ToggleIcon(
+    iconRes: Int,
+    description: String,
+    active: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier = modifier
+            .fillMaxHeight()
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            painter = painterResource(iconRes),
+            contentDescription = description,
+            tint = if (active) Color.White else ColorPrimary,
+            modifier = Modifier.size(16.dp),
+        )
+    }
+}
+
+// ── Панель фильтра и сортировки (строчная раскладка) ──────────────────────────
+
+/**
+ * Минималистичная панель: одна плашка фильтра (по тапу — меню видов с мультивыбором)
+ * и иконка сортировки без подписи (по тапу — меню метрик). Направление сортировки
+ * показывается зеркалированием иконки, а не текстом.
+ */
+@Composable
+private fun FilterSortBar(
+    state: TrainingHistoryUiState,
+    onToggleType: (Int) -> Unit,
+    onClearTypes: () -> Unit,
+    onSort: (HistorySort) -> Unit,
+) {
+    // Виды, которые реально встречаются в истории — фильтровать по пустым незачем.
+    val presentTypes = remember(state.items, state.workoutTypes) {
+        val ids = state.items.map { it.typeActivId }.toSet()
+        state.workoutTypes.filter { it.id in ids }
+    }
+    var filterMenuOpen by remember { mutableStateOf(false) }
+    var sortMenuOpen by remember { mutableStateOf(false) }
+    val filterActive = state.selectedTypeIds.isNotEmpty()
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        // ── Плашка фильтра ──────────────────────────────────────────────────
+        Box {
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(if (filterActive) ColorSecondary else Color.White)
+                    .border(
+                        1.dp,
+                        if (filterActive) ColorSecondary else ColorPrimary.copy(alpha = 0.5f),
+                        RoundedCornerShape(8.dp),
+                    )
+                    .clickable { filterMenuOpen = true }
+                    .padding(start = 10.dp, end = 6.dp, top = 5.dp, bottom = 5.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = filterLabel(state.selectedTypeIds, presentTypes),
+                    color = if (filterActive) Color.White else ColorPrimary,
+                    fontSize = 13.sp,
+                )
+                Icon(
+                    imageVector = Icons.Filled.ExpandMore,
+                    contentDescription = null,
+                    tint = if (filterActive) Color.White else ColorPrimary,
+                    modifier = Modifier.size(16.dp),
+                )
+            }
+            DropdownMenu(expanded = filterMenuOpen, onDismissRequest = { filterMenuOpen = false }) {
+                MenuOption(
+                    label = "Все виды",
+                    selected = state.selectedTypeIds.isEmpty(),
+                    onClick = { onClearTypes(); filterMenuOpen = false },
+                )
+                // Мультивыбор: меню не закрывается, чтобы отметить несколько видов.
+                presentTypes.forEach { type ->
+                    MenuOption(
+                        label = type.name,
+                        selected = type.id in state.selectedTypeIds,
+                        onClick = { onToggleType(type.id) },
+                    )
+                }
+            }
+        }
+
+        // ── Иконка сортировки (без подписи) ─────────────────────────────────
+        Box {
+            Icon(
+                painter = painterResource(R.drawable.ic_sort),
+                contentDescription = "Сортировка: ${sortLabel(state.sortBy)}",
+                tint = ColorPrimary,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable { sortMenuOpen = true }
+                    .padding(4.dp)
+                    .size(20.dp)
+                    // Направление показываем зеркалированием, без текста.
+                    .graphicsLayer { scaleY = if (state.sortAsc) -1f else 1f },
+            )
+            DropdownMenu(expanded = sortMenuOpen, onDismissRequest = { sortMenuOpen = false }) {
+                HistorySort.entries.forEach { option ->
+                    MenuOption(
+                        label = sortLabel(option),
+                        selected = option == state.sortBy,
+                        onClick = { onSort(option); sortMenuOpen = false },
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** Подпись плашки фильтра: «Все виды» / название единственного / «N видов». */
+private fun filterLabel(
+    selectedIds: Set<Int>,
+    presentTypes: List<com.example.smarttracker.domain.model.WorkoutType>,
+): String = when {
+    selectedIds.isEmpty() -> "Все виды"
+    selectedIds.size == 1 -> presentTypes.find { it.id == selectedIds.first() }?.name ?: "1 вид"
+    else -> {
+        val n = selectedIds.size
+        val word = when {
+            n % 100 in 11..14 -> "видов"
+            n % 10 == 1 -> "вид"
+            n % 10 in 2..4 -> "вида"
+            else -> "видов"
+        }
+        "$n $word"
+    }
+}
+
+/** Пункт выпадающего меню с галочкой у выбранного. */
+@Composable
+private fun MenuOption(label: String, selected: Boolean, onClick: () -> Unit) {
+    DropdownMenuItem(
+        text = {
+            Text(
+                text = label,
+                color = if (selected) ColorSecondary else ColorPrimary,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                fontSize = 14.sp,
+            )
+        },
+        leadingIcon = {
+            Icon(
+                imageVector = Icons.Filled.Check,
+                contentDescription = null,
+                tint = if (selected) ColorSecondary else Color.Transparent,
+                modifier = Modifier.size(18.dp),
+            )
+        },
+        onClick = onClick,
+    )
 }
 
 // ── Табы режима (сегмент-контрол День/Неделя/Месяц) ────────────────────────────

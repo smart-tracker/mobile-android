@@ -45,7 +45,10 @@ class TrainingHistoryViewModel @Inject constructor(
         // при первом заходе на экран (гейт в TrainingHistoryScreen).
         viewModelScope.launch {
             settingsStorage.settings.collect { s ->
-                _state.update { it.copy(coachmarkShown = s.calendarCoachmarkShown) }
+                _state.update { it.copy(
+                    coachmarkShown = s.calendarCoachmarkShown,
+                    layout = if (s.calendarListLayout) HistoryLayout.LIST else HistoryLayout.TREE,
+                ) }
             }
         }
         // Автообновление истории при любом изменении: сохранение тренировки
@@ -164,6 +167,45 @@ class TrainingHistoryViewModel @Inject constructor(
      */
     fun jumpToDate(date: LocalDate) {
         _state.update { it.copy(selectedDate = date, scrollTick = it.scrollTick + 1) }
+    }
+
+    // ── Строчная раскладка: переключение вида, фильтр, сортировка ────────────
+
+    /** Смена раскладки (дерево/строки) с персистом в настройках. */
+    fun setLayout(layout: HistoryLayout) {
+        if (_state.value.layout == layout) return
+        _state.update { it.copy(layout = layout) }
+        viewModelScope.launch {
+            settingsStorage.setCalendarListLayout(layout == HistoryLayout.LIST)
+        }
+    }
+
+    /** Мультивыбор фильтра по виду активности: тап переключает вид в наборе. */
+    fun toggleTypeFilter(typeId: Int) {
+        _state.update {
+            val updated = if (typeId in it.selectedTypeIds) {
+                it.selectedTypeIds - typeId
+            } else {
+                it.selectedTypeIds + typeId
+            }
+            it.copy(selectedTypeIds = updated)
+        }
+    }
+
+    /** Сброс фильтра — показывать все виды. */
+    fun clearTypeFilter() {
+        _state.update { it.copy(selectedTypeIds = emptySet()) }
+    }
+
+    /**
+     * Выбор поля сортировки. Повторный выбор той же метрики переворачивает
+     * направление; смена метрики ставит дефолт «по убыванию» (новые/большие сверху).
+     */
+    fun setSort(sortBy: HistorySort) {
+        _state.update {
+            if (it.sortBy == sortBy) it.copy(sortAsc = !it.sortAsc)
+            else it.copy(sortBy = sortBy, sortAsc = false)
+        }
     }
 
     /** «Понятно» в onboarding-coachmark — больше не показывать автоматически (персист). */

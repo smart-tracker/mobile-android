@@ -190,6 +190,62 @@ internal fun generateWeeksForMonth(monthStart: LocalDate): List<LocalDate> {
     return weeks
 }
 
+// ── Строчная раскладка: фильтр и сортировка (чистые функции) ─────────────────
+
+/**
+ * Фильтр по видам активности (мультивыбор). Пустое [typeIds] = все виды.
+ * Применяется ДО агрегации: иначе итоги периода соврут при активном фильтре.
+ */
+internal fun filterByTypes(
+    items: List<TrainingHistoryItem>,
+    typeIds: Set<Int>,
+): List<TrainingHistoryItem> =
+    if (typeIds.isEmpty()) items else items.filter { it.typeActivId in typeIds }
+
+/**
+ * Сортировка списка тренировок. [asc] = по возрастанию (старые/меньшие сверху);
+ * по умолчанию в UI используется false — новые/большие сверху.
+ *
+ * Элементы без значения метрики (null дистанция/калории) всегда уходят В КОНЕЦ
+ * независимо от направления — «нет данных» не должно возглавлять список.
+ */
+internal fun sortTrainings(
+    items: List<TrainingHistoryItem>,
+    sortBy: HistorySort,
+    asc: Boolean,
+): List<TrainingHistoryItem> = when (sortBy) {
+    // Дата + время старта: у элементов дня сохраняется хронология.
+    HistorySort.DATE -> items.sortedWith(
+        compareBy<TrainingHistoryItem> { it.date }.thenBy { it.timeStart ?: "" }
+            .let { if (asc) it else it.reversed() }
+    )
+    HistorySort.DURATION -> items.sortedByMetric(asc) { it.durationSeconds().toDouble() }
+    HistorySort.DISTANCE -> items.sortedByMetric(asc) { it.distanceM }
+    HistorySort.CALORIES -> items.sortedByMetric(asc) { it.kilocalories }
+}
+
+/** Сортировка по nullable-метрике: null всегда в конец, остальное по [asc]. */
+private inline fun List<TrainingHistoryItem>.sortedByMetric(
+    asc: Boolean,
+    crossinline metric: (TrainingHistoryItem) -> Double?,
+): List<TrainingHistoryItem> {
+    val (withValue, withoutValue) = partition { metric(it) != null }
+    val sorted = if (asc) {
+        withValue.sortedBy { metric(it) }
+    } else {
+        withValue.sortedByDescending { metric(it) }
+    }
+    return sorted + withoutValue
+}
+
+/** Подпись поля сортировки для UI. */
+internal fun sortLabel(sortBy: HistorySort): String = when (sortBy) {
+    HistorySort.DATE -> "По дате"
+    HistorySort.DURATION -> "По длительности"
+    HistorySort.DISTANCE -> "По дистанции"
+    HistorySort.CALORIES -> "По калориям"
+}
+
 // ── Бесконечный скролл: заголовки периодов и индексация ──────────────────────
 // Все периоды идут подряд без пропусков, поэтому индекс периода в списке = прямое
 // календарное смещение от сегодня (0 = сегодня сверху, дальше — в прошлое).
